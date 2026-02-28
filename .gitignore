@@ -1,0 +1,22 @@
+# Environment
+.env
+.venv/
+__pycache__/
+
+# Temp files
+temp_uploads/
+generated_documents/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+.~lock.*
+
+# Test artifacts
+Quote_*.docx
+generate_samples.py

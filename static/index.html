@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote Agent - Onboarding</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: rgba(30, 41, 59, 0.7);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --success-color: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated Dark Background with Glows */
+        .bg-glow {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: 0;
+            animation: float 10s infinite ease-in-out alternate;
+        }
+
+        .glow-1 {
+            width: 400px;
+            height: 400px;
+            background: rgba(59, 130, 246, 0.15);
+            top: -100px;
+            left: -100px;
+        }
+
+        .glow-2 {
+            width: 500px;
+            height: 500px;
+            background: rgba(139, 92, 246, 0.15);
+            bottom: -200px;
+            right: -100px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); }
+            100% { transform: translateY(30px) scale(1.1); }
+        }
+
+        /* Glassmorphism Container */
+        .container {
+            position: relative;
+            z-index: 10;
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 48px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.8s forwards cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-weight: 800;
+            font-size: 2.2rem;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+
+        /* Form Elements */
+        .input-group {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        input {
+            width: 100%;
+            padding: 16px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.5);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+        }
+
+        input::placeholder {
+            color: #64748b;
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent-color);
+            color: white;
+            font-weight: 600;
+            font-size: 1.05rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 15px 20px -3px rgba(59, 130, 246, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Loader Animation */
+        .loader {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Success State */
+        #success-state {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .telegram-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: #229ED9;
+            text-decoration: none;
+            margin-top: 10px;
+        }
+
+        .telegram-btn:hover {
+            background: #1C8ADB;
+            box-shadow: 0 15px 20px -3px rgba(34, 158, 217, 0.4);
+        }
+
+        .icon-circle {
+            width: 64px;
+            height: 64px;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            border: 2px solid var(--success-color);
+        }
+        .icon-circle svg {
+            width: 32px;
+            height: 32px;
+            color: var(--success-color);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <div class="container">
+        
+        <div id="initial-state">
+            <h1>Quote Agent</h1>
+            <p>Enter your email to link your account and start generating quotes automatically on Telegram.</p>
+
+            <form id="handshakeForm">
+                <div class="input-group">
+                    <input type="email" id="email" placeholder="trade@example.com" required>
+                </div>
+                <button type="submit" id="submitBtn">
+                    <span id="btnText">Connect to Telegram</span>
+                    <div class="loader" id="loader"></div>
+                </button>
+            </form>
+        </div>
+
+        <div id="success-state">
+            <div class="icon-circle">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h1>Account Linked!</h1>
+            <p>Your unique ID has been generated. Tap the button below to open Telegram and train your AI agent.</p>
+            
+            <a href="#" id="telegramLink" class="telegram-btn button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21.1687 3.32832L2.57147 10.4907C1.04287 11.1019 1.0504 11.9567 2.29063 12.3364L7.06941 13.8291L18.1504 6.84594C18.6728 6.52988 19.148 6.70275 18.756 7.05084L9.79421 15.132H9.79155L9.79421 15.1333L9.37916 21.3255C9.9866 21.3255 10.2541 21.0475 10.5878 20.7259L13.4839 17.9056L19.5079 22.3524C20.6179 22.9644 21.4168 22.6483 21.6852 21.3651L25.626 2.80918C25.9904 1.34685 25.0863 0.692622 23.9872 1.13943L21.1687 3.32832Z" fill="white"/>
+                </svg>
+                Open in Telegram
+            </a>
+        </div>
+
+    </div>
+
+    <script>
+        const form = document.getElementById('handshakeForm');
+        const emailInput = document.getElementById('email');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        
+        const initialState = document.getElementById('initial-state');
+        const successState = document.getElementById('success-state');
+        const telegramLink = document.getElementById('telegramLink');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = emailInput.value.trim();
+            if (!email) return;
+
+            // UI Loading State
+            btnText.style.display = 'none';
+            loader.style.display = 'block';
+            submitBtn.disabled = true;
+
+            try {
+                // Actually hit the FastAPI Backend we just updated
+                const response = await fetch(`/handshake?email=${encodeURIComponent(email)}`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to initiate handshake');
+                }
+
+                const data = await response.json();
+                
+                if (data.user_id && data.bot_username) {
+                    // Update UI 
+                    initialState.style.display = 'none';
+                    successState.style.display = 'block';
+                    
+                    // Small delay for fade effect
+                    setTimeout(() => {
+                        successState.style.opacity = '1';
+                    }, 50);
+
+                    // Build the actual Telegram Deep Link
+                    const deepLink = `https://t.me/${data.bot_username}?start=${data.user_id}`;
+                    telegramLink.href = deepLink;
+                    
+                    // Optionally, redirect them immediately after 3 seconds:
+                    // setTimeout(() => { window.location.href = deepLink; }, 3000);
+                }
+
+            } catch (error) {
+                alert("An error occurred during handshake. Please verify backend is running.");
+                console.error(error);
+                
+                // Reset UI
+                btnText.style.display = 'block';
+                loader.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
