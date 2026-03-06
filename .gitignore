@@ -16,6 +16,7 @@ generated_documents/
 .DS_Store
 Thumbs.db
 .~lock.*
+~$*
 
 # Test artifacts
 Quote_*.docx

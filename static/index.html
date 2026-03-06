@@ -3,333 +3,845 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quote Agent - Onboarding</title>
-    <!-- Google Fonts -->
+    <title>Quote Agent — AI-Powered Quotes for Tradespeople</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --bg-color: #0f172a;
-            --surface-color: rgba(30, 41, 59, 0.7);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent-color: #3b82f6;
-            --accent-hover: #2563eb;
-            --success-color: #10b981;
+            --bg:           #0a0f1e;
+            --surface:      rgba(20, 30, 55, 0.7);
+            --surface-light: rgba(255, 255, 255, 0.04);
+            --border:       rgba(255, 255, 255, 0.08);
+            --primary:      #f8fafc;
+            --secondary:    #94a3b8;
+            --muted:        #475569;
+            --accent:       #3b82f6;
+            --accent-h:     #2563eb;
+            --success:      #10b981;
+            --purple:       #8b5cf6;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
+            background-color: var(--bg);
+            color: var(--primary);
+            overflow-x: hidden;
         }
 
-        /* Animated Dark Background with Glows */
-        .bg-glow {
+        /* ── Background glows ── */
+        .bg-glows {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .glow {
             position: absolute;
             border-radius: 50%;
-            filter: blur(100px);
-            z-index: 0;
-            animation: float 10s infinite ease-in-out alternate;
+            filter: blur(120px);
+            animation: drift 14s ease-in-out infinite alternate;
+        }
+        .glow-1 { width: 600px; height: 600px; background: rgba(59,130,246,0.18); top: -150px; left: -150px; }
+        .glow-2 { width: 700px; height: 700px; background: rgba(139,92,246,0.16); bottom: -200px; right: -150px; animation-delay: -7s; }
+        .glow-3 { width: 400px; height: 400px; background: rgba(16,185,129,0.07); top: 40%; left: 50%; animation-delay: -3s; }
+        @keyframes drift {
+            0%   { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 40px) scale(1.08); }
         }
 
-        .glow-1 {
-            width: 400px;
-            height: 400px;
-            background: rgba(59, 130, 246, 0.15);
-            top: -100px;
-            left: -100px;
-        }
+        /* ── Layout helpers ── */
+        .wrapper { position: relative; z-index: 1; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+        .section { padding: 96px 0; }
 
-        .glow-2 {
-            width: 500px;
-            height: 500px;
-            background: rgba(139, 92, 246, 0.15);
-            bottom: -200px;
-            right: -100px;
-            animation-delay: -5s;
-        }
-
-        @keyframes float {
-            0% { transform: translateY(0) scale(1); }
-            100% { transform: translateY(30px) scale(1.1); }
-        }
-
-        /* Glassmorphism Container */
-        .container {
-            position: relative;
-            z-index: 10;
-            background: var(--surface-color);
+        /* ── Nav ── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            padding: 20px 0;
+            background: rgba(10, 15, 30, 0.8);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px;
-            padding: 48px;
-            width: 100%;
-            max-width: 480px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid var(--border);
+        }
+        nav .container { display: flex; align-items: center; justify-content: space-between; }
+        .nav-logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em;
+            color: var(--primary); text-decoration: none;
+        }
+        .nav-logo .logo-dot {
+            width: 28px; height: 28px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem;
+        }
+        .nav-cta {
+            background: var(--accent);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .nav-cta:hover { background: var(--accent-h); transform: translateY(-1px); }
+
+        /* ── Hero ── */
+        #hero {
+            padding-top: 160px;
+            padding-bottom: 96px;
             text-align: center;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeUp 0.8s forwards cubic-bezier(0.16, 1, 0.3, 1);
         }
-
-        @keyframes fadeUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.3);
+            color: #93c5fd;
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            margin-bottom: 32px;
+            letter-spacing: 0.02em;
         }
-
-        h1 {
+        .badge-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+        h1.hero-title {
+            font-size: clamp(2.6rem, 6vw, 4.2rem);
             font-weight: 800;
-            font-size: 2.2rem;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+        .hero-sub {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: var(--secondary);
+            line-height: 1.7;
+            max-width: 600px;
+            margin: 0 auto 48px;
+        }
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--accent);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.25s;
+            box-shadow: 0 8px 24px rgba(59,130,246,0.35);
+        }
+        .btn-primary:hover { background: var(--accent-h); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(59,130,246,0.45); }
+        .btn-ghost {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: transparent;
+            color: var(--secondary);
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 1rem;
+            text-decoration: none;
+            border: 1px solid var(--border);
+            transition: all 0.25s;
+        }
+        .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--primary); }
 
-        p {
-            color: var(--text-secondary);
-            font-size: 1.05rem;
-            line-height: 1.6;
-            margin-bottom: 32px;
+        /* Demo card */
+        .hero-demo {
+            margin-top: 72px;
+            display: flex;
+            justify-content: center;
+        }
+        .demo-card {
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px 28px;
+            max-width: 420px;
+            width: 100%;
+            text-align: left;
+            box-shadow: 0 32px 64px rgba(0,0,0,0.4);
+        }
+        .demo-card-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .demo-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700;
+        }
+        .demo-name { font-weight: 600; font-size: 0.9rem; }
+        .demo-sub-name { font-size: 0.75rem; color: var(--secondary); }
+        .demo-messages { display: flex; flex-direction: column; gap: 12px; }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            max-width: 88%;
+        }
+        .msg-user {
+            background: var(--accent);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .msg-bot {
+            background: rgba(255,255,255,0.07);
+            color: var(--primary);
+            border-bottom-left-radius: 4px;
+        }
+        .msg-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+        .msg-doc {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.25);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+        }
+        .doc-icon { font-size: 1.4rem; }
+
+        /* ── Demo tabs ── */
+        .demo-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .demo-tab {
+            flex: 1;
+            padding: 7px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--secondary);
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .demo-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+        .demo-panel { display: none; }
+        .demo-panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+        /* Coming soon badge */
+        .coming-soon {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: rgba(139,92,246,0.15);
+            border: 1px solid rgba(139,92,246,0.35);
+            color: #c4b5fd;
+            padding: 2px 8px;
+            border-radius: 999px;
+            margin-left: 8px;
+            vertical-align: middle;
         }
 
-        /* Form Elements */
-        .input-group {
+        /* ── How it works ── */
+        #how-it-works { background: var(--surface-light); }
+        .section-label {
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+        .section-title {
+            text-align: center;
+            font-size: clamp(1.8rem, 4vw, 2.6rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+        }
+        .section-sub {
+            text-align: center;
+            color: var(--secondary);
+            font-size: 1.05rem;
+            max-width: 520px;
+            margin: 0 auto 64px;
+            line-height: 1.7;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .step-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 36px 32px;
             position: relative;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s, transform 0.3s;
+        }
+        .step-card:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-4px); }
+        .step-number {
+            display: inline-flex;
+            align-items: center; justify-content: center;
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            font-weight: 800;
+            font-size: 1rem;
             margin-bottom: 24px;
         }
+        .step-card h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            letter-spacing: -0.02em;
+        }
+        .step-card p {
+            color: var(--secondary);
+            font-size: 0.92rem;
+            line-height: 1.65;
+            margin-bottom: 0;
+        }
 
-        input {
+        /* ── Features ── */
+        #features { background: rgba(255,255,255,0.01); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+        .feature-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px 24px;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s;
+        }
+        .feature-card:hover { border-color: rgba(139,92,246,0.35); }
+        .feature-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 18px;
+        }
+        .fi-blue   { background: rgba(59,130,246,0.12); }
+        .fi-purple { background: rgba(139,92,246,0.12); }
+        .fi-green  { background: rgba(16,185,129,0.12); }
+        .fi-orange { background: rgba(249,115,22,0.12); }
+        .feature-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+        .feature-card p {
+            color: var(--secondary);
+            font-size: 0.88rem;
+            line-height: 1.65;
+            margin-bottom: 0;
+        }
+
+        /* ── CTA / Signup ── */
+        #signup { padding: 96px 0 120px; }
+        .cta-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            padding: 64px 48px;
+            max-width: 560px;
+            margin: 0 auto;
+            text-align: center;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+        }
+        .cta-card h2 {
+            font-size: clamp(1.6rem, 4vw, 2.2rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .cta-card > p {
+            color: var(--secondary);
+            margin-bottom: 36px;
+            font-size: 0.98rem;
+            line-height: 1.65;
+        }
+        .form-group { margin-bottom: 14px; }
+        .form-group input {
             width: 100%;
             padding: 16px 20px;
             border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(15, 23, 42, 0.5);
-            color: var(--text-primary);
+            border: 1px solid var(--border);
+            background: rgba(10,15,30,0.6);
+            color: var(--primary);
             font-size: 1rem;
             font-family: inherit;
             outline: none;
-            transition: all 0.3s ease;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-
-        input:focus {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+        .form-group input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
         }
+        .form-group input::placeholder { color: var(--muted); }
 
-        input::placeholder {
-            color: #64748b;
-        }
-
-        button {
+        #submitBtn {
             width: 100%;
             padding: 16px;
             border-radius: 12px;
             border: none;
-            background: var(--accent-color);
+            background: var(--accent);
             color: white;
             font-weight: 600;
-            font-size: 1.05rem;
+            font-size: 1rem;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+            transition: all 0.25s;
+            box-shadow: 0 8px 24px rgba(59,130,246,0.35);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
         }
-
-        button:hover {
-            background: var(--accent-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 15px 20px -3px rgba(59, 130, 246, 0.4);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        button:disabled {
-            background: #475569;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* Loader Animation */
+        #submitBtn:hover { background: var(--accent-h); transform: translateY(-2px); }
+        #submitBtn:disabled { background: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
         .loader {
             display: none;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
+            width: 18px; height: 18px;
+            border: 2.5px solid rgba(255,255,255,0.3);
             border-radius: 50%;
             border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .form-note {
+            margin-top: 14px;
+            font-size: 0.78rem;
+            color: var(--muted);
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Success State */
-        #success-state {
-            display: none;
-            opacity: 0;
-            transition: opacity 0.5s ease;
-        }
-
-        .telegram-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            background: #229ED9;
-            text-decoration: none;
-            margin-top: 10px;
-        }
-
-        .telegram-btn:hover {
-            background: #1C8ADB;
-            box-shadow: 0 15px 20px -3px rgba(34, 158, 217, 0.4);
-        }
-
-        .icon-circle {
-            width: 64px;
-            height: 64px;
-            background: rgba(16, 185, 129, 0.1);
+        /* Success state */
+        #success-state { display: none; opacity: 0; transition: opacity 0.4s ease; }
+        .success-icon {
+            width: 68px; height: 68px;
+            background: rgba(16,185,129,0.1);
+            border: 2px solid var(--success);
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             margin: 0 auto 24px;
-            border: 2px solid var(--success-color);
         }
-        .icon-circle svg {
-            width: 32px;
-            height: 32px;
-            color: var(--success-color);
+        .success-icon svg { width: 30px; height: 30px; color: var(--success); }
+        #success-state h2 {
+            font-size: 1.8rem; font-weight: 800;
+            letter-spacing: -0.03em; margin-bottom: 10px;
+            background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
+        #success-state p { color: var(--secondary); font-size: 0.95rem; margin-bottom: 28px; }
+        .telegram-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 16px;
+            border-radius: 12px;
+            background: #229ED9;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.25s;
+            box-shadow: 0 8px 24px rgba(34,158,217,0.3);
+        }
+        .telegram-btn:hover { background: #1c8cd6; transform: translateY(-2px); }
 
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 32px 0;
+            text-align: center;
+        }
+        footer p { color: var(--muted); font-size: 0.82rem; }
+
+        /* ── Fade-in on scroll ── */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .cta-card { padding: 40px 24px; }
+            #hero { padding-top: 130px; }
+            .hero-actions { flex-direction: column; align-items: center; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="bg-glow glow-1"></div>
-    <div class="bg-glow glow-2"></div>
+<div class="bg-glows">
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="glow glow-3"></div>
+</div>
 
+<!-- Nav -->
+<nav>
     <div class="container">
-        
-        <div id="initial-state">
-            <h1>Quote Agent</h1>
-            <p>Enter your email to link your account and start generating quotes automatically on Telegram.</p>
-
-            <form id="handshakeForm">
-                <div class="input-group">
-                    <input type="email" id="email" placeholder="trade@example.com" required>
-                </div>
-                <button type="submit" id="submitBtn">
-                    <span id="btnText">Connect to Telegram</span>
-                    <div class="loader" id="loader"></div>
-                </button>
-            </form>
-        </div>
-
-        <div id="success-state">
-            <div class="icon-circle">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </div>
-            <h1>Account Linked!</h1>
-            <p>Your unique ID has been generated. Tap the button below to open Telegram and train your AI agent.</p>
-            
-            <a href="#" id="telegramLink" class="telegram-btn button">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M21.1687 3.32832L2.57147 10.4907C1.04287 11.1019 1.0504 11.9567 2.29063 12.3364L7.06941 13.8291L18.1504 6.84594C18.6728 6.52988 19.148 6.70275 18.756 7.05084L9.79421 15.132H9.79155L9.79421 15.1333L9.37916 21.3255C9.9866 21.3255 10.2541 21.0475 10.5878 20.7259L13.4839 17.9056L19.5079 22.3524C20.6179 22.9644 21.4168 22.6483 21.6852 21.3651L25.626 2.80918C25.9904 1.34685 25.0863 0.692622 23.9872 1.13943L21.1687 3.32832Z" fill="white"/>
-                </svg>
-                Open in Telegram
-            </a>
-        </div>
-
+        <a href="#" class="nav-logo">
+            <div class="logo-dot">⚡</div>
+            Quote Agent
+        </a>
+        <a href="#signup" class="nav-cta">Get Started Free</a>
     </div>
+</nav>
 
-    <script>
-        const form = document.getElementById('handshakeForm');
-        const emailInput = document.getElementById('email');
-        const submitBtn = document.getElementById('submitBtn');
-        const btnText = document.getElementById('btnText');
-        const loader = document.getElementById('loader');
-        
-        const initialState = document.getElementById('initial-state');
-        const successState = document.getElementById('success-state');
-        const telegramLink = document.getElementById('telegramLink');
+<div class="wrapper">
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const email = emailInput.value.trim();
-            if (!email) return;
+    <!-- Hero -->
+    <section id="hero" class="container">
+        <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
+        <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
+        <p class="hero-sub">
+            Send a voice note, snap a photo, or type the job — your AI agent generates a branded, professional quote and sends it straight back to you on Telegram.
+        </p>
+        <div class="hero-actions">
+            <a href="#signup" class="btn-primary">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Start for Free
+            </a>
+            <a href="#how-it-works" class="btn-ghost">See how it works</a>
+        </div>
 
-            // UI Loading State
-            btnText.style.display = 'none';
-            loader.style.display = 'block';
-            submitBtn.disabled = true;
+        <div class="hero-demo">
+            <div class="demo-card">
+                <div class="demo-card-header">
+                    <div class="demo-avatar">QA</div>
+                    <div>
+                        <div class="demo-name">Quote Agent</div>
+                        <div class="demo-sub-name">AI Assistant · Online</div>
+                    </div>
+                </div>
 
-            try {
-                // Actually hit the FastAPI Backend we just updated
-                const response = await fetch(`/handshake?email=${encodeURIComponent(email)}`, {
-                    method: 'POST'
-                });
+                <div class="demo-tabs">
+                    <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
+                    <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
+                    <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
+                </div>
 
-                if (!response.ok) {
-                    throw new Error('Failed to initiate handshake');
-                }
+                <!-- Voice tab -->
+                <div class="demo-panel active" id="tab-voice">
+                    <div>
+                        <div class="msg msg-user">🎙️ Voice note — 0:12</div>
+                        <div class="msg-time" style="text-align:right">Just now</div>
+                    </div>
+                    <div>
+                        <div class="msg msg-bot">
+                            Got it! Here's what I extracted:<br><br>
+                            <strong>Quote for John Smith</strong><br>
+                            • Replace boiler — 1 × £850<br>
+                            • Labour (4hrs) — 4 × £65<br>
+                            <strong>Total: £1,110.00</strong><br><br>
+                            Does this look right? Reply YES or tell me what to change.
+                        </div>
+                    </div>
+                    <div><div class="msg msg-user">YES</div></div>
+                    <div>
+                        <div class="msg-doc">
+                            <span class="doc-icon">📄</span>
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
+                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                const data = await response.json();
-                
-                if (data.user_id && data.bot_username) {
-                    // Update UI 
-                    initialState.style.display = 'none';
-                    successState.style.display = 'block';
-                    
-                    // Small delay for fade effect
-                    setTimeout(() => {
-                        successState.style.opacity = '1';
-                    }, 50);
+                <!-- Photo tab -->
+                <div class="demo-panel" id="tab-photo">
+                    <div>
+                        <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
+                        <div class="msg-time" style="text-align:right">Just now</div>
+                    </div>
+                    <div>
+                        <div class="msg msg-bot">
+                            Read your notes! Here's what I found:<br><br>
+                            <strong>Quote for D. Patel</strong><br>
+                            • Rewire kitchen sockets — 1 × £220<br>
+                            • New consumer unit — 1 × £480<br>
+                            <strong>Total: £700.00</strong><br><br>
+                            Does this look right? Reply YES or tell me what to change.
+                        </div>
+                    </div>
+                    <div><div class="msg msg-user">YES</div></div>
+                    <div>
+                        <div class="msg-doc">
+                            <span class="doc-icon">📄</span>
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
+                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                    // Build the actual Telegram Deep Link
-                    const deepLink = `https://t.me/${data.bot_username}?start=${data.user_id}`;
-                    telegramLink.href = deepLink;
-                    
-                    // Optionally, redirect them immediately after 3 seconds:
-                    // setTimeout(() => { window.location.href = deepLink; }, 3000);
-                }
+                <!-- Text tab -->
+                <div class="demo-panel" id="tab-text">
+                    <div>
+                        <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55, parts £90</div>
+                        <div class="msg-time" style="text-align:right">Just now</div>
+                    </div>
+                    <div>
+                        <div class="msg msg-bot">
+                            Here's your quote:<br><br>
+                            <strong>Quote for Sarah Jones</strong><br>
+                            • Fit new radiator — 1 × £90<br>
+                            • Labour (3hrs) — 3 × £55<br>
+                            <strong>Total: £255.00</strong><br><br>
+                            Does this look right? Reply YES or tell me what to change.
+                        </div>
+                    </div>
+                    <div><div class="msg msg-user">YES</div></div>
+                    <div>
+                        <div class="msg-doc">
+                            <span class="doc-icon">📄</span>
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
+                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            } catch (error) {
-                alert("An error occurred during handshake. Please verify backend is running.");
-                console.error(error);
-                
-                // Reset UI
-                btnText.style.display = 'block';
-                loader.style.display = 'none';
-                submitBtn.disabled = false;
+            </div>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section id="how-it-works" class="section" style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+        <div class="container">
+            <div class="section-label fade-up">How it works</div>
+            <h2 class="section-title fade-up">Up and running in minutes</h2>
+            <p class="section-sub fade-up">Three steps to never hand-write another quote again.</p>
+
+            <div class="steps">
+                <div class="step-card fade-up">
+                    <div class="step-number">1</div>
+                    <h3>Register &amp; Link</h3>
+                    <p>Enter your email below. We generate a unique link that connects your account to Telegram in a single tap — no app install, no extra accounts.</p>
+                </div>
+                <div class="step-card fade-up" style="transition-delay: 0.1s">
+                    <div class="step-number">2</div>
+                    <h3>Train Your AI</h3>
+                    <p>Upload 3–10 past invoices or quotes (PDF or photo). The AI extracts your business name, VAT rate, bank details, and pricing style automatically.</p>
+                </div>
+                <div class="step-card fade-up" style="transition-delay: 0.2s">
+                    <div class="step-number">3</div>
+                    <h3>Generate Quotes</h3>
+                    <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded Word or Excel quote back in seconds. Review it on your computer in the evening, then email it straight to the client.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section">
+        <div class="container">
+            <div class="section-label fade-up">Features</div>
+            <h2 class="section-title fade-up">Everything a tradesperson needs</h2>
+            <p class="section-sub fade-up">No complicated software. No desktop required. Just your phone and Telegram.</p>
+
+            <div class="features-grid">
+                <div class="feature-card fade-up">
+                    <div class="feature-icon fi-blue">🎙️</div>
+                    <h3>Voice Notes</h3>
+                    <p>Describe the job out loud on the way to the van. The AI transcribes, structures, and prices it for you.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.08s">
+                    <div class="feature-icon fi-purple">📸</div>
+                    <h3>Photo Capture</h3>
+                    <p>Snap a photo of your handwritten notes or a job spec sheet. The AI reads and formats the details automatically.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.16s">
+                    <div class="feature-icon fi-green">🧬</div>
+                    <h3>Brand DNA</h3>
+                    <p>Your business name, address, bank info, and VAT rate are pulled from your existing invoices and applied to every quote.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.24s">
+                    <div class="feature-icon fi-orange">📄</div>
+                    <h3>Word &amp; Excel Output</h3>
+                    <p>Get your quotes as .docx or .xlsx — your choice — fully editable and ready to email straight to the client.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.32s">
+                    <div class="feature-icon fi-blue">✏️</div>
+                    <h3>Interactive Refinement</h3>
+                    <p>Review a summary before the doc is generated. Change a price, add a line item, or fix a name — all in plain English.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.4s">
+                    <div class="feature-icon fi-purple">☁️</div>
+                    <h3>Quote History</h3>
+                    <p>Every quote is saved to your account so you can re-use, reference, or rebill past jobs without digging through paperwork.</p>
+                </div>
+                <div class="feature-card fade-up" style="transition-delay: 0.48s; opacity: 0.75;">
+                    <div class="feature-icon fi-green">📧</div>
+                    <h3>Email Delivery <span class="coming-soon">Coming Soon</span></h3>
+                    <p>Send the finished quote directly to your client from Telegram with one tap — no computer needed.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Signup CTA -->
+    <section id="signup" class="section">
+        <div class="container">
+            <div class="cta-card">
+                <div id="initial-state">
+                    <div class="badge" style="margin-bottom: 20px;"><span class="badge-dot"></span> Free to get started</div>
+                    <h2>Ready to save hours every week?</h2>
+                    <p>Enter your email to link your account. You'll be generating your first quote in under 10 minutes.</p>
+
+                    <form id="handshakeForm">
+                        <div class="form-group">
+                            <input type="email" id="email" placeholder="trade@example.com" required autocomplete="email">
+                        </div>
+                        <button type="submit" id="submitBtn">
+                            <span id="btnText">Connect to Telegram</span>
+                            <div class="loader" id="loader"></div>
+                        </button>
+                    </form>
+                    <p class="form-note">No credit card required. Works with your existing Telegram account.</p>
+                </div>
+
+                <div id="success-state">
+                    <div class="success-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <h2>Account Created!</h2>
+                    <p>Your unique ID is ready. Tap below to open Telegram and start training your AI agent — it only takes a few minutes.</p>
+                    <a href="#" id="telegramLink" class="telegram-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21.1687 3.32832L2.57147 10.4907C1.04287 11.1019 1.0504 11.9567 2.29063 12.3364L7.06941 13.8291L18.1504 6.84594C18.6728 6.52988 19.148 6.70275 18.756 7.05084L9.79421 15.132H9.79155L9.79421 15.1333L9.37916 21.3255C9.9866 21.3255 10.2541 21.0475 10.5878 20.7259L13.4839 17.9056L19.5079 22.3524C20.6179 22.9644 21.4168 22.6483 21.6852 21.3651L25.626 2.80918C25.9904 1.34685 25.0863 0.692622 23.9872 1.13943L21.1687 3.32832Z"/></svg>
+                        Open in Telegram
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>© 2026 Quote Agent · Built for tradespeople, by Antigravity</p>
+        </div>
+    </footer>
+
+</div>
+
+<script>
+    // Form logic
+    const form         = document.getElementById('handshakeForm');
+    const emailInput   = document.getElementById('email');
+    const submitBtn    = document.getElementById('submitBtn');
+    const btnText      = document.getElementById('btnText');
+    const loader       = document.getElementById('loader');
+    const initialState = document.getElementById('initial-state');
+    const successState = document.getElementById('success-state');
+    const telegramLink = document.getElementById('telegramLink');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = emailInput.value.trim();
+        if (!email) return;
+
+        btnText.style.display = 'none';
+        loader.style.display  = 'block';
+        submitBtn.disabled    = true;
+
+        try {
+            const response = await fetch(`/handshake?email=${encodeURIComponent(email)}`, { method: 'POST' });
+            if (!response.ok) throw new Error('Server error. Please try again.');
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            if (data.user_id && data.bot_username) {
+                initialState.style.display = 'none';
+                successState.style.display = 'block';
+                setTimeout(() => { successState.style.opacity = '1'; }, 50);
+                telegramLink.href = `https://t.me/${data.bot_username}?start=${data.user_id}`;
+            } else {
+                throw new Error('Unexpected response. Please try again.');
             }
-        });
-    </script>
+
+        } catch (error) {
+            let errorEl = document.getElementById('error-msg');
+            if (!errorEl) {
+                errorEl = document.createElement('p');
+                errorEl.id = 'error-msg';
+                errorEl.style.cssText = 'color:#f87171;font-size:0.85rem;margin-top:12px;';
+                submitBtn.after(errorEl);
+            }
+            errorEl.textContent = error.message || 'An error occurred. Please try again.';
+            btnText.style.display = 'block';
+            loader.style.display  = 'none';
+            submitBtn.disabled    = false;
+        }
+    });
+
+    // Demo tab switching
+    function switchTab(name, btn) {
+        document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + name).classList.add('active');
+    }
+
+    // Scroll fade-in
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+
 </body>
 </html>
