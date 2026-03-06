@@ -542,10 +542,11 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 # Bot runner
 # ---------------------------------------------------------------------------
 
-def run_bot():
+def build_application():
+    """Build and return the configured bot Application (without running it)."""
     if not settings.TELEGRAM_BOT_TOKEN:
         logger.error("No TELEGRAM_BOT_TOKEN provided.")
-        return
+        return None
 
     application = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
 
@@ -558,7 +559,13 @@ def run_bot():
     # Text and voice — fixed precedence: (TEXT | VOICE) & ~COMMAND
     application.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, handle_text_or_voice))
 
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    return application
+
+
+def run_bot():
+    app = build_application()
+    if app:
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
