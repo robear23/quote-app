@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import re
 import glob
+import uuid
 from datetime import datetime, timezone, timedelta
 
 from telegram import Update
@@ -42,20 +44,26 @@ for filepath in glob.glob(os.path.join(TEMP_DIR, "*")):
 # ---------------------------------------------------------------------------
 
 async def update_user_state(telegram_id: int, state: str):
-    """Updates the user's bot_state in Supabase."""
-    supabase.table("users").update({"bot_state": state}).eq("telegram_id", telegram_id).execute()
+    """Updates the user's bot_state in Supabase (runs in thread to avoid blocking event loop)."""
+    await asyncio.to_thread(
+        lambda: supabase.table("users").update({"bot_state": state}).eq("telegram_id", telegram_id).execute()
+    )
 
 
 async def get_user(telegram_id: int):
-    """Retrieves user by telegram_id."""
-    res = supabase.table("users").select("*").eq("telegram_id", telegram_id).execute()
-    return res.data[0] if res.data else None
+    """Retrieves user by telegram_id (runs in thread to avoid blocking event loop)."""
+    def _fetch():
+        res = supabase.table("users").select("*").eq("telegram_id", telegram_id).execute()
+        return res.data[0] if res.data else None
+    return await asyncio.to_thread(_fetch)
 
 
-def get_brand_dna(user_id: str) -> dict:
-    """Retrieves the user's Brand DNA config from Supabase."""
-    res = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
-    return res.data[0] if res.data else {}
+async def get_brand_dna(user_id: str) -> dict:
+    """Retrieves the user's Brand DNA config from Supabase (runs in thread)."""
+    def _fetch():
+        res = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
+        return res.data[0] if res.data else {}
+    return await asyncio.to_thread(_fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -113,11 +121,13 @@ async def generate_and_send_quote(
     DAILY_LIMIT = 5
     yesterday = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     try:
-        count_res = supabase.table("documents") \
-            .select("id", count="exact") \
-            .eq("user_id", db_user["id"]) \
-            .gte("created_at", yesterday) \
-            .execute()
+        def _count_daily():
+            return supabase.table("documents") \
+                .select("id", count="exact") \
+                .eq("user_id", db_user["id"]) \
+                .gte("created_at", yesterday) \
+                .execute()
+        count_res = await asyncio.to_thread(_count_daily)
         daily_count = count_res.count or 0
     except Exception:
         daily_count = 0
@@ -141,22 +151,25 @@ async def generate_and_send_quote(
     else:
         status_msg = await update.message.reply_text("Generating your quote document...")
 
-    # Build filename: Quote_Smith_001.docx
+    # Build filename: Quote_Smith_001_a3f2bc.docx (UUID suffix prevents collisions)
     preferred_format = brand_dna.get("preferred_format") or "docx"
     output_ext = "xlsx" if preferred_format == "xlsx" else "docx"
     raw_name = quote_data.get("customer_name") or "Client"
     surname = re.sub(r'[^A-Za-z0-9]', '', raw_name.strip().split()[-1]) or "Client"
     try:
-        total_res = supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
+        def _count_total():
+            return supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
+        total_res = await asyncio.to_thread(_count_total)
         quote_num = (total_res.count or 0) + 1
     except Exception:
         quote_num = 1
-    output_filename = f"Quote_{surname}_{quote_num:03d}.{output_ext}"
+    unique_id = uuid.uuid4().hex[:6]
+    output_filename = f"Quote_{surname}_{quote_num:03d}_{unique_id}.{output_ext}"
 
     if preferred_format == "xlsx":
-        result = DocumentFactory.generate_xlsx(quote_data, brand_dna, output_filename)
+        result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
     else:
-        result = DocumentFactory.generate_docx(quote_data, brand_dna, output_filename)
+        result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
 
     doc_path = result["filepath"]
 
@@ -177,7 +190,7 @@ async def generate_and_send_quote(
 
     # Persist to Supabase documents table
     try:
-        supabase.table("documents").insert({
+        doc_record = {
             "user_id": db_user["id"],
             "customer_name": quote_data.get("customer_name"),
             "customer_address": quote_data.get("customer_address"),
@@ -185,7 +198,8 @@ async def generate_and_send_quote(
             "subtotal": result["subtotal"],
             "tax_amount": result["tax_amount"],
             "total": result["total"],
-        }).execute()
+        }
+        await asyncio.to_thread(lambda: supabase.table("documents").insert(doc_record).execute())
     except Exception as e:
         logger.error(f"Failed to store quote in Supabase: {e}")
 
@@ -236,12 +250,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # First-time link via deep-link payload (UUID from web registration)
     if payload:
         try:
-            res = supabase.table("users").select("*").eq("id", payload).execute()
-            if res.data:
-                supabase.table("users").update({
-                    "telegram_id": user.id,
-                    "bot_state": "ONBOARDING"
-                }).eq("id", payload).execute()
+            def _link_user():
+                res = supabase.table("users").select("*").eq("id", payload).execute()
+                if res.data:
+                    supabase.table("users").update({
+                        "telegram_id": user.id,
+                        "bot_state": "ONBOARDING"
+                    }).eq("id", payload).execute()
+                return res.data
+            data = await asyncio.to_thread(_link_user)
+            if data:
                 await update.message.reply_text(
                     f"Hi {user.first_name}! Account linked. Let's learn your Brand DNA.\n\n"
                     "Please upload 3–10 past invoices or quotes (PDF/Image). "
@@ -274,7 +292,7 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         f"Processing {len(files)} document(s) to extract your Brand DNA. This might take a minute..."
     )
 
-    dna_data = AIService.extract_brand_dna(files)
+    dna_data = await asyncio.to_thread(AIService.extract_brand_dna, files)
 
     if not dna_data:
         await msg.edit_text(
@@ -284,12 +302,15 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
 
     dna_data["user_id"] = db_user["id"]
     try:
-        supabase.table("user_configs").upsert(dna_data).execute()
+        await asyncio.to_thread(lambda: supabase.table("user_configs").upsert(dna_data).execute())
 
         # Cleanup temp files
         for f in files:
             if os.path.exists(f):
-                os.remove(f)
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass
         onboarding_files.pop(user.id, None)
 
         # Move to format selection step
@@ -358,8 +379,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.jpg")
             await file_obj.download_to_drive(custom_path=filepath)
 
-            brand_dna = get_brand_dna(db_user["id"])
-            quote_data = AIService.extract_quote_from_image(filepath)
+            brand_dna = await get_brand_dna(db_user["id"])
+            quote_data = await asyncio.to_thread(AIService.extract_quote_from_image, filepath)
 
             try:
                 os.remove(filepath)
@@ -430,7 +451,9 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         try:
-            supabase.table("user_configs").update({"preferred_format": chosen_format}).eq("user_id", db_user["id"]).execute()
+            await asyncio.to_thread(
+                lambda: supabase.table("user_configs").update({"preferred_format": chosen_format}).eq("user_id", db_user["id"]).execute()
+            )
             await update_user_state(user.id, "ACTIVE")
             format_name = "Word (.docx)" if chosen_format == "docx" else "Excel (.xlsx)"
             await update.message.reply_text(
@@ -466,7 +489,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         msg = await update.message.reply_text("Checking your response...")
-        result = AIService.refine_quote(pending_quote, update.message.text or "")
+        result = await asyncio.to_thread(AIService.refine_quote, pending_quote, update.message.text or "")
 
         if result.get("confirmed"):
             await generate_and_send_quote(
@@ -499,7 +522,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.ogg")
         await file_obj.download_to_drive(custom_path=filepath)
 
-        quote_data = AIService.transcribe_and_extract_voice(filepath)
+        quote_data = await asyncio.to_thread(AIService.transcribe_and_extract_voice, filepath)
 
         try:
             os.remove(filepath)
@@ -514,7 +537,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
-        quote_data = AIService.generate_quote_data(update.message.text)
+        quote_data = await asyncio.to_thread(AIService.generate_quote_data, update.message.text)
 
         if not quote_data or not quote_data.get("line_items"):
             await msg.edit_text(
@@ -528,7 +551,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # Show summary and move to confirmation state
-    brand_dna = get_brand_dna(db_user["id"])
+    brand_dna = await get_brand_dna(db_user["id"])
     quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
     context.user_data["pending_quote"] = quote_data
     context.user_data["pending_brand_dna"] = brand_dna

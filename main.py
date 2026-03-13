@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI
+import re
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from database import supabase
@@ -21,12 +22,14 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 if settings.RESEND_API_KEY:
     resend.api_key = settings.RESEND_API_KEY
 
+EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
 bot_username_cache = None
 
 def get_bot_username():
     global bot_username_cache
     if bot_username_cache: return bot_username_cache
-    
+
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getMe"
     try:
         response = httpx.get(url).json()
@@ -76,6 +79,12 @@ def send_welcome_email(to_email: str, telegram_link: str):
         logger.error(f"Failed to send welcome email to {to_email}: {e}")
 
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint for load balancers and monitoring."""
+    return {"status": "ok"}
+
+
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     """Serve the sleek landing page."""
@@ -89,28 +98,43 @@ def initiate_handshake(email: str):
     Creates a user record with the 'HANDSHAKE' state and returns the UUID.
     The web client uses this UUID to deep-link to the Telegram Bot.
     """
+    email = email.strip().lower()
+    if not email or not EMAIL_RE.match(email) or len(email) > 254:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
     bot_username = get_bot_username()
-    
+
     try:
-        # Basic check if user exists
+        # Check if user already exists
         response = supabase.table("users").select("*").eq("email", email).execute()
-        
+
         if response.data:
             user_id = response.data[0]['id']
             logger.info(f"User {email} already exists. Redirecting with ID: {user_id}")
             return {"user_id": user_id, "status": "existing_user", "bot_username": bot_username}
-            
-        # Create new user
-        new_user = supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
-        user_id = new_user.data[0]['id']
-        logger.info(f"Created new user {email} with ID: {user_id}")
-        telegram_link = f"https://t.me/{bot_username}?start={user_id}"
-        send_welcome_email(email, telegram_link)
-        return {"user_id": user_id, "status": "new_user", "bot_username": bot_username}
-        
+
+        # Create new user — inner try/except handles duplicate race condition
+        try:
+            new_user = supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
+            user_id = new_user.data[0]['id']
+            logger.info(f"Created new user {email} with ID: {user_id}")
+            telegram_link = f"https://t.me/{bot_username}?start={user_id}"
+            send_welcome_email(email, telegram_link)
+            return {"user_id": user_id, "status": "new_user", "bot_username": bot_username}
+        except Exception as insert_err:
+            err_str = str(insert_err).lower()
+            if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
+                # Concurrent request just created this user — fetch and return it
+                retry = supabase.table("users").select("*").eq("email", email).execute()
+                if retry.data:
+                    user_id = retry.data[0]['id']
+                    return {"user_id": user_id, "status": "existing_user", "bot_username": bot_username}
+            raise
+
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
         logger.error(f"Error during handshake: {e}")
         return {"error": "Failed to initiate handshake"}
-
