@@ -29,15 +29,22 @@ async def main():
     server = uvicorn.Server(config)
 
     if bot_app:
-        async with bot_app:
-            await bot_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            await bot_app.start()
-            logger.info("Telegram bot started.")
+        async def run_bot():
             try:
-                await server.serve()
-            finally:
-                await bot_app.updater.stop()
-                await bot_app.stop()
+                async with bot_app:
+                    await bot_app.updater.start_polling(
+                        allowed_updates=Update.ALL_TYPES,
+                        drop_pending_updates=True
+                    )
+                    await bot_app.start()
+                    logger.info("Telegram bot started.")
+                    # Wait until the web server signals exit
+                    while not server.should_exit:
+                        await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(f"Bot encountered a fatal error: {e}", exc_info=True)
+
+        await asyncio.gather(server.serve(), run_bot())
     else:
         logger.warning("Bot not started — missing TELEGRAM_BOT_TOKEN. Running web server only.")
         await server.serve()
