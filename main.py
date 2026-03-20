@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
         await bot_app.shutdown()
 
 
-app = FastAPI(title="Telegram Quote Agent API", lifespan=lifespan)
+app = FastAPI(title="Telegram Quote Me API", lifespan=lifespan)
 
 # Ensure static directory exists
 os.makedirs("static", exist_ok=True)
@@ -74,17 +74,17 @@ def send_welcome_email(to_email: str, telegram_link: str):
         resend.Emails.send({
             "from": settings.FROM_EMAIL,
             "to": [to_email],
-            "subject": "You're in — open Quote Agent in Telegram",
+            "subject": "You're in — open Quote Me in Telegram",
             "html": f"""
             <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e293b;">
-                <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Welcome to Quote Agent ⚡</h1>
+                <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Welcome to Quote Me ⚡</h1>
                 <p style="color:#475569;margin-bottom:24px;">
                     Your account is ready. Tap the button below to open Telegram and start training your AI — it only takes a few minutes.
                 </p>
                 <a href="{telegram_link}"
                    style="display:inline-block;background:#229ED9;color:white;font-weight:600;
                           padding:14px 28px;border-radius:10px;text-decoration:none;font-size:1rem;">
-                    Open Quote Agent in Telegram
+                    Open Quote Me in Telegram
                 </a>
                 <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
                 <p style="color:#64748b;font-size:0.85rem;margin-bottom:6px;"><strong>What happens next:</strong></p>
@@ -94,7 +94,7 @@ def send_welcome_email(to_email: str, telegram_link: str):
                     <li>Start generating branded quotes by voice, photo, or text</li>
                 </ol>
                 <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
-                    © 2026 Quote Agent · Built for tradespeople, by Antigravity
+                    © 2026 Quote Me · Built for tradespeople, by Antigravity
                 </p>
             </div>
             """,
