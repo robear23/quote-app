@@ -1,19 +1,47 @@
 import os
 import re
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from database import supabase
 import httpx
 import resend
 from config import settings
+from telegram import Update
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Telegram Quote Agent API")
+bot_app = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global bot_app
+    from bot_manager import build_application
+    bot_app = build_application()
+    if bot_app:
+        await bot_app.initialize()
+        if settings.WEBHOOK_URL:
+            webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}/telegram"
+            kwargs = {"url": webhook_url, "drop_pending_updates": True}
+            if settings.WEBHOOK_SECRET:
+                kwargs["secret_token"] = settings.WEBHOOK_SECRET
+            await bot_app.bot.set_webhook(**kwargs)
+            logger.info(f"Webhook set to {webhook_url}")
+        else:
+            logger.warning("WEBHOOK_URL not set — bot will not receive updates")
+        await bot_app.start()
+    yield
+    if bot_app:
+        await bot_app.stop()
+        await bot_app.shutdown()
+
+
+app = FastAPI(title="Telegram Quote Agent API", lifespan=lifespan)
 
 # Ensure static directory exists
 os.makedirs("static", exist_ok=True)
@@ -24,18 +52,15 @@ if settings.RESEND_API_KEY:
 
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
-bot_username_cache = None
-
 def get_bot_username():
-    global bot_username_cache
-    if bot_username_cache: return bot_username_cache
-
+    if bot_app and bot_app.bot.username:
+        return bot_app.bot.username
+    # Fallback before bot is initialized
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getMe"
     try:
         response = httpx.get(url).json()
         if response.get("ok"):
-            bot_username_cache = response["result"]["username"]
-            return bot_username_cache
+            return response["result"]["username"]
     except Exception as e:
         logger.error(f"Failed to fetch bot username: {e}")
     return "YourBot"
@@ -83,6 +108,21 @@ def send_welcome_email(to_email: str, telegram_link: str):
 def health_check():
     """Health check endpoint for load balancers and monitoring."""
     return {"status": "ok"}
+
+
+@app.post("/telegram")
+async def telegram_webhook(request: Request):
+    """Receives updates from Telegram and dispatches them to the bot."""
+    if settings.WEBHOOK_SECRET:
+        token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if token != settings.WEBHOOK_SECRET:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    if not bot_app:
+        raise HTTPException(status_code=503, detail="Bot not ready")
+    data = await request.json()
+    update = Update.de_json(data, bot_app.bot)
+    await bot_app.process_update(update)
+    return {"ok": True}
 
 
 @app.get("/", response_class=HTMLResponse)
