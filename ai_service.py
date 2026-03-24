@@ -100,6 +100,11 @@ RETRY_DELAY = 5  # seconds
 JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
 
 
+class RateLimitError(Exception):
+    """Raised when Gemini API rate limit retries are exhausted."""
+    pass
+
+
 def _generate_with_retry(contents, config=JSON_CONFIG):
     """Calls Gemini with exponential backoff retry logic."""
     for attempt in range(MAX_RETRIES):
@@ -118,7 +123,7 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
                 time.sleep(wait_time)
             else:
                 raise
-    raise Exception("Max retries exceeded for Gemini API call")
+    raise RateLimitError("Gemini API rate limit reached — please try again shortly.")
 
 
 class AIService:
@@ -161,6 +166,8 @@ class AIService:
 
             return json.loads(response.text)
 
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Failed to extract Brand DNA: {e}")
             return {}
@@ -171,6 +178,8 @@ class AIService:
         try:
             response = _generate_with_retry(f"{QUOTE_GENERATION_PROMPT}\n\nUser Input: {text}")
             return json.loads(response.text)
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Failed to generate quote data: {e}")
             return {}
@@ -190,6 +199,8 @@ class AIService:
 
             return json.loads(response.text)
 
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Failed to process voice note: {e}")
             return {}
@@ -209,6 +220,8 @@ class AIService:
 
             return json.loads(response.text)
 
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Failed to extract quote from image: {e}")
             return {}
@@ -227,6 +240,8 @@ class AIService:
             response = _generate_with_retry(prompt)
             return json.loads(response.text)
 
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Failed to refine quote: {e}")
             return {"confirmed": True, "updated_quote": current_quote}

@@ -11,7 +11,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 from config import settings
 from database import supabase
-from ai_service import AIService
+from ai_service import AIService, RateLimitError
+
+RATE_LIMIT_MSG = "I'm a bit overwhelmed right now — please try again in a minute."
 from document_factory import DocumentFactory, _extract_tax_rate
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -292,7 +294,11 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         f"Processing {len(files)} document(s) to extract your Brand DNA. This might take a minute..."
     )
 
-    dna_data = await asyncio.to_thread(AIService.extract_brand_dna, files)
+    try:
+        dna_data = await asyncio.to_thread(AIService.extract_brand_dna, files)
+    except RateLimitError:
+        await msg.edit_text(RATE_LIMIT_MSG)
+        return
 
     if not dna_data:
         await msg.edit_text(
@@ -380,7 +386,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await file_obj.download_to_drive(custom_path=filepath)
 
             brand_dna = await get_brand_dna(db_user["id"])
-            quote_data = await asyncio.to_thread(AIService.extract_quote_from_image, filepath)
+            try:
+                quote_data = await asyncio.to_thread(AIService.extract_quote_from_image, filepath)
+            except RateLimitError:
+                await msg.edit_text(RATE_LIMIT_MSG)
+                return
 
             try:
                 os.remove(filepath)
@@ -489,7 +499,11 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         msg = await update.message.reply_text("Checking your response...")
-        result = await asyncio.to_thread(AIService.refine_quote, pending_quote, update.message.text or "")
+        try:
+            result = await asyncio.to_thread(AIService.refine_quote, pending_quote, update.message.text or "")
+        except RateLimitError:
+            await msg.edit_text(RATE_LIMIT_MSG)
+            return
 
         if result.get("confirmed"):
             await generate_and_send_quote(
@@ -522,7 +536,11 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.ogg")
         await file_obj.download_to_drive(custom_path=filepath)
 
-        quote_data = await asyncio.to_thread(AIService.transcribe_and_extract_voice, filepath)
+        try:
+            quote_data = await asyncio.to_thread(AIService.transcribe_and_extract_voice, filepath)
+        except RateLimitError:
+            await msg.edit_text(RATE_LIMIT_MSG)
+            return
 
         try:
             os.remove(filepath)
@@ -537,7 +555,11 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
-        quote_data = await asyncio.to_thread(AIService.generate_quote_data, update.message.text)
+        try:
+            quote_data = await asyncio.to_thread(AIService.generate_quote_data, update.message.text)
+        except RateLimitError:
+            await msg.edit_text(RATE_LIMIT_MSG)
+            return
 
         if not quote_data or not quote_data.get("line_items"):
             await msg.edit_text(
