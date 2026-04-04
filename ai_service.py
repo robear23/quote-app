@@ -188,7 +188,23 @@ class AIService:
     def transcribe_and_extract_voice(file_path: str) -> dict:
         """Transcribes a voice note (OGG) and extracts structured quote data."""
         try:
-            uploaded_file = client.files.upload(file=file_path)
+            uploaded_file = client.files.upload(
+                file=file_path,
+                config=types.UploadFileConfig(mime_type="audio/ogg"),
+            )
+
+            # Wait for Gemini to finish processing the uploaded file
+            max_wait = 30
+            waited = 0
+            while getattr(uploaded_file.state, "name", str(uploaded_file.state)) == "PROCESSING":
+                time.sleep(2)
+                waited += 2
+                uploaded_file = client.files.get(name=uploaded_file.name)
+                if waited >= max_wait:
+                    raise Exception("Timed out waiting for voice file to be processed by Gemini")
+
+            if getattr(uploaded_file.state, "name", str(uploaded_file.state)) == "FAILED":
+                raise Exception(f"Gemini file processing failed for {file_path}")
 
             response = _generate_with_retry([VOICE_QUOTE_PROMPT, uploaded_file])
 
