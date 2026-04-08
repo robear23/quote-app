@@ -14,4 +14,21 @@ class Settings:
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "").strip()  # e.g. https://yourapp.railway.app
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "").strip()
 
+    # App base URL (used for OAuth redirect URIs and Stripe success/cancel URLs)
+    APP_URL: str = os.getenv("APP_URL", "http://localhost:8000").strip().rstrip("/")
+
+    # Google OAuth 2.0 — configure at console.cloud.google.com
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+
+    # Stripe — configure at dashboard.stripe.com
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    STRIPE_PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "").strip()
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+    # Price ID for the £10/month Premium plan — create in Stripe dashboard
+    STRIPE_PREMIUM_PRICE_ID: str = os.getenv("STRIPE_PREMIUM_PRICE_ID", "").strip()
+
+    # Session signing secret — set a long random string in production
+    SESSION_SECRET: str = os.getenv("SESSION_SECRET", "change-me-in-production").strip()
+
 settings = Settings()

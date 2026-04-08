@@ -4,7 +4,6 @@ import os
 import re
 import glob
 import uuid
-from datetime import datetime, timezone, timedelta
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -119,26 +118,25 @@ async def generate_and_send_quote(
     """Generates the quote document, sends it, stores in DB, and cleans up."""
     user = update.effective_user
 
-    # Daily usage limit (testing phase)
-    DAILY_LIMIT = 5
-    yesterday = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    try:
-        def _count_daily():
-            return supabase.table("documents") \
-                .select("id", count="exact") \
-                .eq("user_id", db_user["id"]) \
-                .gte("created_at", yesterday) \
-                .execute()
-        count_res = await asyncio.to_thread(_count_daily)
-        daily_count = count_res.count or 0
-    except Exception:
-        daily_count = 0
+    # Monthly usage limit — based on subscription tier
+    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier
+    from config import settings as _settings
+    tier = await get_user_tier(db_user["id"])
+    monthly_limit = monthly_limit_for_tier(tier)
+    monthly_count = await get_monthly_usage(db_user["id"])
 
-    if daily_count >= DAILY_LIMIT:
-        msg_text = (
-            f"You've reached the daily limit of {DAILY_LIMIT} quotes during the testing phase. "
-            "Try again tomorrow!"
-        )
+    if monthly_count >= monthly_limit:
+        account_url = f"{_settings.APP_URL}/account"
+        if tier == "free":
+            msg_text = (
+                f"You've used all {monthly_limit} free quotes this month.\n\n"
+                f"Upgrade to Premium for 100 quotes/month at:\n{account_url}"
+            )
+        else:
+            msg_text = (
+                f"You've reached your Premium limit of {monthly_limit} quotes this month. "
+                "Resets on the 1st of next month."
+            )
         if status_msg:
             await status_msg.edit_text(msg_text)
         else:
