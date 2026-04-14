@@ -358,7 +358,7 @@ async def auth_google_callback(
 
 @app.post("/auth/logout")
 async def auth_logout():
-    redirect = RedirectResponse("/")
+    redirect = RedirectResponse("/", status_code=303)
     redirect.delete_cookie("qm_session")
     return redirect
 
