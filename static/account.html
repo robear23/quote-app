@@ -315,18 +315,39 @@
 <script>
     let accountData = null;
 
+    async function fetchAccount() {
+        const res = await fetch('/api/account', { credentials: 'include' });
+        if (res.status === 401) return { status: 401 };
+        if (!res.ok) throw new Error('Server error');
+        return { status: 200, data: await res.json() };
+    }
+
     async function loadAccount() {
         try {
-            const res = await fetch('/api/account', { credentials: 'include' });
+            const params = new URLSearchParams(window.location.search);
+            const justUpgraded = params.get('upgraded') === '1';
 
-            if (res.status === 401) {
+            let result = await fetchAccount();
+
+            if (result.status === 401) {
                 document.getElementById('stateLoading').style.display = 'none';
                 document.getElementById('stateLogin').style.display = 'flex';
                 return;
             }
-            if (!res.ok) throw new Error('Server error');
 
-            accountData = await res.json();
+            // If we just came back from Stripe but the webhook hasn't fired yet,
+            // poll until the tier flips to premium (up to ~15s).
+            if (justUpgraded && result.data.subscription_tier !== 'premium') {
+                const loadingEl = document.getElementById('stateLoading');
+                loadingEl.querySelector('p').textContent = 'Confirming your upgrade…';
+                const deadline = Date.now() + 15000;
+                while (Date.now() < deadline && result.data.subscription_tier !== 'premium') {
+                    await new Promise(r => setTimeout(r, 1500));
+                    result = await fetchAccount();
+                }
+            }
+
+            accountData = result.data;
             renderAccount(accountData);
 
         } catch (e) {

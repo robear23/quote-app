@@ -389,6 +389,7 @@ async def api_account(request: Request):
     tier = await get_user_tier(user_id)
     usage = await get_monthly_usage(user_id)
     limit = monthly_limit_for_tier(tier)
+    logger.info(f"Account API: user_id={user_id} email={user.get('email')} telegram_id={user.get('telegram_id')} usage={usage}/{limit}")
 
     bot_username = get_bot_username()
     telegram_url = f"https://t.me/{bot_username}?start={user_id}"
@@ -410,6 +411,7 @@ async def api_account(request: Request):
         "monthly_usage": usage,
         "monthly_limit": limit,
         "telegram_linked": bool(user.get("telegram_id")),
+        "telegram_id": user.get("telegram_id"),
         "telegram_url": telegram_url,
         "bot_username": bot_username,
         "subscription_period_end": period_end,

@@ -5,8 +5,8 @@ import re
 import glob
 import uuid
 
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from config import settings
 from database import supabase
@@ -99,8 +99,12 @@ def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
         lines.append(f"VAT/Tax ({tax_rate:.0f}%): {currency} {tax_amount:.2f}")
         lines.append(f"*TOTAL: {currency} {subtotal + tax_amount:.2f}*")
 
-    lines.append("\nDoes this look right? Reply *YES* to generate the document, or tell me what to change.")
+    lines.append("\nDoes this look right? Press *YES* or tell me what to change.")
     return "\n".join(lines)
+
+
+def _yes_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("YES ✓", callback_data="confirm_yes")]])
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +209,9 @@ async def generate_and_send_quote(
             "total": result["total"],
         }
         await asyncio.to_thread(lambda: supabase.table("documents").insert(doc_record).execute())
+        logger.info(f"Document stored for user {db_user['id']} (telegram_id={user.id})")
     except Exception as e:
-        logger.error(f"Failed to store quote in Supabase: {e}")
+        logger.error(f"Failed to store quote in Supabase for user {db_user['id']}: {e}")
 
     # Clear pending state and return user to ACTIVE
     context.user_data.pop("pending_quote", None)
@@ -341,6 +346,7 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             lambda: supabase.table("feedback").insert({
                 "user_id": db_user["id"],
                 "telegram_id": user.id,
+                "email": db_user.get("email"),
                 "message": feedback_text,
             }).execute()
         )
@@ -352,6 +358,17 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Sorry, something went wrong saving your feedback. Please try again.")
 
 
+async def whoami(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Replies with the email linked to this Telegram account."""
+    user = update.effective_user
+    db_user = await get_user(user.id)
+    if not db_user:
+        await update.message.reply_text("No account found for this Telegram ID. Please register on the website first.")
+        return
+    email = db_user.get("email") or "(no email linked)"
+    await update.message.reply_text(f"Your linked email: *{email}*", parse_mode="Markdown")
+
+
 async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     """Lists all available bot commands."""
     await update.message.reply_text(
@@ -359,6 +376,7 @@ async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         "/start — Link your account and get started\n"
         "/restart — Re-upload your quote DNA documents\n"
         "/feedback — Send feedback to the developers\n"
+        "/whoami — Check which email is linked to your account\n"
         "/commands — Show this list of commands\n"
         "/finish\\_onboarding — Complete the onboarding process after uploading samples",
         parse_mode="Markdown"
@@ -498,7 +516,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update_user_state(user.id, "AWAITING_CONFIRMATION")
 
             summary = format_quote_summary(quote_data, brand_dna)
-            await msg.edit_text(summary, parse_mode="Markdown")
+            await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
         else:
             await update.message.reply_text(
                 "Send a *photo* of your handwritten notes to extract a quote, "
@@ -604,7 +622,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             updated_quote = result.get("updated_quote", pending_quote)
             context.user_data["pending_quote"] = updated_quote
             summary = format_quote_summary(updated_quote, pending_brand_dna)
-            await msg.edit_text(f"Updated quote:\n\n{summary}", parse_mode="Markdown")
+            await msg.edit_text(f"Updated quote:\n\n{summary}", parse_mode="Markdown", reply_markup=_yes_keyboard())
         return
 
     # ------------------------------------------------------------------
@@ -668,7 +686,44 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     await update_user_state(user.id, "AWAITING_CONFIRMATION")
 
     summary = format_quote_summary(quote_data, brand_dna)
-    await msg.edit_text(summary, parse_mode="Markdown")
+    await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
+
+
+# ---------------------------------------------------------------------------
+# Inline button callbacks
+# ---------------------------------------------------------------------------
+
+async def handle_confirm_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the YES ✓ inline button press — treat it as a typed YES confirmation."""
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    db_user = await get_user(user.id)
+    if not db_user:
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
+    pending_quote = context.user_data.get("pending_quote")
+    pending_brand_dna = context.user_data.get("pending_brand_dna")
+
+    if not pending_quote:
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.message.reply_text(
+            "Sorry, I lost track of the pending quote (likely a restart). Please send the job details again."
+        )
+        return
+
+    # Remove the button so it can't be pressed twice
+    await query.edit_message_reply_markup(reply_markup=None)
+
+    msg = await query.message.reply_text("Generating your document...")
+    await generate_and_send_quote(
+        update, context, db_user,
+        pending_quote,
+        pending_brand_dna,
+        status_msg=msg,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -687,7 +742,9 @@ def build_application():
     application.add_handler(CommandHandler("finish_onboarding", finish_onboarding))
     application.add_handler(CommandHandler("restart", restart))
     application.add_handler(CommandHandler("feedback", feedback))
+    application.add_handler(CommandHandler("whoami", whoami))
     application.add_handler(CommandHandler("commands", commands))
+    application.add_handler(CallbackQueryHandler(handle_confirm_yes, pattern="^confirm_yes$"))
 
     # Photos and file documents
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document))
