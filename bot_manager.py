@@ -180,7 +180,12 @@ async def generate_and_send_quote(
     # Send the document
     with open(doc_path, 'rb') as doc_file:
         await context.bot.send_document(chat_id=user.id, document=doc_file, filename=output_filename)
-    await status_msg.edit_text("Here is your generated quote!")
+    await status_msg.edit_text(
+        "Here is your generated quote!\n\n"
+        "Use commands:\n"
+        "/restart to change your uploaded quote DNA documents\n"
+        "/feedback along with a message to give us feedback and tell us what features you want added."
+    )
 
     # Cleanup local file
     try:
@@ -273,6 +278,91 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text("An error occurred linking your account. Please try again.")
     else:
         await update.message.reply_text("Hi! Please visit our website to register before using the bot.")
+
+
+async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Resets the user back to ONBOARDING so they can re-upload Brand DNA documents."""
+    user = update.effective_user
+    db_user = await get_user(user.id)
+
+    if not db_user:
+        await update.message.reply_text("Please register first at our website.")
+        return
+
+    # Delete existing Brand DNA config
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.table("user_configs").delete().eq("user_id", db_user["id"]).execute()
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete user_configs during restart: {e}")
+
+    # Clear any in-memory onboarding files
+    onboarding_files.pop(user.id, None)
+
+    # Reset state to ONBOARDING
+    await update_user_state(user.id, "ONBOARDING")
+
+    await update.message.reply_text(
+        "Your Brand DNA has been reset! Let's start fresh.\n\n"
+        "Please upload 3–10 past invoices or quotes (PDF/Image). "
+        "Type /finish\\_onboarding when you're done.",
+        parse_mode="Markdown"
+    )
+
+
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Stores user feedback in the Supabase feedback table."""
+    user = update.effective_user
+    db_user = await get_user(user.id)
+
+    if not db_user:
+        await update.message.reply_text("Please register first at our website.")
+        return
+
+    # Extract the feedback message (everything after /feedback)
+    message_text = (update.message.text or "").strip()
+    # Remove the /feedback command prefix
+    if message_text.lower().startswith("/feedback"):
+        feedback_text = message_text[len("/feedback"):].strip()
+    else:
+        feedback_text = ""
+
+    if not feedback_text:
+        await update.message.reply_text(
+            "Please include your feedback message after the command.\n\n"
+            "_Example: /feedback I love it but could you include invoices too?!?_",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.table("feedback").insert({
+                "user_id": db_user["id"],
+                "telegram_id": user.id,
+                "message": feedback_text,
+            }).execute()
+        )
+        await update.message.reply_text(
+            "Thanks for your feedback! The developers will be in touch via email shortly."
+        )
+    except Exception as e:
+        logger.error(f"Failed to store feedback: {e}")
+        await update.message.reply_text("Sorry, something went wrong saving your feedback. Please try again.")
+
+
+async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lists all available bot commands."""
+    await update.message.reply_text(
+        "📋 *Available Commands*\n\n"
+        "/start — Link your account and get started\n"
+        "/restart — Re-upload your quote DNA documents\n"
+        "/feedback — Send feedback to the developers\n"
+        "/commands — Show this list of commands\n"
+        "/finish\\_onboarding — Complete the onboarding process after uploading samples",
+        parse_mode="Markdown"
+    )
 
 
 async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -595,6 +685,9 @@ def build_application():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("finish_onboarding", finish_onboarding))
+    application.add_handler(CommandHandler("restart", restart))
+    application.add_handler(CommandHandler("feedback", feedback))
+    application.add_handler(CommandHandler("commands", commands))
 
     # Photos and file documents
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document))

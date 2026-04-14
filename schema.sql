@@ -71,3 +71,14 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Feedback Table (stores user feedback from /feedback bot command)
+CREATE TABLE IF NOT EXISTS feedback (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    telegram_id BIGINT,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
