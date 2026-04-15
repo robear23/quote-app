@@ -247,7 +247,7 @@
                 <div class="usage-bar-track">
                     <div class="usage-bar-fill" id="usageBar" style="width:0%"></div>
                 </div>
-                <p class="usage-note">Resets on the 1st of each month.</p>
+                <p class="usage-note" id="usageNote">Resets on the 1st of each month.</p>
                 <p class="period-note" id="periodNote" style="display:none"></p>
             </div>
         </div>
@@ -387,8 +387,24 @@
         setTimeout(() => { bar.style.width = pct + '%'; }, 50);
         if (pct >= 80) bar.classList.add('near-limit');
 
-        // Period end
-        if (d.subscription_period_end) {
+        // Usage reset date — billing anniversary for premium, 1st of month for free
+        if (d.billing_period_start) {
+            const start = new Date(d.billing_period_start);
+            if (isPremium) {
+                // Next reset = same day next month (i.e. subscription_period_end)
+                const resetLabel = d.subscription_period_end
+                    ? new Date(d.subscription_period_end).toLocaleDateString('en-GB', { day:'numeric', month:'long' })
+                    : null;
+                if (resetLabel) {
+                    document.getElementById('usageNote').textContent = `Resets on ${resetLabel}.`;
+                }
+            } else {
+                document.getElementById('usageNote').textContent = 'Resets on the 1st of each month.';
+            }
+        }
+
+        // Period end (renewal notice for premium)
+        if (isPremium && d.subscription_period_end) {
             const end = new Date(d.subscription_period_end);
             document.getElementById('periodNote').style.display = 'block';
             document.getElementById('periodNote').textContent =

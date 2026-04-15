@@ -940,21 +940,18 @@
                             <div class="loader" id="loader"></div>
                         </button>
                     </form>
-                    <p class="form-note">No password needed. New accounts get a welcome email with your Telegram link.</p>
+                    <p class="form-note">No password needed — we'll email you a secure sign-in link.</p>
                 </div>
 
                 <div id="success-state">
                     <div class="success-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                         </svg>
                     </div>
-                    <h2>Account Created!</h2>
-                    <p>Your unique ID is ready. Tap below to open Telegram and start training your AI agent — it only takes a few minutes.</p>
-                    <a href="#" id="telegramLink" class="telegram-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21.1687 3.32832L2.57147 10.4907C1.04287 11.1019 1.0504 11.9567 2.29063 12.3364L7.06941 13.8291L18.1504 6.84594C18.6728 6.52988 19.148 6.70275 18.756 7.05084L9.79421 15.132H9.79155L9.79421 15.1333L9.37916 21.3255C9.9866 21.3255 10.2541 21.0475 10.5878 20.7259L13.4839 17.9056L19.5079 22.3524C20.6179 22.9644 21.4168 22.6483 21.6852 21.3651L25.626 2.80918C25.9904 1.34685 25.0863 0.692622 23.9872 1.13943L21.1687 3.32832Z"/></svg>
-                        Open in Telegram
-                    </a>
+                    <h2>Check your email</h2>
+                    <p>We've sent a sign-in link to <strong id="sentEmailDisplay"></strong>. Click it to access your account — the link expires in 30 minutes.</p>
+                    <p style="color:var(--secondary);font-size:0.85rem;margin-top:16px;">Didn't get it? Check your spam folder, or <a href="#" id="resendLink" style="color:var(--accent);">try again</a>.</p>
                 </div>
             </div>
         </div>
@@ -972,11 +969,12 @@
 <script>
     // ── Session check & auth error handling ──
     const AUTH_ERRORS = {
-        '1':        'Sign-in failed. Please try again.',
-        'csrf':     'Security check failed. Please try again.',
-        'exchange': 'Google authentication failed. Please try again.',
-        'no_email': "Couldn't get your email from Google. Please try again.",
-        'db':       'Account error. Please contact support.',
+        '1':            'Sign-in failed. Please try again.',
+        'csrf':         'Security check failed. Please try again.',
+        'exchange':     'Google authentication failed. Please try again.',
+        'no_email':     "Couldn't get your email from Google. Please try again.",
+        'db':           'Account error. Please contact support.',
+        'invalid_link': 'This sign-in link has expired or already been used. Please request a new one.',
     };
 
     (async function initPage() {
@@ -1022,13 +1020,8 @@
     const loader       = document.getElementById('loader');
     const initialState = document.getElementById('initial-state');
     const successState = document.getElementById('success-state');
-    const telegramLink = document.getElementById('telegramLink');
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = emailInput.value.trim();
-        if (!email) return;
-
+    async function submitEmail(email) {
         btnText.style.display = 'none';
         loader.style.display  = 'block';
         submitBtn.disabled    = true;
@@ -1040,8 +1033,10 @@
             const data = await response.json();
             if (data.error) throw new Error(data.error);
 
-            if (data.user_id) {
-                window.location.href = '/account';
+            if (data.status === 'check_email') {
+                document.getElementById('sentEmailDisplay').textContent = email;
+                initialState.style.display = 'none';
+                successState.style.display = 'block';
             } else {
                 throw new Error('Unexpected response. Please try again.');
             }
@@ -1059,6 +1054,22 @@
             loader.style.display  = 'none';
             submitBtn.disabled    = false;
         }
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = emailInput.value.trim();
+        if (!email) return;
+        await submitEmail(email);
+    });
+
+    document.getElementById('resendLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        successState.style.display = 'none';
+        initialState.style.display = 'block';
+        btnText.style.display = 'block';
+        loader.style.display  = 'none';
+        submitBtn.disabled    = false;
     });
 
     // Demo tab switching

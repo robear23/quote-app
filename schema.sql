@@ -65,10 +65,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     stripe_customer_id TEXT,
     plan_tier TEXT DEFAULT 'free',       -- 'free' | 'premium'
     status TEXT DEFAULT 'active',        -- 'active' | 'canceled' | 'past_due' | 'unpaid'
+    current_period_start TIMESTAMP WITH TIME ZONE,
     current_period_end TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS current_period_start TIMESTAMP WITH TIME ZONE;
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 

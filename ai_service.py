@@ -1,5 +1,6 @@
 from google import genai
 from google.genai import types
+import asyncio
 import json
 import logging
 import time
@@ -98,6 +99,16 @@ MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
 
 JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
+
+# Limits concurrent Gemini calls to prevent thread pool exhaustion under load.
+# Tune this based on your Gemini API quota (free tier: lower; paid tier: higher).
+_ai_semaphore = asyncio.Semaphore(5)
+
+
+async def run_ai(func, *args):
+    """Run a sync AI function with concurrency limiting (max 5 simultaneous Gemini calls)."""
+    async with _ai_semaphore:
+        return await asyncio.to_thread(func, *args)
 
 
 class RateLimitError(Exception):

@@ -1,6 +1,8 @@
+import asyncio
 import os
 import re
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -15,7 +17,8 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from telegram import Update
 
 from config import settings
-from database import supabase
+import database
+from database import init_supabase
 import logging
 
 # Configure logging
@@ -28,6 +31,7 @@ bot_app = None
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global bot_app
+    await init_supabase()
     from bot_manager import build_application
     bot_app = build_application()
     if bot_app:
@@ -61,6 +65,31 @@ if settings.STRIPE_SECRET_KEY:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+# ---------------------------------------------------------------------------
+# Magic-link token store (in-memory, single-use, 30-minute TTL)
+# ---------------------------------------------------------------------------
+
+# token -> (user_id, expires_at)
+_login_tokens: dict[str, tuple[str, float]] = {}
+
+
+def _generate_login_token(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    _login_tokens[token] = (user_id, time.time() + 1800)
+    return token
+
+
+def _consume_login_token(token: str) -> str | None:
+    """Returns user_id if token is valid and unexpired, then deletes it."""
+    entry = _login_tokens.pop(token, None)
+    if entry is None:
+        return None
+    user_id, expires_at = entry
+    if time.time() > expires_at:
+        return None
+    return user_id
+
 
 # ---------------------------------------------------------------------------
 # Session helpers (signed cookie, 30-day expiry)
@@ -142,12 +171,12 @@ async def _google_exchange_code(code: str) -> dict:
 # Misc helpers
 # ---------------------------------------------------------------------------
 
-def get_bot_username():
+async def get_bot_username():
     if bot_app and bot_app.bot.username:
         return bot_app.bot.username
     url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getMe"
     try:
-        response = httpx.get(url).json()
+        response = await asyncio.to_thread(lambda: httpx.get(url).json())
         if response.get("ok"):
             return response["result"]["username"]
     except Exception as e:
@@ -155,8 +184,65 @@ def get_bot_username():
     return "YourBot"
 
 
-def send_welcome_email(to_email: str, telegram_link: str):
-    """Sends a welcome email with the Telegram deep-link via Resend."""
+def send_magic_link_email(to_email: str, token: str, is_new_user: bool = False, telegram_link: str = None):
+    """Sends a magic sign-in link. For new users, also includes the Telegram onboarding link."""
+    if not settings.RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY not set — cannot send magic link.")
+        return
+
+    verify_url = f"{settings.APP_URL}/auth/email/verify?token={token}"
+
+    if is_new_user and telegram_link:
+        subject = "Welcome to Quote Me — tap to sign in"
+        extra_html = f"""
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
+                <p style="color:#64748b;font-size:0.85rem;margin-bottom:6px;"><strong>After signing in, open Telegram to get started:</strong></p>
+                <a href="{telegram_link}"
+                   style="display:inline-block;background:#229ED9;color:white;font-weight:600;
+                          padding:12px 24px;border-radius:10px;text-decoration:none;font-size:0.95rem;margin-top:8px;">
+                    Open Quote Me in Telegram
+                </a>
+                <ol style="color:#64748b;font-size:0.85rem;padding-left:20px;line-height:1.8;margin-top:20px;">
+                    <li>Upload 3–10 past invoices or quotes so the AI can learn your style</li>
+                    <li>Start generating branded quotes by voice, photo, or text</li>
+                </ol>"""
+        intro = "Your account is ready. Click the button below to sign in — the link expires in 30 minutes."
+    else:
+        subject = "Your Quote Me sign-in link"
+        extra_html = ""
+        intro = "Click the button below to sign in to Quote Me. This link expires in 30 minutes and can only be used once."
+
+    try:
+        resend.Emails.send({
+            "from": settings.FROM_EMAIL,
+            "to": [to_email],
+            "subject": subject,
+            "html": f"""
+            <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e293b;">
+                <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Quote Me ⚡</h1>
+                <p style="color:#475569;margin-bottom:24px;">{intro}</p>
+                <a href="{verify_url}"
+                   style="display:inline-block;background:#3b82f6;color:white;font-weight:600;
+                          padding:14px 28px;border-radius:10px;text-decoration:none;font-size:1rem;">
+                    Sign in to Quote Me
+                </a>
+                <p style="color:#94a3b8;font-size:0.78rem;margin-top:16px;">
+                    If you didn't request this, you can safely ignore this email.
+                </p>
+                {extra_html}
+                <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
+                    © 2026 Quote Me · Built for tradespeople, by Antigravity
+                </p>
+            </div>
+            """,
+        })
+        logger.info(f"Magic link email sent to {to_email}")
+    except Exception as e:
+        logger.error(f"Failed to send magic link to {to_email}: {e}")
+
+
+def _send_google_welcome_email(to_email: str, telegram_link: str):
+    """Sends a Telegram onboarding email to new users who signed up via Google OAuth."""
     if not settings.RESEND_API_KEY:
         logger.warning("RESEND_API_KEY not set — skipping welcome email.")
         return
@@ -189,23 +275,23 @@ def send_welcome_email(to_email: str, telegram_link: str):
             </div>
             """,
         })
-        logger.info(f"Welcome email sent to {to_email}")
+        logger.info(f"Google welcome email sent to {to_email}")
     except Exception as e:
-        logger.error(f"Failed to send welcome email to {to_email}: {e}")
+        logger.error(f"Failed to send Google welcome email to {to_email}: {e}")
 
 
-def _upsert_user_by_email(email: str) -> dict:
+async def _upsert_user_by_email(email: str) -> dict:
     """Find or create a user by email. Returns the user row."""
-    res = supabase.table("users").select("*").eq("email", email).execute()
+    res = await database.supabase.table("users").select("*").eq("email", email).execute()
     if res.data:
         return res.data[0]
     try:
-        new = supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
+        new = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
         return new.data[0]
     except Exception as e:
         err = str(e).lower()
         if "duplicate" in err or "unique" in err or "23505" in err:
-            res2 = supabase.table("users").select("*").eq("email", email).execute()
+            res2 = await database.supabase.table("users").select("*").eq("email", email).execute()
             if res2.data:
                 return res2.data[0]
         raise
@@ -248,46 +334,52 @@ def account_page():
 
 
 @app.post("/handshake")
-def initiate_handshake(email: str):
+async def initiate_handshake(email: str):
     """
-    Phase 1 web entry point (email-only flow, kept for backwards compatibility).
-    Creates/fetches a user and returns the Telegram deep-link UUID.
+    Email sign-in entry point. Sends a magic link — never grants a session directly.
+    New users are created here; all users must click the emailed link to authenticate.
     """
     email = email.strip().lower()
     if not email or not EMAIL_RE.match(email) or len(email) > 254:
         raise HTTPException(status_code=400, detail="Invalid email address")
 
-    bot_username = get_bot_username()
+    if not settings.RESEND_API_KEY:
+        raise HTTPException(status_code=503, detail="Email service not configured")
 
-    def _json_with_session(user_id: str, status: str) -> JSONResponse:
-        res = JSONResponse({"user_id": user_id, "status": status, "bot_username": bot_username})
-        _set_session_cookie(res, user_id)
-        return res
+    bot_username = await get_bot_username()
 
     try:
-        res = supabase.table("users").select("*").eq("email", email).execute()
-        if res.data:
-            user_id = res.data[0]["id"]
-            return _json_with_session(user_id, "existing_user")
+        res = await database.supabase.table("users").select("id").eq("email", email).execute()
 
-        try:
-            new_user = supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
-            user_id = new_user.data[0]["id"]
+        if res.data:
+            # Existing user: send magic link only — do NOT grant a session
+            user_id = res.data[0]["id"]
+            token = _generate_login_token(user_id)
+            await asyncio.to_thread(send_magic_link_email, email, token, False)
+        else:
+            # New user: create account then send welcome + magic link
+            try:
+                new_user = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
+                user_id = new_user.data[0]["id"]
+            except Exception as insert_err:
+                err_str = str(insert_err).lower()
+                if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
+                    retry = await database.supabase.table("users").select("id").eq("email", email).execute()
+                    if retry.data:
+                        user_id = retry.data[0]["id"]
+                        token = _generate_login_token(user_id)
+                        await asyncio.to_thread(send_magic_link_email, email, token, False)
+                        return JSONResponse({"status": "check_email"})
+                raise
             telegram_link = f"https://t.me/{bot_username}?start={user_id}"
-            send_welcome_email(email, telegram_link)
-            return _json_with_session(user_id, "new_user")
-        except Exception as insert_err:
-            err_str = str(insert_err).lower()
-            if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
-                retry = supabase.table("users").select("*").eq("email", email).execute()
-                if retry.data:
-                    return _json_with_session(retry.data[0]["id"], "existing_user")
-            raise
+            token = _generate_login_token(user_id)
+            await asyncio.to_thread(send_magic_link_email, email, token, True, telegram_link)
+
+        return JSONResponse({"status": "check_email"})
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback; traceback.print_exc()
         logger.error(f"Error during handshake: {e}")
         return JSONResponse({"error": "Failed to initiate handshake"}, status_code=500)
 
@@ -336,16 +428,16 @@ async def auth_google_callback(
     email = email.strip().lower()
 
     try:
-        user = _upsert_user_by_email(email)
+        user = await _upsert_user_by_email(email)
     except Exception as e:
         logger.error(f"User upsert failed after Google OAuth: {e}")
         return RedirectResponse("/?auth_error=db")
 
-    # First-time login: send welcome email with Telegram link
+    # First-time Google login: send welcome email with Telegram link
     if not user.get("telegram_id"):
-        bot_username = get_bot_username()
+        bot_username = await get_bot_username()
         telegram_link = f"https://t.me/{bot_username}?start={user['id']}"
-        send_welcome_email(email, telegram_link)
+        await asyncio.to_thread(_send_google_welcome_email, email, telegram_link)
 
     intent = request.cookies.get("oauth_intent", "")
     redirect_path = "/account?upgrade=1" if intent == "premium" else "/account"
@@ -354,6 +446,17 @@ async def auth_google_callback(
     response.delete_cookie("oauth_state")
     response.delete_cookie("oauth_intent")
     return response
+
+
+@app.get("/auth/email/verify")
+async def auth_email_verify(token: str):
+    """Validates a magic link token and creates a session."""
+    user_id = _consume_login_token(token)
+    if not user_id:
+        return RedirectResponse("/?auth_error=invalid_link")
+    redirect = RedirectResponse("/account")
+    _set_session_cookie(redirect, user_id)
+    return redirect
 
 
 @app.post("/auth/logout")
@@ -375,7 +478,7 @@ async def api_account(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
-        user_res = supabase.table("users").select("*").eq("id", user_id).execute()
+        user_res = await database.supabase.table("users").select("*").eq("id", user_id).execute()
         if not user_res.data:
             raise HTTPException(status_code=404, detail="User not found")
         user = user_res.data[0]
@@ -385,19 +488,20 @@ async def api_account(request: Request):
         logger.error(f"Failed to load user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier
+    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier, get_billing_period_start
     tier = await get_user_tier(user_id)
     usage = await get_monthly_usage(user_id)
     limit = monthly_limit_for_tier(tier)
+    period_start = await get_billing_period_start(user_id)
     logger.info(f"Account API: user_id={user_id} email={user.get('email')} telegram_id={user.get('telegram_id')} usage={usage}/{limit}")
 
-    bot_username = get_bot_username()
+    bot_username = await get_bot_username()
     telegram_url = f"https://t.me/{bot_username}?start={user_id}"
 
     # Subscription period end (if premium)
     period_end = None
     try:
-        sub_res = supabase.table("subscriptions").select("current_period_end, status") \
+        sub_res = await database.supabase.table("subscriptions").select("current_period_end, status") \
             .eq("user_id", user_id).execute()
         if sub_res.data:
             period_end = sub_res.data[0].get("current_period_end")
@@ -415,6 +519,7 @@ async def api_account(request: Request):
         "telegram_url": telegram_url,
         "bot_username": bot_username,
         "subscription_period_end": period_end,
+        "billing_period_start": period_start.isoformat(),
         "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
     }
 
@@ -434,7 +539,7 @@ async def create_checkout_session(request: Request):
         raise HTTPException(status_code=503, detail="Stripe not configured")
 
     try:
-        user_res = supabase.table("users").select("email, stripe_customer_id").eq("id", user_id).execute()
+        user_res = await database.supabase.table("users").select("email, stripe_customer_id").eq("id", user_id).execute()
         if not user_res.data:
             raise HTTPException(status_code=404, detail="User not found")
         user = user_res.data[0]
@@ -450,7 +555,7 @@ async def create_checkout_session(request: Request):
         try:
             customer = stripe.Customer.create(email=user["email"], metadata={"user_id": user_id})
             customer_id = customer.id
-            supabase.table("users").update({"stripe_customer_id": customer_id}).eq("id", user_id).execute()
+            await database.supabase.table("users").update({"stripe_customer_id": customer_id}).eq("id", user_id).execute()
         except stripe.StripeError as e:
             logger.error(f"Stripe customer creation failed: {e}")
             raise HTTPException(status_code=502, detail="Payment provider error")
@@ -461,7 +566,7 @@ async def create_checkout_session(request: Request):
             payment_method_types=["card"],
             line_items=[{"price": settings.STRIPE_PREMIUM_PRICE_ID, "quantity": 1}],
             mode="subscription",
-            success_url=f"{settings.APP_URL}/billing/success",
+            success_url=f"{settings.APP_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{settings.APP_URL}/account",
             metadata={"user_id": user_id},
         )
@@ -472,9 +577,17 @@ async def create_checkout_session(request: Request):
     return {"checkout_url": session.url}
 
 
-@app.get("/billing/success", response_class=HTMLResponse)
-def billing_success():
-    """Redirect page after successful Stripe checkout."""
+@app.get("/billing/success")
+async def billing_success(session_id: str = None):
+    """Proactively sync subscription after successful Stripe checkout, then redirect."""
+    if session_id and settings.STRIPE_SECRET_KEY:
+        try:
+            session = await asyncio.to_thread(
+                stripe.checkout.Session.retrieve, session_id
+            )
+            await _handle_checkout_completed(session)
+        except Exception as e:
+            logger.error(f"Failed to sync subscription on billing success: {e}")
     return RedirectResponse("/account?upgraded=1")
 
 
@@ -486,7 +599,7 @@ async def billing_portal(request: Request):
         return RedirectResponse("/auth/google")
 
     try:
-        user_res = supabase.table("users").select("stripe_customer_id").eq("id", user_id).execute()
+        user_res = await database.supabase.table("users").select("stripe_customer_id").eq("id", user_id).execute()
         customer_id = user_res.data[0].get("stripe_customer_id") if user_res.data else None
     except Exception:
         customer_id = None
@@ -558,8 +671,9 @@ async def _handle_checkout_completed(session: dict):
         user_id = user["id"]
 
     try:
-        sub = stripe.Subscription.retrieve(subscription_id)
+        sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
         period_end = datetime.fromtimestamp(sub["current_period_end"], tz=timezone.utc)
+        period_start = datetime.fromtimestamp(sub["current_period_start"], tz=timezone.utc)
         await upsert_subscription(
             user_id=user_id,
             stripe_customer_id=customer_id,
@@ -567,6 +681,7 @@ async def _handle_checkout_completed(session: dict):
             plan_tier="premium",
             status=sub["status"],
             current_period_end=period_end,
+            current_period_start=period_start,
         )
         logger.info(f"User {user_id} upgraded to premium")
     except Exception as e:
@@ -585,8 +700,11 @@ async def _handle_subscription_updated(sub: dict):
     status = sub.get("status", "canceled")
     tier = "premium" if status in ("active", "trialing") else "free"
     period_end = None
+    period_start = None
     if sub.get("current_period_end"):
         period_end = datetime.fromtimestamp(sub["current_period_end"], tz=timezone.utc)
+    if sub.get("current_period_start"):
+        period_start = datetime.fromtimestamp(sub["current_period_start"], tz=timezone.utc)
 
     await upsert_subscription(
         user_id=user["id"],
@@ -595,6 +713,7 @@ async def _handle_subscription_updated(sub: dict):
         plan_tier=tier,
         status=status,
         current_period_end=period_end,
+        current_period_start=period_start,
     )
     logger.info(f"User {user['id']} subscription updated: {status} → tier={tier}")
 

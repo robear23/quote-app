@@ -9,8 +9,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from config import settings
-from database import supabase
-from ai_service import AIService, RateLimitError
+import database
+from ai_service import AIService, RateLimitError, run_ai
 
 RATE_LIMIT_MSG = "I'm a bit overwhelmed right now — please try again in a minute."
 from document_factory import DocumentFactory, _extract_tax_rate
@@ -45,26 +45,20 @@ for filepath in glob.glob(os.path.join(TEMP_DIR, "*")):
 # ---------------------------------------------------------------------------
 
 async def update_user_state(telegram_id: int, state: str):
-    """Updates the user's bot_state in Supabase (runs in thread to avoid blocking event loop)."""
-    await asyncio.to_thread(
-        lambda: supabase.table("users").update({"bot_state": state}).eq("telegram_id", telegram_id).execute()
-    )
+    """Updates the user's bot_state in Supabase."""
+    await database.supabase.table("users").update({"bot_state": state}).eq("telegram_id", telegram_id).execute()
 
 
 async def get_user(telegram_id: int):
-    """Retrieves user by telegram_id (runs in thread to avoid blocking event loop)."""
-    def _fetch():
-        res = supabase.table("users").select("*").eq("telegram_id", telegram_id).execute()
-        return res.data[0] if res.data else None
-    return await asyncio.to_thread(_fetch)
+    """Retrieves user by telegram_id."""
+    res = await database.supabase.table("users").select("*").eq("telegram_id", telegram_id).execute()
+    return res.data[0] if res.data else None
 
 
 async def get_brand_dna(user_id: str) -> dict:
-    """Retrieves the user's Brand DNA config from Supabase (runs in thread)."""
-    def _fetch():
-        res = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
-        return res.data[0] if res.data else {}
-    return await asyncio.to_thread(_fetch)
+    """Retrieves the user's Brand DNA config from Supabase."""
+    res = await database.supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
+    return res.data[0] if res.data else {}
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +113,7 @@ async def generate_and_send_quote(
     brand_dna: dict,
     status_msg=None,
 ):
-    """Generates the quote document, sends it, stores in DB, and cleans up."""
+    """Generates the quote document, uploads to Supabase Storage, sends via URL, and cleans up."""
     user = update.effective_user
 
     # Monthly usage limit — based on subscription tier
@@ -161,9 +155,7 @@ async def generate_and_send_quote(
     raw_name = quote_data.get("customer_name") or "Client"
     surname = re.sub(r'[^A-Za-z0-9]', '', raw_name.strip().split()[-1]) or "Client"
     try:
-        def _count_total():
-            return supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
-        total_res = await asyncio.to_thread(_count_total)
+        total_res = await database.supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
         quote_num = (total_res.count or 0) + 1
     except Exception:
         quote_num = 1
@@ -181,21 +173,48 @@ async def generate_and_send_quote(
         await status_msg.edit_text("Failed to generate the document. Please try again.")
         return
 
-    # Send the document
-    with open(doc_path, 'rb') as doc_file:
-        await context.bot.send_document(chat_id=user.id, document=doc_file, filename=output_filename)
+    # Upload to Supabase Storage and send to Telegram via signed URL
+    try:
+        with open(doc_path, 'rb') as f:
+            file_bytes = f.read()
+
+        storage_path = f"{db_user['id']}/{output_filename}"
+        mime = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            if output_ext == "xlsx" else
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
+            storage_path, file_bytes, {"content-type": mime}
+        )
+        url_data = await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).create_signed_url(
+            storage_path, 3600
+        )
+        signed_url = url_data.get("signedURL") or url_data.get("signedUrl", "")
+        await context.bot.send_document(chat_id=user.id, document=signed_url, filename=output_filename)
+
+        # Cleanup storage after Telegram has fetched the file
+        try:
+            await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove([storage_path])
+        except Exception as e:
+            logger.warning(f"Failed to remove document from storage: {e}")
+    except Exception as e:
+        logger.error(f"Storage upload/send failed: {e}")
+        await status_msg.edit_text("Failed to send the document. Please try again.")
+        return
+    finally:
+        # Always clean up the local file
+        try:
+            os.remove(doc_path)
+        except Exception:
+            pass
+
     await status_msg.edit_text(
         "Here is your generated quote!\n\n"
         "Use commands:\n"
         "/restart to change your uploaded quote DNA documents\n"
         "/feedback along with a message to give us feedback and tell us what features you want added."
     )
-
-    # Cleanup local file
-    try:
-        os.remove(doc_path)
-    except Exception:
-        pass
 
     # Persist to Supabase documents table
     try:
@@ -208,7 +227,7 @@ async def generate_and_send_quote(
             "tax_amount": result["tax_amount"],
             "total": result["total"],
         }
-        await asyncio.to_thread(lambda: supabase.table("documents").insert(doc_record).execute())
+        await database.supabase.table("documents").insert(doc_record).execute()
         logger.info(f"Document stored for user {db_user['id']} (telegram_id={user.id})")
     except Exception as e:
         logger.error(f"Failed to store quote in Supabase for user {db_user['id']}: {e}")
@@ -260,16 +279,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # First-time link via deep-link payload (UUID from web registration)
     if payload:
         try:
-            def _link_user():
-                res = supabase.table("users").select("*").eq("id", payload).execute()
-                if res.data:
-                    supabase.table("users").update({
-                        "telegram_id": user.id,
-                        "bot_state": "ONBOARDING"
-                    }).eq("id", payload).execute()
-                return res.data
-            data = await asyncio.to_thread(_link_user)
-            if data:
+            res = await database.supabase.table("users").select("*").eq("id", payload).execute()
+            if res.data:
+                await database.supabase.table("users").update({
+                    "telegram_id": user.id,
+                    "bot_state": "ONBOARDING"
+                }).eq("id", payload).execute()
                 await update.message.reply_text(
                     f"Hi {user.first_name}! Account linked. Let's learn your Brand DNA.\n\n"
                     "Please upload 3–10 past invoices or quotes (PDF/Image). "
@@ -296,9 +311,7 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Delete existing Brand DNA config
     try:
-        await asyncio.to_thread(
-            lambda: supabase.table("user_configs").delete().eq("user_id", db_user["id"]).execute()
-        )
+        await database.supabase.table("user_configs").delete().eq("user_id", db_user["id"]).execute()
     except Exception as e:
         logger.error(f"Failed to delete user_configs during restart: {e}")
 
@@ -316,7 +329,7 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def feedback(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     """Stores user feedback in the Supabase feedback table."""
     user = update.effective_user
     db_user = await get_user(user.id)
@@ -327,7 +340,6 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Extract the feedback message (everything after /feedback)
     message_text = (update.message.text or "").strip()
-    # Remove the /feedback command prefix
     if message_text.lower().startswith("/feedback"):
         feedback_text = message_text[len("/feedback"):].strip()
     else:
@@ -342,14 +354,12 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        await asyncio.to_thread(
-            lambda: supabase.table("feedback").insert({
-                "user_id": db_user["id"],
-                "telegram_id": user.id,
-                "email": db_user.get("email"),
-                "message": feedback_text,
-            }).execute()
-        )
+        await database.supabase.table("feedback").insert({
+            "user_id": db_user["id"],
+            "telegram_id": user.id,
+            "email": db_user.get("email"),
+            "message": feedback_text,
+        }).execute()
         await update.message.reply_text(
             "Thanks for your feedback! The developers will be in touch via email shortly."
         )
@@ -401,7 +411,7 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
     )
 
     try:
-        dna_data = await asyncio.to_thread(AIService.extract_brand_dna, files)
+        dna_data = await run_ai(AIService.extract_brand_dna, files)
     except RateLimitError:
         await msg.edit_text(RATE_LIMIT_MSG)
         return
@@ -414,7 +424,7 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
 
     dna_data["user_id"] = db_user["id"]
     try:
-        await asyncio.to_thread(lambda: supabase.table("user_configs").upsert(dna_data).execute())
+        await database.supabase.table("user_configs").upsert(dna_data).execute()
 
         # Cleanup temp files
         for f in files:
@@ -493,7 +503,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             brand_dna = await get_brand_dna(db_user["id"])
             try:
-                quote_data = await asyncio.to_thread(AIService.extract_quote_from_image, filepath)
+                quote_data = await run_ai(AIService.extract_quote_from_image, filepath)
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
@@ -567,9 +577,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         try:
-            await asyncio.to_thread(
-                lambda: supabase.table("user_configs").update({"preferred_format": chosen_format}).eq("user_id", db_user["id"]).execute()
-            )
+            await database.supabase.table("user_configs").update({"preferred_format": chosen_format}).eq("user_id", db_user["id"]).execute()
             await update_user_state(user.id, "ACTIVE")
             format_name = "Word (.docx)" if chosen_format == "docx" else "Excel (.xlsx)"
             await update.message.reply_text(
@@ -606,7 +614,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
         msg = await update.message.reply_text("Checking your response...")
         try:
-            result = await asyncio.to_thread(AIService.refine_quote, pending_quote, update.message.text or "")
+            result = await run_ai(AIService.refine_quote, pending_quote, update.message.text or "")
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -643,7 +651,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await asyncio.to_thread(AIService.transcribe_and_extract_voice, filepath)
+            quote_data = await run_ai(AIService.transcribe_and_extract_voice, filepath)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -662,7 +670,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await asyncio.to_thread(AIService.generate_quote_data, update.message.text)
+            quote_data = await run_ai(AIService.generate_quote_data, update.message.text)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
