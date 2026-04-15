@@ -651,19 +651,20 @@ async def stripe_webhook(request: Request):
     return {"ok": True}
 
 
-async def _handle_checkout_completed(session: dict):
+async def _handle_checkout_completed(session):
     """Promote user to premium after a successful checkout."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = session.get("customer")
-    subscription_id = session.get("subscription")
+    customer_id = getattr(session, "customer", None)
+    subscription_id = getattr(session, "subscription", None)
     if not customer_id or not subscription_id:
         return
 
     user = await get_user_by_stripe_customer(customer_id)
     if not user:
         # Fallback: try metadata
-        user_id = (session.get("metadata") or {}).get("user_id")
+        metadata = getattr(session, "metadata", None)
+        user_id = getattr(metadata, "user_id", None) if metadata else None
         if not user_id:
             logger.warning(f"Checkout completed but no user found for customer {customer_id}")
             return
@@ -672,14 +673,14 @@ async def _handle_checkout_completed(session: dict):
 
     try:
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
-        period_end = datetime.fromtimestamp(sub["current_period_end"], tz=timezone.utc)
-        period_start = datetime.fromtimestamp(sub["current_period_start"], tz=timezone.utc)
+        period_end = datetime.fromtimestamp(getattr(sub, "current_period_end"), tz=timezone.utc)
+        period_start = datetime.fromtimestamp(getattr(sub, "current_period_start"), tz=timezone.utc)
         await upsert_subscription(
             user_id=user_id,
             stripe_customer_id=customer_id,
             stripe_subscription_id=subscription_id,
             plan_tier="premium",
-            status=sub["status"],
+            status=getattr(sub, "status"),
             current_period_end=period_end,
             current_period_start=period_start,
         )
@@ -688,28 +689,30 @@ async def _handle_checkout_completed(session: dict):
         logger.error(f"Failed to upsert subscription after checkout: {e}")
 
 
-async def _handle_subscription_updated(sub: dict):
+async def _handle_subscription_updated(sub):
     """Sync subscription status changes from Stripe."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = sub.get("customer")
+    customer_id = getattr(sub, "customer", None)
     user = await get_user_by_stripe_customer(customer_id)
     if not user:
         return
 
-    status = sub.get("status", "canceled")
+    status = getattr(sub, "status", "canceled")
     tier = "premium" if status in ("active", "trialing") else "free"
     period_end = None
     period_start = None
-    if sub.get("current_period_end"):
-        period_end = datetime.fromtimestamp(sub["current_period_end"], tz=timezone.utc)
-    if sub.get("current_period_start"):
-        period_start = datetime.fromtimestamp(sub["current_period_start"], tz=timezone.utc)
+    period_end_ts = getattr(sub, "current_period_end", None)
+    period_start_ts = getattr(sub, "current_period_start", None)
+    if period_end_ts:
+        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc)
+    if period_start_ts:
+        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc)
 
     await upsert_subscription(
         user_id=user["id"],
         stripe_customer_id=customer_id,
-        stripe_subscription_id=sub["id"],
+        stripe_subscription_id=getattr(sub, "id"),
         plan_tier=tier,
         status=status,
         current_period_end=period_end,
@@ -718,11 +721,11 @@ async def _handle_subscription_updated(sub: dict):
     logger.info(f"User {user['id']} subscription updated: {status} → tier={tier}")
 
 
-async def _handle_subscription_deleted(sub: dict):
+async def _handle_subscription_deleted(sub):
     """Downgrade user to free when subscription is cancelled."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = sub.get("customer")
+    customer_id = getattr(sub, "customer", None)
     user = await get_user_by_stripe_customer(customer_id)
     if not user:
         return
@@ -730,7 +733,7 @@ async def _handle_subscription_deleted(sub: dict):
     await upsert_subscription(
         user_id=user["id"],
         stripe_customer_id=customer_id,
-        stripe_subscription_id=sub["id"],
+        stripe_subscription_id=getattr(sub, "id"),
         plan_tier="free",
         status="canceled",
         current_period_end=None,
