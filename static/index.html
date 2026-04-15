@@ -1095,9 +1095,9 @@
 
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 24px;
-            max-width: 720px;
+            max-width: 980px;
             margin: 0 auto;
         }
 
@@ -1583,7 +1583,6 @@
         <section id="pricing" class="section">
             <div class="container">
                 <div class="section-label fade-up">Pricing</div>
-                <h2 class="section-title fade-up">Simple, honest pricing</h2>
                 <p class="section-sub fade-up">Start free. Upgrade when you need more quotes.</p>
 
                 <div class="pricing-grid">
@@ -1593,7 +1592,7 @@
                         <div class="pricing-price"><sup>£</sup>0</div>
                         <div class="pricing-period">forever</div>
                         <ul class="pricing-features">
-                            <li><span class="check">✓</span> 10 quotes per month</li>
+                            <li><span class="check">✓</span> 5 quotes per month</li>
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>
@@ -1602,8 +1601,23 @@
                         <a href="#signup" class="pricing-cta pricing-cta-ghost">Get started free</a>
                     </div>
 
+                    <!-- Pro -->
+                    <div class="pricing-card fade-up" style="transition-delay:0.1s">
+                        <div class="pricing-name">Pro</div>
+                        <div class="pricing-price"><sup>£</sup>5</div>
+                        <div class="pricing-period">per month</div>
+                        <ul class="pricing-features">
+                            <li><span class="check">✓</span> <strong>25 quotes per month</strong></li>
+                            <li><span class="check">✓</span> Voice, photo &amp; text input</li>
+                            <li><span class="check">✓</span> Brand DNA training</li>
+                            <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> Quote history</li>
+                        </ul>
+                        <a href="/auth/google?intent=pro" class="pricing-cta pricing-cta-ghost">Start with Pro</a>
+                    </div>
+
                     <!-- Premium -->
-                    <div class="pricing-card featured fade-up" style="transition-delay:0.1s">
+                    <div class="pricing-card featured fade-up" style="transition-delay:0.2s">
                         <div class="pricing-badge">Most Popular</div>
                         <div class="pricing-name">Premium</div>
                         <div class="pricing-price"><sup>£</sup>10</div>
