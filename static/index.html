@@ -177,6 +177,30 @@
             gap: 14px;
         }
 
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .nav-link {
+            color: var(--secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-link:hover {
+            color: var(--primary);
+        }
+
+        @media (max-width: 860px) {
+            .nav-links {
+                display: none;
+            }
+        }
+
         .nav-sign-in {
             color: var(--secondary);
             font-size: 0.9rem;
@@ -264,7 +288,7 @@
             font-weight: 800;
             line-height: 1.1;
             letter-spacing: -0.03em;
-            margin-bottom: 24px;
+            margin-bottom: 80px;
             background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
             -webkit-background-clip: text;
             background-clip: text;
@@ -1326,6 +1350,11 @@
                 <img src="/static/quote-me-logo-dark.png" alt="Quote Me" style="height:44px;width:auto;display:block;">
                 <span>Quote Me</span>
             </a>
+            <div class="nav-links">
+                <a href="#how-it-works" class="nav-link">How it works</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+            </div>
             <div class="nav-right" id="navRight">
                 <a href="#signup" class="nav-sign-in">Sign in</a>
                 <a href="#signup" class="nav-cta" id="navCta">Get Started Free</a>
