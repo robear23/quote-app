@@ -231,7 +231,7 @@ def send_magic_link_email(to_email: str, token: str, is_new_user: bool = False, 
                 </p>
                 {extra_html}
                 <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
-                    © 2026 Quote Me · Built for tradespeople, by Antigravity
+                    © 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" style="color:#94a3b8;text-decoration:underline;">ForestTech Solutions</a>
                 </p>
             </div>
             """,
@@ -270,7 +270,7 @@ def _send_google_welcome_email(to_email: str, telegram_link: str):
                     <li>Start generating branded quotes by voice, photo, or text</li>
                 </ol>
                 <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
-                    © 2026 Quote Me · Built for tradespeople, by Antigravity
+                    © 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" style="color:#94a3b8;text-decoration:underline;">ForestTech Solutions</a>
                 </p>
             </div>
             """,

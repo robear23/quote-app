@@ -179,6 +179,10 @@
         /* Period end */
         .period-note { font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
 
+        /* Footer */
+        footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; margin-top: 40px; }
+        footer p { color: var(--muted); font-size: 0.82rem; }
+
         @media (max-width: 600px) {
             .upgrade-grid { grid-template-columns: 1fr; }
             .plan-row { flex-direction: column; align-items: flex-start; }
@@ -311,6 +315,12 @@
 </div><!-- /page -->
 
 <div class="toast" id="toast"></div>
+
+<footer>
+    <div class="inner" style="max-width: 900px; margin: 0 auto; padding: 0 24px;">
+        <p>© 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" target="_blank" style="color: inherit; text-decoration: underline;">ForestTech Solutions</a></p>
+    </div>
+</footer>
 
 <script>
     let accountData = null;
