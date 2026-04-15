@@ -105,10 +105,13 @@
         /* ── Hero ── */
         #hero {
             position: relative;
+            min-height: 90vh;
             padding-top: 160px;
             padding-bottom: 96px;
             text-align: center;
             overflow: hidden;
+            display: flex;
+            align-items: center;
         }
         .hero-video-bg {
             position: absolute;
@@ -122,6 +125,7 @@
         #hero > *:not(.hero-video-bg) {
             position: relative;
             z-index: 1;
+            width: 100%;
         }
 
         .badge {
@@ -302,6 +306,14 @@
             font-size: 0.85rem;
         }
         .doc-icon { font-size: 1.4rem; }
+        .demo-tabs-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
         .demo-tabs {
             display: flex;
             gap: 8px;
@@ -320,13 +332,52 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+        .demo-tab:not(.active):hover {
+            border-color: rgba(59,130,246,0.5);
+            color: var(--primary);
+            background: rgba(59,130,246,0.07);
+        }
         .demo-tab.active {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
         }
+        /* Pulse hint on inactive tabs to signal they're clickable */
+        .demo-tab:not(.active) {
+            animation: tab-hint 2.8s ease-in-out infinite;
+        }
+        @keyframes tab-hint {
+            0%, 70%, 100% { opacity: 1; }
+            85% { opacity: 0.55; }
+        }
         .demo-panel { display: none; }
         .demo-panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+        /* Telegram-style YES inline keyboard button */
+        .tg-yes-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            width: 100%;
+            padding: 10px 16px;
+            border-radius: 10px;
+            background: var(--accent);
+            color: white;
+            font-size: 0.88rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            border: none;
+            cursor: default;
+            margin-top: 2px;
+        }
+        .tg-yes-check {
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem;
+        }
 
         /* Telegram prereq notice */
         .telegram-prereq {
@@ -774,6 +825,7 @@
                         </div>
                     </div>
 
+                    <div class="demo-tabs-label">Try it →</div>
                     <div class="demo-tabs">
                         <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
                         <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
@@ -796,7 +848,7 @@
                                 Does this look right? Reply YES or tell me what to change.
                             </div>
                         </div>
-                        <div><div class="msg msg-user">YES</div></div>
+                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
                         <div>
                             <div class="msg-doc">
                                 <span class="doc-icon">📄</span>
@@ -824,7 +876,7 @@
                                 Does this look right? Reply YES or tell me what to change.
                             </div>
                         </div>
-                        <div><div class="msg msg-user">YES</div></div>
+                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
                         <div>
                             <div class="msg-doc">
                                 <span class="doc-icon">📄</span>
@@ -852,7 +904,7 @@
                                 Does this look right? Reply YES or tell me what to change.
                             </div>
                         </div>
-                        <div><div class="msg msg-user">YES</div></div>
+                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
                         <div>
                             <div class="msg-doc">
                                 <span class="doc-icon">📄</span>
