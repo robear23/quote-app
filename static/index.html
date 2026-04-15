@@ -214,10 +214,14 @@
         }
 
         /* ── Hero ── */
+        :root {
+            --nav-h: 84px; /* fallback; overridden by JS */
+        }
+
         #hero {
             position: relative;
             min-height: 100vh;
-            padding-top: 84px; /* clear fixed nav */
+            padding-top: var(--nav-h); /* clear fixed nav */
             text-align: center;
             overflow: hidden;
             display: flex;
@@ -227,12 +231,10 @@
 
         .hero-video-bg {
             position: absolute;
-            top: 84px; /* start below fixed nav */
+            top: var(--nav-h); /* start below fixed nav */
             right: 0;
             bottom: 0;
             left: 0;
-            width: 100%;
-            height: calc(100% - 84px);
             object-fit: cover;
             object-position: center center;
             z-index: 0;
@@ -246,7 +248,7 @@
 
         .hero-overlay {
             position: absolute;
-            top: 84px;
+            top: var(--nav-h);
             right: 0;
             bottom: 0;
             left: 0;
@@ -1869,6 +1871,14 @@
             btn.classList.add('active');
             document.getElementById('tab-' + name).classList.add('active');
         }
+
+        // Set nav height as CSS variable so hero video clears the fixed nav exactly
+        function setNavHeight() {
+            const h = document.querySelector('nav').getBoundingClientRect().height;
+            document.documentElement.style.setProperty('--nav-h', h + 'px');
+        }
+        setNavHeight();
+        window.addEventListener('resize', setNavHeight);
 
         // Scroll fade-in
         const observer = new IntersectionObserver((entries) => {
