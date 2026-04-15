@@ -635,107 +635,129 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(payload, sig, settings.STRIPE_WEBHOOK_SECRET)
     except stripe.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
+    except Exception as e:
+        logger.error(f"Stripe webhook construct_event failed: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Webhook parse error")
 
-    event_type = event["type"]
+    event_type = event.get("type") or getattr(event, "type", None)
     logger.info(f"Stripe event received: {event_type}")
 
+    try:
+        data_obj = event["data"]["object"]
+    except Exception:
+        data_obj = event.data.object
+
     if event_type == "checkout.session.completed":
-        await _handle_checkout_completed(event["data"]["object"])
+        await _handle_checkout_completed(data_obj)
 
     elif event_type in ("customer.subscription.updated", "customer.subscription.created"):
-        await _handle_subscription_updated(event["data"]["object"])
+        await _handle_subscription_updated(data_obj)
 
     elif event_type == "customer.subscription.deleted":
-        await _handle_subscription_deleted(event["data"]["object"])
+        await _handle_subscription_deleted(data_obj)
 
     return {"ok": True}
+
+
+def _get(obj, key, default=None):
+    """Safe getter that works on both Stripe SDK objects and plain dicts."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 async def _handle_checkout_completed(session):
     """Promote user to premium after a successful checkout."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = getattr(session, "customer", None)
-    subscription_id = getattr(session, "subscription", None)
-    if not customer_id or not subscription_id:
-        return
-
-    user = await get_user_by_stripe_customer(customer_id)
-    if not user:
-        # Fallback: try metadata
-        metadata = getattr(session, "metadata", None)
-        user_id = getattr(metadata, "user_id", None) if metadata else None
-        if not user_id:
-            logger.warning(f"Checkout completed but no user found for customer {customer_id}")
-            return
-    else:
-        user_id = user["id"]
-
     try:
+        customer_id = _get(session, "customer")
+        subscription_id = _get(session, "subscription")
+        if not customer_id or not subscription_id:
+            logger.warning(f"checkout.session.completed missing customer/subscription: customer={customer_id} sub={subscription_id}")
+            return
+
+        user = await get_user_by_stripe_customer(customer_id)
+        if not user:
+            # Fallback: try metadata
+            metadata = _get(session, "metadata")
+            user_id = metadata.get("user_id") if isinstance(metadata, dict) else _get(metadata, "user_id")
+            if not user_id:
+                logger.warning(f"Checkout completed but no user found for customer {customer_id}")
+                return
+        else:
+            user_id = user["id"]
+
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
-        period_end = datetime.fromtimestamp(getattr(sub, "current_period_end"), tz=timezone.utc)
-        period_start = datetime.fromtimestamp(getattr(sub, "current_period_start"), tz=timezone.utc)
+        period_end = datetime.fromtimestamp(_get(sub, "current_period_end"), tz=timezone.utc)
+        period_start = datetime.fromtimestamp(_get(sub, "current_period_start"), tz=timezone.utc)
         await upsert_subscription(
             user_id=user_id,
             stripe_customer_id=customer_id,
             stripe_subscription_id=subscription_id,
             plan_tier="premium",
-            status=getattr(sub, "status"),
+            status=_get(sub, "status"),
             current_period_end=period_end,
             current_period_start=period_start,
         )
         logger.info(f"User {user_id} upgraded to premium")
     except Exception as e:
-        logger.error(f"Failed to upsert subscription after checkout: {e}")
+        logger.error(f"_handle_checkout_completed failed: {e}", exc_info=True)
 
 
 async def _handle_subscription_updated(sub):
     """Sync subscription status changes from Stripe."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = getattr(sub, "customer", None)
-    user = await get_user_by_stripe_customer(customer_id)
-    if not user:
-        return
+    try:
+        customer_id = _get(sub, "customer")
+        user = await get_user_by_stripe_customer(customer_id)
+        if not user:
+            return
 
-    status = getattr(sub, "status", "canceled")
-    tier = "premium" if status in ("active", "trialing") else "free"
-    period_end = None
-    period_start = None
-    period_end_ts = getattr(sub, "current_period_end", None)
-    period_start_ts = getattr(sub, "current_period_start", None)
-    if period_end_ts:
-        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc)
-    if period_start_ts:
-        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc)
+        status = _get(sub, "status") or "canceled"
+        tier = "premium" if status in ("active", "trialing") else "free"
+        period_end = None
+        period_start = None
+        period_end_ts = _get(sub, "current_period_end")
+        period_start_ts = _get(sub, "current_period_start")
+        if period_end_ts:
+            period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc)
+        if period_start_ts:
+            period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc)
 
-    await upsert_subscription(
-        user_id=user["id"],
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=getattr(sub, "id"),
-        plan_tier=tier,
-        status=status,
-        current_period_end=period_end,
-        current_period_start=period_start,
-    )
-    logger.info(f"User {user['id']} subscription updated: {status} → tier={tier}")
+        await upsert_subscription(
+            user_id=user["id"],
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=_get(sub, "id"),
+            plan_tier=tier,
+            status=status,
+            current_period_end=period_end,
+            current_period_start=period_start,
+        )
+        logger.info(f"User {user['id']} subscription updated: {status} → tier={tier}")
+    except Exception as e:
+        logger.error(f"_handle_subscription_updated failed: {e}", exc_info=True)
 
 
 async def _handle_subscription_deleted(sub):
     """Downgrade user to free when subscription is cancelled."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
-    customer_id = getattr(sub, "customer", None)
-    user = await get_user_by_stripe_customer(customer_id)
-    if not user:
-        return
+    try:
+        customer_id = _get(sub, "customer")
+        user = await get_user_by_stripe_customer(customer_id)
+        if not user:
+            return
 
-    await upsert_subscription(
-        user_id=user["id"],
-        stripe_customer_id=customer_id,
-        stripe_subscription_id=getattr(sub, "id"),
-        plan_tier="free",
-        status="canceled",
-        current_period_end=None,
-    )
-    logger.info(f"User {user['id']} downgraded to free (subscription cancelled)")
+        await upsert_subscription(
+            user_id=user["id"],
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=_get(sub, "id"),
+            plan_tier="free",
+            status="canceled",
+            current_period_end=None,
+        )
+        logger.info(f"User {user['id']} downgraded to free (subscription cancelled)")
+    except Exception as e:
+        logger.error(f"_handle_subscription_deleted failed: {e}", exc_info=True)
