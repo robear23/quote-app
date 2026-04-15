@@ -104,9 +104,24 @@
 
         /* ── Hero ── */
         #hero {
+            position: relative;
             padding-top: 160px;
             padding-bottom: 96px;
             text-align: center;
+            overflow: hidden;
+        }
+        .hero-video-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            opacity: 0.45;
+        }
+        #hero > *:not(.hero-video-bg) {
+            position: relative;
+            z-index: 1;
         }
         .badge {
             display: inline-flex;
@@ -174,93 +189,6 @@
         }
         .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--primary); }
 
-        /* Demo card */
-        .hero-demo {
-            margin-top: 72px;
-            display: flex;
-            justify-content: center;
-        }
-        .demo-card {
-            background: var(--surface);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 24px 28px;
-            max-width: 420px;
-            width: 100%;
-            text-align: left;
-            box-shadow: 0 32px 64px rgba(0,0,0,0.4);
-        }
-        .demo-card-header {
-            display: flex; align-items: center; gap: 10px;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .demo-avatar {
-            width: 36px; height: 36px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent), var(--purple));
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem; font-weight: 700;
-        }
-        .demo-name { font-weight: 600; font-size: 0.9rem; }
-        .demo-sub-name { font-size: 0.75rem; color: var(--secondary); }
-        .demo-messages { display: flex; flex-direction: column; gap: 12px; }
-        .msg {
-            padding: 10px 14px;
-            border-radius: 14px;
-            font-size: 0.88rem;
-            line-height: 1.5;
-            max-width: 88%;
-        }
-        .msg-user {
-            background: var(--accent);
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-        .msg-bot {
-            background: rgba(255,255,255,0.07);
-            color: var(--primary);
-            border-bottom-left-radius: 4px;
-        }
-        .msg-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
-        .msg-doc {
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(16,185,129,0.1);
-            border: 1px solid rgba(16,185,129,0.25);
-            border-radius: 10px;
-            padding: 10px 14px;
-            font-size: 0.85rem;
-        }
-        .doc-icon { font-size: 1.4rem; }
-
-        /* ── Demo tabs ── */
-        .demo-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        .demo-tab {
-            flex: 1;
-            padding: 7px 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--secondary);
-            font-size: 0.78rem;
-            font-weight: 500;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .demo-tab.active {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: white;
-        }
-        .demo-panel { display: none; }
-        .demo-panel.active { display: flex; flex-direction: column; gap: 12px; }
 
         /* Coming soon badge */
         .coming-soon {
@@ -681,6 +609,11 @@
 
     <!-- Hero -->
     <section id="hero" class="container">
+        <video class="hero-video-bg" autoplay muted loop playsinline>
+            <source src="/static/Quote me hero video.webm" type="video/webm">
+            <source src="/static/Quote me hero video.mp4" type="video/mp4">
+        </video>
+
         <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
         <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
         <p class="hero-sub">
@@ -692,109 +625,6 @@
                 Start for Free
             </a>
             <a href="#how-it-works" class="btn-ghost">See how it works</a>
-        </div>
-
-        <div class="hero-demo">
-            <div class="demo-card">
-                <div class="demo-card-header">
-                    <div class="demo-avatar">QA</div>
-                    <div>
-                        <div class="demo-name">Quote Me</div>
-                        <div class="demo-sub-name">AI Assistant · Online</div>
-                    </div>
-                </div>
-
-                <div class="demo-tabs">
-                    <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
-                    <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
-                    <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
-                </div>
-
-                <!-- Voice tab -->
-                <div class="demo-panel active" id="tab-voice">
-                    <div>
-                        <div class="msg msg-user">🎙️ Voice note — 0:12</div>
-                        <div class="msg-time" style="text-align:right">Just now</div>
-                    </div>
-                    <div>
-                        <div class="msg msg-bot">
-                            Got it! Here's what I extracted:<br><br>
-                            <strong>Quote for John Smith</strong><br>
-                            • Replace boiler — 1 × £850<br>
-                            • Labour (4hrs) — 4 × £65<br>
-                            <strong>Total: £1,110.00</strong><br><br>
-                            Does this look right? Reply YES or tell me what to change.
-                        </div>
-                    </div>
-                    <div><div class="msg msg-user">YES</div></div>
-                    <div>
-                        <div class="msg-doc">
-                            <span class="doc-icon">📄</span>
-                            <div>
-                                <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
-                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Photo tab -->
-                <div class="demo-panel" id="tab-photo">
-                    <div>
-                        <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
-                        <div class="msg-time" style="text-align:right">Just now</div>
-                    </div>
-                    <div>
-                        <div class="msg msg-bot">
-                            Read your notes! Here's what I found:<br><br>
-                            <strong>Quote for D. Patel</strong><br>
-                            • Rewire kitchen sockets — 1 × £220<br>
-                            • New consumer unit — 1 × £480<br>
-                            <strong>Total: £700.00</strong><br><br>
-                            Does this look right? Reply YES or tell me what to change.
-                        </div>
-                    </div>
-                    <div><div class="msg msg-user">YES</div></div>
-                    <div>
-                        <div class="msg-doc">
-                            <span class="doc-icon">📄</span>
-                            <div>
-                                <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
-                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Text tab -->
-                <div class="demo-panel" id="tab-text">
-                    <div>
-                        <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55, parts £90</div>
-                        <div class="msg-time" style="text-align:right">Just now</div>
-                    </div>
-                    <div>
-                        <div class="msg msg-bot">
-                            Here's your quote:<br><br>
-                            <strong>Quote for Sarah Jones</strong><br>
-                            • Fit new radiator — 1 × £90<br>
-                            • Labour (3hrs) — 3 × £55<br>
-                            <strong>Total: £255.00</strong><br><br>
-                            Does this look right? Reply YES or tell me what to change.
-                        </div>
-                    </div>
-                    <div><div class="msg msg-user">YES</div></div>
-                    <div>
-                        <div class="msg-doc">
-                            <span class="doc-icon">📄</span>
-                            <div>
-                                <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
-                                <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
         </div>
     </section>
 
@@ -1071,14 +901,6 @@
         loader.style.display  = 'none';
         submitBtn.disabled    = false;
     });
-
-    // Demo tab switching
-    function switchTab(name, btn) {
-        document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('tab-' + name).classList.add('active');
-    }
 
     // Scroll fade-in
     const observer = new IntersectionObserver((entries) => {
