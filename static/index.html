@@ -208,7 +208,7 @@
             object-fit: cover;
             object-position: center center;
             z-index: 0;
-            opacity: 0.55;
+            opacity: 0.65;
         }
 
         #hero > .container {
@@ -216,11 +216,34 @@
             z-index: 1;
         }
 
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(10, 15, 30, 0.45) 0%,
+                rgba(10, 15, 30, 0.25) 60%,
+                rgba(10, 15, 30, 0.5) 100%
+            );
+            z-index: 0;
+        }
+
+        .hero-glass {
+            background: rgba(10, 15, 30, 0.35);
+            backdrop-filter: blur(18px) saturate(160%);
+            -webkit-backdrop-filter: blur(18px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 56px 64px;
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
         .badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(59, 130, 246, 0.1);
+            background: rgba(59, 130, 246, 0.18);
             border: 1px solid rgba(59, 130, 246, 0.3);
             color: #93c5fd;
             padding: 6px 16px;
@@ -252,7 +275,7 @@
 
         .hero-sub {
             font-size: clamp(1rem, 2.5vw, 1.2rem);
-            color: var(--secondary);
+            color: rgba(255, 255, 255, 0.8);
             line-height: 1.7;
             max-width: 600px;
             margin: 0 auto 48px;
@@ -1282,6 +1305,11 @@
                 padding: 16px;
             }
 
+            .hero-glass {
+                padding: 36px 28px;
+                border-radius: 16px;
+            }
+
             .hero-actions {
                 flex-direction: column;
                 align-items: center;
@@ -1319,23 +1347,26 @@
                 <source src="/static/Quote me hero video.webm" type="video/webm">
                 <source src="/static/Quote me hero video.mp4" type="video/mp4">
             </video>
+            <div class="hero-overlay"></div>
 
             <div class="container">
-                <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
-                <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
-                <p class="hero-sub">
-                    Send a voice note, snap a photo of your notes, or type the job in Telegram — your AI agent generates
-                    a branded, professional quote and sends it straight back to you.
-                </p>
-                <div class="hero-actions">
-                    <a href="#signup" class="btn-primary">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Start for Free
-                    </a>
-                    <a href="#how-it-works" class="btn-ghost">See how it works</a>
+                <div class="hero-glass">
+                    <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
+                    <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
+                    <p class="hero-sub">
+                        Send a voice note, snap a photo of your notes, or type the job in Telegram — your AI agent generates
+                        a branded, professional quote and sends it straight back to you.
+                    </p>
+                    <div class="hero-actions">
+                        <a href="#signup" class="btn-primary">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Start for Free
+                        </a>
+                        <a href="#how-it-works" class="btn-ghost">See how it works</a>
+                    </div>
                 </div>
             </div>
         </section>
