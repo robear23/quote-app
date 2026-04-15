@@ -1,31 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quote Me — AI-Powered Quotes for Tradespeople</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <style>
         :root {
-            --bg:           #0a0f1e;
-            --surface:      rgba(20, 30, 55, 0.7);
+            --bg: #0a0f1e;
+            --surface: rgba(20, 30, 55, 0.7);
             --surface-light: rgba(255, 255, 255, 0.04);
-            --border:       rgba(255, 255, 255, 0.08);
-            --primary:      #f8fafc;
-            --secondary:    #94a3b8;
-            --muted:        #475569;
-            --accent:       #3b82f6;
-            --accent-h:     #2563eb;
-            --success:      #10b981;
-            --purple:       #8b5cf6;
+            --border: rgba(255, 255, 255, 0.08);
+            --primary: #f8fafc;
+            --secondary: #94a3b8;
+            --muted: #475569;
+            --accent: #3b82f6;
+            --accent-h: #2563eb;
+            --success: #10b981;
+            --purple: #8b5cf6;
         }
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-        html { scroll-behavior: smooth; }
+        html {
+            scroll-behavior: smooth;
+        }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -42,29 +52,72 @@
             z-index: 0;
             overflow: hidden;
         }
+
         .glow {
             position: absolute;
             border-radius: 50%;
             filter: blur(120px);
             animation: drift 14s ease-in-out infinite alternate;
         }
-        .glow-1 { width: 600px; height: 600px; background: rgba(59,130,246,0.18); top: -150px; left: -150px; }
-        .glow-2 { width: 700px; height: 700px; background: rgba(139,92,246,0.16); bottom: -200px; right: -150px; animation-delay: -7s; }
-        .glow-3 { width: 400px; height: 400px; background: rgba(16,185,129,0.07); top: 40%; left: 50%; animation-delay: -3s; }
+
+        .glow-1 {
+            width: 600px;
+            height: 600px;
+            background: rgba(59, 130, 246, 0.18);
+            top: -150px;
+            left: -150px;
+        }
+
+        .glow-2 {
+            width: 700px;
+            height: 700px;
+            background: rgba(139, 92, 246, 0.16);
+            bottom: -200px;
+            right: -150px;
+            animation-delay: -7s;
+        }
+
+        .glow-3 {
+            width: 400px;
+            height: 400px;
+            background: rgba(16, 185, 129, 0.07);
+            top: 40%;
+            left: 50%;
+            animation-delay: -3s;
+        }
+
         @keyframes drift {
-            0%   { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(30px, 40px) scale(1.08); }
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(30px, 40px) scale(1.08);
+            }
         }
 
         /* ── Layout helpers ── */
-        .wrapper { position: relative; z-index: 1; }
-        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-        .section { padding: 96px 0; }
+        .wrapper {
+            position: relative;
+            z-index: 1;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .section {
+            padding: 96px 0;
+        }
 
         /* ── Nav ── */
         nav {
             position: fixed;
-            top: 0; left: 0; right: 0;
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 100;
             padding: 20px 0;
             background: rgba(10, 15, 30, 0.8);
@@ -72,18 +125,35 @@
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border);
         }
-        nav .container { display: flex; align-items: center; justify-content: space-between; }
-        .nav-logo {
-            display: flex; align-items: center; gap: 10px;
-            font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em;
-            color: var(--primary); text-decoration: none;
+
+        nav .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: -0.02em;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
         .nav-logo .logo-dot {
-            width: 28px; height: 28px; border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
             background: linear-gradient(135deg, var(--accent), var(--purple));
-            display: flex; align-items: center; justify-content: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 0.8rem;
         }
+
         .nav-cta {
             background: var(--accent);
             color: white;
@@ -94,46 +164,62 @@
             text-decoration: none;
             transition: background 0.2s, transform 0.2s;
         }
-        .nav-cta:hover { background: var(--accent-h); transform: translateY(-1px); }
-        .nav-right { display: flex; align-items: center; gap: 14px; }
-        .nav-sign-in {
-            color: var(--secondary); font-size: 0.9rem; font-weight: 500;
-            text-decoration: none; transition: color 0.2s;
+
+        .nav-cta:hover {
+            background: var(--accent-h);
+            transform: translateY(-1px);
         }
-        .nav-sign-in:hover { color: var(--primary); }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .nav-sign-in {
+            color: var(--secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-sign-in:hover {
+            color: var(--primary);
+        }
 
         /* ── Hero ── */
         #hero {
             position: relative;
-            min-height: 90vh;
-            padding-top: 160px;
-            padding-bottom: 96px;
             text-align: center;
             overflow: hidden;
-            display: flex;
-            align-items: center;
         }
+
         .hero-video-bg {
-            position: absolute;
-            inset: 0;
+            display: block;
             width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 0;
+            height: auto;
             opacity: 0.45;
+            z-index: 0;
         }
-        #hero > *:not(.hero-video-bg) {
-            position: relative;
+
+        #hero>.container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             z-index: 1;
             width: 100%;
+            max-width: 1100px;
+            padding: 24px;
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(59,130,246,0.1);
-            border: 1px solid rgba(59,130,246,0.3);
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
             color: #93c5fd;
             padding: 6px 16px;
             border-radius: 999px;
@@ -142,7 +228,14 @@
             margin-bottom: 32px;
             letter-spacing: 0.02em;
         }
-        .badge-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+        }
+
         h1.hero-title {
             font-size: clamp(2.6rem, 6vw, 4.2rem);
             font-weight: 800;
@@ -154,6 +247,7 @@
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .hero-sub {
             font-size: clamp(1rem, 2.5vw, 1.2rem);
             color: var(--secondary);
@@ -161,14 +255,18 @@
             max-width: 600px;
             margin: 0 auto 48px;
         }
+
         .hero-actions {
             display: flex;
             gap: 16px;
             justify-content: center;
             flex-wrap: wrap;
         }
+
         .btn-primary {
-            display: inline-flex; align-items: center; gap: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             background: var(--accent);
             color: white;
             padding: 16px 32px;
@@ -177,11 +275,19 @@
             font-size: 1rem;
             text-decoration: none;
             transition: all 0.25s;
-            box-shadow: 0 8px 24px rgba(59,130,246,0.35);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
         }
-        .btn-primary:hover { background: var(--accent-h); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(59,130,246,0.45); }
+
+        .btn-primary:hover {
+            background: var(--accent-h);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(59, 130, 246, 0.45);
+        }
+
         .btn-ghost {
-            display: inline-flex; align-items: center; gap: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             background: transparent;
             color: var(--secondary);
             padding: 16px 32px;
@@ -192,7 +298,11 @@
             border: 1px solid var(--border);
             transition: all 0.25s;
         }
-        .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--primary); }
+
+        .btn-ghost:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            color: var(--primary);
+        }
 
 
         /* Coming soon badge */
@@ -202,8 +312,8 @@
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            background: rgba(139,92,246,0.15);
-            border: 1px solid rgba(139,92,246,0.35);
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.35);
             color: #c4b5fd;
             padding: 2px 8px;
             border-radius: 999px;
@@ -212,7 +322,10 @@
         }
 
         /* ── How it works ── */
-        #how-it-works { background: var(--surface-light); }
+        #how-it-works {
+            background: var(--surface-light);
+        }
+
         .section-label {
             text-align: center;
             font-size: 0.8rem;
@@ -222,6 +335,7 @@
             color: var(--accent);
             margin-bottom: 16px;
         }
+
         .section-title {
             text-align: center;
             font-size: clamp(1.8rem, 4vw, 2.6rem);
@@ -229,6 +343,7 @@
             letter-spacing: -0.03em;
             margin-bottom: 16px;
         }
+
         .section-sub {
             text-align: center;
             color: var(--secondary);
@@ -245,6 +360,7 @@
             gap: 64px;
             align-items: start;
         }
+
         @media (max-width: 860px) {
             .how-it-works-layout {
                 grid-template-columns: 1fr;
@@ -261,23 +377,46 @@
             padding: 24px 28px;
             width: 100%;
             text-align: left;
-            box-shadow: 0 32px 64px rgba(0,0,0,0.4);
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4);
         }
+
         .demo-card-header {
-            display: flex; align-items: center; gap: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin-bottom: 20px;
             padding-bottom: 16px;
             border-bottom: 1px solid var(--border);
         }
+
         .demo-avatar {
-            width: 36px; height: 36px; border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
             background: linear-gradient(135deg, var(--accent), var(--purple));
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem; font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
         }
-        .demo-name { font-weight: 600; font-size: 0.9rem; }
-        .demo-sub-name { font-size: 0.75rem; color: var(--secondary); }
-        .demo-messages { display: flex; flex-direction: column; gap: 12px; }
+
+        .demo-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .demo-sub-name {
+            font-size: 0.75rem;
+            color: var(--secondary);
+        }
+
+        .demo-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
         .msg {
             padding: 10px 14px;
             border-radius: 14px;
@@ -285,27 +424,41 @@
             line-height: 1.5;
             max-width: 88%;
         }
+
         .msg-user {
             background: var(--accent);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
+
         .msg-bot {
-            background: rgba(255,255,255,0.07);
+            background: rgba(255, 255, 255, 0.07);
             color: var(--primary);
             border-bottom-left-radius: 4px;
         }
-        .msg-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+
+        .msg-time {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
         .msg-doc {
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(16,185,129,0.1);
-            border: 1px solid rgba(16,185,129,0.25);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
             border-radius: 10px;
             padding: 10px 14px;
             font-size: 0.85rem;
         }
-        .doc-icon { font-size: 1.4rem; }
+
+        .doc-icon {
+            font-size: 1.4rem;
+        }
+
         .demo-tabs-label {
             font-size: 0.72rem;
             font-weight: 600;
@@ -314,11 +467,13 @@
             color: var(--muted);
             margin-bottom: 8px;
         }
+
         .demo-tabs {
             display: flex;
             gap: 8px;
             margin-bottom: 16px;
         }
+
         .demo-tab {
             flex: 1;
             padding: 7px 10px;
@@ -332,26 +487,46 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+
         .demo-tab:not(.active):hover {
-            border-color: rgba(59,130,246,0.5);
+            border-color: rgba(59, 130, 246, 0.5);
             color: var(--primary);
-            background: rgba(59,130,246,0.07);
+            background: rgba(59, 130, 246, 0.07);
         }
+
         .demo-tab.active {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
         }
+
         /* Pulse hint on inactive tabs to signal they're clickable */
         .demo-tab:not(.active) {
             animation: tab-hint 2.8s ease-in-out infinite;
         }
+
         @keyframes tab-hint {
-            0%, 70%, 100% { opacity: 1; }
-            85% { opacity: 0.55; }
+
+            0%,
+            70%,
+            100% {
+                opacity: 1;
+            }
+
+            85% {
+                opacity: 0.55;
+            }
         }
-        .demo-panel { display: none; }
-        .demo-panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+        .demo-panel {
+            display: none;
+        }
+
+        .demo-panel.active {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
         /* Telegram-style YES inline keyboard button */
         .tg-yes-btn {
@@ -371,11 +546,15 @@
             cursor: default;
             margin-top: 2px;
         }
+
         .tg-yes-check {
-            width: 16px; height: 16px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.25);
-            display: flex; align-items: center; justify-content: center;
+            background: rgba(255, 255, 255, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 0.7rem;
         }
 
@@ -384,29 +563,212 @@
             display: flex;
             align-items: flex-start;
             gap: 10px;
-            background: rgba(42,171,238,0.08);
-            border: 1px solid rgba(42,171,238,0.2);
+            background: rgba(42, 171, 238, 0.08);
+            border: 1px solid rgba(42, 171, 238, 0.2);
             border-radius: 14px;
             padding: 14px 18px;
             font-size: 0.88rem;
             line-height: 1.6;
             color: var(--secondary);
         }
-        .tg-prereq-icon { flex-shrink: 0; margin-top: 2px; }
+
+        .tg-prereq-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
         .tg-links {
             display: inline-flex;
             gap: 10px;
             margin-left: 8px;
         }
+
         .tg-links a {
             color: #2AABEE;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.82rem;
-            border-bottom: 1px solid rgba(42,171,238,0.35);
+            border-bottom: 1px solid rgba(42, 171, 238, 0.35);
             transition: border-color 0.2s;
         }
-        .tg-links a:hover { border-color: #2AABEE; }
+
+        .tg-links a:hover {
+            border-color: #2AABEE;
+        }
+
+        /* ── How It Works animations ── */
+        /* Floating demo card */
+        .demo-card {
+            animation: float-card 6s ease-in-out infinite;
+        }
+
+        @keyframes float-card {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        /* Step cards: slide in from right on visibility */
+        .step-card {
+            opacity: 0;
+            transform: translateX(40px);
+            transition: opacity 0.55s ease, transform 0.55s ease, border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .step-card.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .step-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15), 0 16px 40px rgba(59, 130, 246, 0.12);
+            transform: translateY(-4px) translateX(0);
+        }
+
+        /* Animated gradient border on step number */
+        .step-number {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-number::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%);
+            transform: translateX(-100%);
+            animation: shimmer-step 3s ease-in-out infinite;
+        }
+
+        @keyframes shimmer-step {
+            0% { transform: translateX(-100%); }
+            50%, 100% { transform: translateX(200%); }
+        }
+
+        /* Telegram prereq notice slide-in from left */
+        .telegram-prereq {
+            opacity: 0;
+            transform: translateX(-40px);
+            transition: opacity 0.55s ease, transform 0.55s ease;
+        }
+
+        .telegram-prereq.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Pulse on the YES button in demo */
+        .tg-yes-btn {
+            animation: pulse-yes 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-yes {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+            50% { box-shadow: 0 0 0 6px rgba(59,130,246,0.2); }
+        }
+
+        /* Doc icon bounce */
+        .doc-icon {
+            display: inline-block;
+            animation: bounce-doc 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce-doc {
+            0%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-4px); }
+            60% { transform: translateY(-2px); }
+        }
+
+        /* ── Email delivery coming soon card ── */
+        .email-coming-soon {
+            max-width: 720px;
+            margin: 32px auto 0;
+            background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.06));
+            border: 1px dashed rgba(139,92,246,0.35);
+            border-radius: 20px;
+            padding: 28px 36px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .email-coming-soon::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.06) 50%, transparent 100%);
+            animation: sweep 3.5s ease-in-out infinite;
+        }
+
+        @keyframes sweep {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .ecs-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: rgba(139,92,246,0.12);
+            border: 1px solid rgba(139,92,246,0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            animation: icon-glow 2.5s ease-in-out infinite;
+        }
+
+        @keyframes icon-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
+            50% { box-shadow: 0 0 0 8px rgba(139,92,246,0.12); }
+        }
+
+        .ecs-text {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .ecs-text h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+        }
+
+        .ecs-text p {
+            color: var(--secondary);
+            font-size: 0.88rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .ecs-badge {
+            flex-shrink: 0;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: rgba(139,92,246,0.15);
+            border: 1px solid rgba(139,92,246,0.4);
+            color: #c4b5fd;
+            padding: 5px 14px;
+            border-radius: 999px;
+            animation: badge-pulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes badge-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
+        }
+
+        @media (max-width: 640px) {
+            .email-coming-soon { flex-direction: column; text-align: center; padding: 24px 20px; }
+            .ecs-badge { align-self: center; }
+        }
 
         /* Steps (right column) */
         .steps {
@@ -414,6 +776,7 @@
             flex-direction: column;
             gap: 20px;
         }
+
         .step-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -421,25 +784,28 @@
             padding: 28px 28px;
             position: relative;
             backdrop-filter: blur(8px);
-            transition: border-color 0.3s, transform 0.3s;
         }
-        .step-card:hover { border-color: rgba(59,130,246,0.3); transform: translateY(-4px); }
+
         .step-number {
             display: inline-flex;
-            align-items: center; justify-content: center;
-            width: 40px; height: 40px;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
             border-radius: 12px;
             background: linear-gradient(135deg, var(--accent), var(--purple));
             font-weight: 800;
             font-size: 1rem;
             margin-bottom: 16px;
         }
+
         .step-card h3 {
             font-size: 1.15rem;
             font-weight: 700;
             margin-bottom: 10px;
             letter-spacing: -0.02em;
         }
+
         .step-card p {
             color: var(--secondary);
             font-size: 0.92rem;
@@ -448,13 +814,18 @@
         }
 
         /* ── Features ── */
-        #features { background: rgba(255,255,255,0.01); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        #features {
+            background: rgba(255, 255, 255, 0.01);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
 
         .features-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 20px;
         }
+
         .feature-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -463,24 +834,45 @@
             backdrop-filter: blur(8px);
             transition: border-color 0.3s;
         }
-        .feature-card:hover { border-color: rgba(139,92,246,0.35); }
+
+        .feature-card:hover {
+            border-color: rgba(139, 92, 246, 0.35);
+        }
+
         .feature-icon {
-            width: 44px; height: 44px;
+            width: 44px;
+            height: 44px;
             border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 1.3rem;
             margin-bottom: 18px;
         }
-        .fi-blue   { background: rgba(59,130,246,0.12); }
-        .fi-purple { background: rgba(139,92,246,0.12); }
-        .fi-green  { background: rgba(16,185,129,0.12); }
-        .fi-orange { background: rgba(249,115,22,0.12); }
+
+        .fi-blue {
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .fi-purple {
+            background: rgba(139, 92, 246, 0.12);
+        }
+
+        .fi-green {
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        .fi-orange {
+            background: rgba(249, 115, 22, 0.12);
+        }
+
         .feature-card h3 {
             font-size: 1rem;
             font-weight: 700;
             margin-bottom: 8px;
             letter-spacing: -0.01em;
         }
+
         .feature-card p {
             color: var(--secondary);
             font-size: 0.88rem;
@@ -489,7 +881,10 @@
         }
 
         /* ── CTA / Signup ── */
-        #signup { padding: 96px 0 120px; }
+        #signup {
+            padding: 96px 0 120px;
+        }
+
         .cta-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -499,8 +894,9 @@
             margin: 0 auto;
             text-align: center;
             backdrop-filter: blur(16px);
-            box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+            box-shadow: 0 32px 80px rgba(0, 0, 0, 0.35);
         }
+
         .cta-card h2 {
             font-size: clamp(1.6rem, 4vw, 2.2rem);
             font-weight: 800;
@@ -511,30 +907,39 @@
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .cta-card > p {
+
+        .cta-card>p {
             color: var(--secondary);
             margin-bottom: 36px;
             font-size: 0.98rem;
             line-height: 1.65;
         }
-        .form-group { margin-bottom: 14px; }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
         .form-group input {
             width: 100%;
             padding: 16px 20px;
             border-radius: 12px;
             border: 1px solid var(--border);
-            background: rgba(10,15,30,0.6);
+            background: rgba(10, 15, 30, 0.6);
             color: var(--primary);
             font-size: 1rem;
             font-family: inherit;
             outline: none;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
+
         .form-group input:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
         }
-        .form-group input::placeholder { color: var(--muted); }
+
+        .form-group input::placeholder {
+            color: var(--muted);
+        }
 
         #submitBtn {
             width: 100%;
@@ -548,20 +953,40 @@
             font-family: inherit;
             cursor: pointer;
             transition: all 0.25s;
-            box-shadow: 0 8px 24px rgba(59,130,246,0.35);
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        #submitBtn:hover { background: var(--accent-h); transform: translateY(-2px); }
-        #submitBtn:disabled { background: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+        #submitBtn:hover {
+            background: var(--accent-h);
+            transform: translateY(-2px);
+        }
+
+        #submitBtn:disabled {
+            background: var(--muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .loader {
             display: none;
-            width: 18px; height: 18px;
-            border: 2.5px solid rgba(255,255,255,0.3);
+            width: 18px;
+            height: 18px;
+            border: 2.5px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
             animation: spin 0.8s linear infinite;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
 
         .form-note {
             margin-top: 14px;
@@ -570,27 +995,54 @@
         }
 
         /* Success state */
-        #success-state { display: none; opacity: 0; transition: opacity 0.4s ease; }
+        #success-state {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
         .success-icon {
-            width: 68px; height: 68px;
-            background: rgba(16,185,129,0.1);
+            width: 68px;
+            height: 68px;
+            background: rgba(16, 185, 129, 0.1);
             border: 2px solid var(--success);
             border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             margin: 0 auto 24px;
         }
-        .success-icon svg { width: 30px; height: 30px; color: var(--success); }
+
+        .success-icon svg {
+            width: 30px;
+            height: 30px;
+            color: var(--success);
+        }
+
         #success-state h2 {
-            font-size: 1.8rem; font-weight: 800;
-            letter-spacing: -0.03em; margin-bottom: 10px;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 10px;
             background: linear-gradient(135deg, #fff 30%, #94a3b8 100%);
-            -webkit-background-clip: text; background-clip: text;
+            -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        #success-state p { color: var(--secondary); font-size: 0.95rem; margin-bottom: 28px; }
+
+        #success-state p {
+            color: var(--secondary);
+            font-size: 0.95rem;
+            margin-bottom: 28px;
+        }
+
         .telegram-btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-            width: 100%; padding: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px;
             border-radius: 12px;
             background: #229ED9;
             color: white;
@@ -598,12 +1050,21 @@
             font-size: 1rem;
             text-decoration: none;
             transition: all 0.25s;
-            box-shadow: 0 8px 24px rgba(34,158,217,0.3);
+            box-shadow: 0 8px 24px rgba(34, 158, 217, 0.3);
         }
-        .telegram-btn:hover { background: #1c8cd6; transform: translateY(-2px); }
+
+        .telegram-btn:hover {
+            background: #1c8cd6;
+            transform: translateY(-2px);
+        }
 
         /* ── Pricing ── */
-        #pricing { background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        #pricing {
+            background: var(--surface-light);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
         .pricing-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -611,6 +1072,7 @@
             max-width: 720px;
             margin: 0 auto;
         }
+
         .pricing-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -621,11 +1083,16 @@
             transition: border-color 0.3s, transform 0.3s;
             position: relative;
         }
-        .pricing-card:hover { transform: translateY(-4px); }
+
+        .pricing-card:hover {
+            transform: translateY(-4px);
+        }
+
         .pricing-card.featured {
             border-color: var(--accent);
-            box-shadow: 0 0 0 1px var(--accent), 0 24px 48px rgba(59,130,246,0.2);
+            box-shadow: 0 0 0 1px var(--accent), 0 24px 48px rgba(59, 130, 246, 0.2);
         }
+
         .pricing-badge {
             position: absolute;
             top: -14px;
@@ -641,6 +1108,7 @@
             border-radius: 999px;
             white-space: nowrap;
         }
+
         .pricing-name {
             font-size: 1rem;
             font-weight: 700;
@@ -649,6 +1117,7 @@
             letter-spacing: 0.1em;
             margin-bottom: 16px;
         }
+
         .pricing-price {
             font-size: 3rem;
             font-weight: 800;
@@ -656,13 +1125,25 @@
             line-height: 1;
             margin-bottom: 4px;
         }
-        .pricing-price sup { font-size: 1.4rem; vertical-align: top; margin-top: 10px; }
-        .pricing-period { color: var(--secondary); font-size: 0.88rem; margin-bottom: 32px; }
+
+        .pricing-price sup {
+            font-size: 1.4rem;
+            vertical-align: top;
+            margin-top: 10px;
+        }
+
+        .pricing-period {
+            color: var(--secondary);
+            font-size: 0.88rem;
+            margin-bottom: 32px;
+        }
+
         .pricing-features {
             list-style: none;
             text-align: left;
             margin-bottom: 36px;
         }
+
         .pricing-features li {
             display: flex;
             align-items: center;
@@ -672,8 +1153,16 @@
             padding: 7px 0;
             border-bottom: 1px solid var(--border);
         }
-        .pricing-features li:last-child { border-bottom: none; }
-        .pricing-features li span.check { color: var(--success); font-size: 1rem; }
+
+        .pricing-features li:last-child {
+            border-bottom: none;
+        }
+
+        .pricing-features li span.check {
+            color: var(--success);
+            font-size: 1rem;
+        }
+
         .pricing-cta {
             display: block;
             width: 100%;
@@ -687,18 +1176,28 @@
             transition: all 0.25s;
             border: none;
         }
+
         .pricing-cta-ghost {
             background: transparent;
             border: 1px solid var(--border);
             color: var(--secondary);
         }
-        .pricing-cta-ghost:hover { border-color: rgba(255,255,255,0.25); color: var(--primary); }
+
+        .pricing-cta-ghost:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            color: var(--primary);
+        }
+
         .pricing-cta-primary {
             background: var(--accent);
             color: white;
-            box-shadow: 0 8px 24px rgba(59,130,246,0.35);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
         }
-        .pricing-cta-primary:hover { background: var(--accent-h); transform: translateY(-1px); }
+
+        .pricing-cta-primary:hover {
+            background: var(--accent-h);
+            transform: translateY(-1px);
+        }
 
         /* Google sign-in */
         .google-btn {
@@ -710,7 +1209,7 @@
             padding: 14px;
             border-radius: 12px;
             border: 1px solid var(--border);
-            background: rgba(255,255,255,0.04);
+            background: rgba(255, 255, 255, 0.04);
             color: var(--primary);
             font-size: 0.95rem;
             font-weight: 500;
@@ -719,7 +1218,12 @@
             transition: all 0.25s;
             text-decoration: none;
         }
-        .google-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); }
+
+        .google-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
         .divider {
             display: flex;
             align-items: center;
@@ -728,7 +1232,9 @@
             color: var(--muted);
             font-size: 0.8rem;
         }
-        .divider::before, .divider::after {
+
+        .divider::before,
+        .divider::after {
             content: '';
             flex: 1;
             height: 1px;
@@ -741,7 +1247,11 @@
             padding: 32px 0;
             text-align: center;
         }
-        footer p { color: var(--muted); font-size: 0.82rem; }
+
+        footer p {
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
 
         /* ── Fade-in on scroll ── */
         .fade-up {
@@ -749,472 +1259,538 @@
             transform: translateY(24px);
             transition: opacity 0.6s ease, transform 0.6s ease;
         }
-        .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+        .fade-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
 
         /* ── Responsive ── */
         @media (max-width: 640px) {
-            .cta-card { padding: 40px 24px; }
-            #hero { padding-top: 130px; }
-            .hero-actions { flex-direction: column; align-items: center; }
+            .cta-card {
+                padding: 40px 24px;
+            }
+
+            #hero>.container {
+                padding: 16px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+                align-items: center;
+            }
         }
     </style>
 </head>
+
 <body>
 
-<div class="bg-glows">
-    <div class="glow glow-1"></div>
-    <div class="glow glow-2"></div>
-    <div class="glow glow-3"></div>
-</div>
-
-<!-- Nav -->
-<nav>
-    <div class="container">
-        <a href="#" class="nav-logo">
-            <div class="logo-dot">⚡</div>
-            Quote Me
-        </a>
-        <div class="nav-right" id="navRight">
-            <a href="#signup" class="nav-sign-in">Sign in</a>
-            <a href="#signup" class="nav-cta" id="navCta">Get Started Free</a>
-        </div>
+    <div class="bg-glows">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+        <div class="glow glow-3"></div>
     </div>
-</nav>
 
-<div class="wrapper">
-
-    <!-- Hero -->
-    <section id="hero">
-        <video class="hero-video-bg" autoplay muted loop playsinline>
-            <source src="/static/Quote me hero video.webm" type="video/webm">
-            <source src="/static/Quote me hero video.mp4" type="video/mp4">
-        </video>
-
+    <!-- Nav -->
+    <nav>
         <div class="container">
-            <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
-            <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
-            <p class="hero-sub">
-                Send a voice note, snap a photo, or type the job — your AI agent generates a branded, professional quote and sends it straight back to you on Telegram.
-            </p>
-            <div class="hero-actions">
-                <a href="#signup" class="btn-primary">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    Start for Free
-                </a>
-                <a href="#how-it-works" class="btn-ghost">See how it works</a>
+            <a href="#" class="nav-logo">
+                <div class="logo-dot">⚡</div>
+                Quote Me
+            </a>
+            <div class="nav-right" id="navRight">
+                <a href="#signup" class="nav-sign-in">Sign in</a>
+                <a href="#signup" class="nav-cta" id="navCta">Get Started Free</a>
             </div>
         </div>
-    </section>
+    </nav>
 
-    <!-- How it works -->
-    <section id="how-it-works" class="section" style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
-        <div class="container">
-            <div class="section-label fade-up">How it works</div>
-            <h2 class="section-title fade-up">Up and running in minutes</h2>
-            <p class="section-sub fade-up">Three steps to never hand-write another quote again.</p>
+    <div class="wrapper">
 
-            <div class="how-it-works-layout">
+        <!-- Hero -->
+        <section id="hero">
+            <video class="hero-video-bg" autoplay muted loop playsinline>
+                <source src="/static/Quote me hero video.webm" type="video/webm">
+                <source src="/static/Quote me hero video.mp4" type="video/mp4">
+            </video>
 
-                <!-- Left: Demo widget -->
-                <div class="demo-card fade-up">
-                    <div class="demo-card-header">
-                        <div class="demo-avatar">QM</div>
-                        <div>
-                            <div class="demo-name">Quote Me</div>
-                            <div class="demo-sub-name">AI Assistant · Online</div>
-                        </div>
-                    </div>
-
-                    <div class="demo-tabs-label">Try it →</div>
-                    <div class="demo-tabs">
-                        <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
-                        <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
-                        <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
-                    </div>
-
-                    <!-- Voice tab -->
-                    <div class="demo-panel active" id="tab-voice">
-                        <div>
-                            <div class="msg msg-user">🎙️ Voice note — 0:12</div>
-                            <div class="msg-time" style="text-align:right">Just now</div>
-                        </div>
-                        <div>
-                            <div class="msg msg-bot">
-                                Got it! Here's what I extracted:<br><br>
-                                <strong>Quote for John Smith</strong><br>
-                                • Replace boiler — 1 × £850<br>
-                                • Labour (4hrs) — 4 × £65<br>
-                                <strong>Total: £1,110.00</strong><br><br>
-                                Does this look right? Reply YES or tell me what to change.
-                            </div>
-                        </div>
-                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                        <div>
-                            <div class="msg-doc">
-                                <span class="doc-icon">📄</span>
-                                <div>
-                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
-                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Photo tab -->
-                    <div class="demo-panel" id="tab-photo">
-                        <div>
-                            <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
-                            <div class="msg-time" style="text-align:right">Just now</div>
-                        </div>
-                        <div>
-                            <div class="msg msg-bot">
-                                Read your notes! Here's what I found:<br><br>
-                                <strong>Quote for D. Patel</strong><br>
-                                • Rewire kitchen sockets — 1 × £220<br>
-                                • New consumer unit — 1 × £480<br>
-                                <strong>Total: £700.00</strong><br><br>
-                                Does this look right? Reply YES or tell me what to change.
-                            </div>
-                        </div>
-                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                        <div>
-                            <div class="msg-doc">
-                                <span class="doc-icon">📄</span>
-                                <div>
-                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
-                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Text tab -->
-                    <div class="demo-panel" id="tab-text">
-                        <div>
-                            <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55, parts £90</div>
-                            <div class="msg-time" style="text-align:right">Just now</div>
-                        </div>
-                        <div>
-                            <div class="msg msg-bot">
-                                Here's your quote:<br><br>
-                                <strong>Quote for Sarah Jones</strong><br>
-                                • Fit new radiator — 1 × £90<br>
-                                • Labour (3hrs) — 3 × £55<br>
-                                <strong>Total: £255.00</strong><br><br>
-                                Does this look right? Reply YES or tell me what to change.
-                            </div>
-                        </div>
-                        <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                        <div>
-                            <div class="msg-doc">
-                                <span class="doc-icon">📄</span>
-                                <div>
-                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
-                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right: Steps stacked vertically -->
-                <div class="steps">
-                    <div class="telegram-prereq fade-up">
-                        <span class="tg-prereq-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z" fill="#2AABEE"/></svg>
-                        </span>
-                        <span>
-                            You'll need <strong>Telegram</strong> on your phone to send quotes on the go, and we recommend the <strong>desktop app</strong> to review and send finished quotes from your computer.
-                            <span class="tg-links">
-                                <a href="https://telegram.org/dl/android" target="_blank" rel="noopener">Android</a>
-                                <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener">iOS</a>
-                                <a href="https://desktop.telegram.org" target="_blank" rel="noopener">Desktop</a>
-                            </span>
-                        </span>
-                    </div>
-
-                    <div class="step-card fade-up">
-                        <div class="step-number">1</div>
-                        <h3>Register &amp; Link</h3>
-                        <p>Enter your email below. We generate a unique link that connects your account to Telegram in a single tap.</p>
-                    </div>
-                    <div class="step-card fade-up" style="transition-delay: 0.1s">
-                        <div class="step-number">2</div>
-                        <h3>Train Your AI</h3>
-                        <p>Upload 3–10 past invoices or quotes (PDF or photo). The AI extracts your business name, VAT rate, bank details, and pricing style automatically.</p>
-                    </div>
-                    <div class="step-card fade-up" style="transition-delay: 0.2s">
-                        <div class="step-number">3</div>
-                        <h3>Generate Quotes</h3>
-                        <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded Word or Excel quote back in seconds. Review it on your computer in the evening, then email it straight to the client.</p>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </section>
-
-    <!-- Features -->
-    <section id="features" class="section">
-        <div class="container">
-            <div class="section-label fade-up">Features</div>
-            <h2 class="section-title fade-up">Everything a tradesperson needs</h2>
-            <p class="section-sub fade-up">No complicated software. No desktop required. Just your phone and Telegram.</p>
-
-            <div class="features-grid">
-                <div class="feature-card fade-up">
-                    <div class="feature-icon fi-blue">🎙️</div>
-                    <h3>Voice Notes</h3>
-                    <p>Describe the job out loud on the way to the van. The AI transcribes, structures, and prices it for you.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.08s">
-                    <div class="feature-icon fi-purple">📸</div>
-                    <h3>Photo Capture</h3>
-                    <p>Snap a photo of your handwritten notes or a job spec sheet. The AI reads and formats the details automatically.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.16s">
-                    <div class="feature-icon fi-green">🧬</div>
-                    <h3>Brand DNA</h3>
-                    <p>Your business name, address, bank info, and VAT rate are pulled from your existing invoices and applied to every quote.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.24s">
-                    <div class="feature-icon fi-orange">📄</div>
-                    <h3>Word &amp; Excel Output</h3>
-                    <p>Get your quotes as .docx or .xlsx — your choice — fully editable and ready to email straight to the client.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.32s">
-                    <div class="feature-icon fi-blue">✏️</div>
-                    <h3>Interactive Refinement</h3>
-                    <p>Review a summary before the doc is generated. Change a price, add a line item, or fix a name — all in plain English.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.4s">
-                    <div class="feature-icon fi-purple">☁️</div>
-                    <h3>Quote History</h3>
-                    <p>Every quote is saved to your account so you can re-use, reference, or rebill past jobs without digging through paperwork.</p>
-                </div>
-                <div class="feature-card fade-up" style="transition-delay: 0.48s; opacity: 0.75;">
-                    <div class="feature-icon fi-green">📧</div>
-                    <h3>Email Delivery <span class="coming-soon">Coming Soon</span></h3>
-                    <p>Send the finished quote directly to your client from Telegram with one tap — no computer needed.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Pricing -->
-    <section id="pricing" class="section">
-        <div class="container">
-            <div class="section-label fade-up">Pricing</div>
-            <h2 class="section-title fade-up">Simple, honest pricing</h2>
-            <p class="section-sub fade-up">Start free. Upgrade when you need more quotes.</p>
-
-            <div class="pricing-grid">
-                <!-- Free -->
-                <div class="pricing-card fade-up">
-                    <div class="pricing-name">Free</div>
-                    <div class="pricing-price"><sup>£</sup>0</div>
-                    <div class="pricing-period">forever</div>
-                    <ul class="pricing-features">
-                        <li><span class="check">✓</span> 10 quotes per month</li>
-                        <li><span class="check">✓</span> Voice, photo &amp; text input</li>
-                        <li><span class="check">✓</span> Brand DNA training</li>
-                        <li><span class="check">✓</span> Word &amp; Excel output</li>
-                        <li><span class="check">✓</span> Quote history</li>
-                    </ul>
-                    <a href="#signup" class="pricing-cta pricing-cta-ghost">Get started free</a>
-                </div>
-
-                <!-- Premium -->
-                <div class="pricing-card featured fade-up" style="transition-delay:0.1s">
-                    <div class="pricing-badge">Most Popular</div>
-                    <div class="pricing-name">Premium</div>
-                    <div class="pricing-price"><sup>£</sup>10</div>
-                    <div class="pricing-period">per month</div>
-                    <ul class="pricing-features">
-                        <li><span class="check">✓</span> <strong>100 quotes per month</strong></li>
-                        <li><span class="check">✓</span> Voice, photo &amp; text input</li>
-                        <li><span class="check">✓</span> Brand DNA training</li>
-                        <li><span class="check">✓</span> Word &amp; Excel output</li>
-                        <li><span class="check">✓</span> Quote history</li>
-                        <li><span class="check">✓</span> Priority support</li>
-                    </ul>
-                    <a href="/auth/google?intent=premium" class="pricing-cta pricing-cta-primary">Start with Premium</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Signup CTA -->
-    <section id="signup" class="section">
-        <div class="container">
-            <div class="cta-card">
-                <div id="initial-state">
-                    <div class="badge" style="margin-bottom: 20px;"><span class="badge-dot"></span> Free to get started</div>
-                    <h2>Sign in or create your account</h2>
-                    <p>Use Google or enter your email — works for new and existing accounts alike.</p>
-
-                    <a href="/auth/google" class="google-btn">
-                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.7 0 6.8 5.4 3 13.3l7.8 6C12.7 13.3 17.9 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.8 28.7A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7L2.5 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.3-5.9z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.1 0-11.3-4.1-13.2-9.6l-8.1 6.3C6.7 42.5 14.8 48 24 48z"/></svg>
-                        Continue with Google
-                    </a>
-
-                    <div class="divider">or sign up with email</div>
-
-                    <form id="handshakeForm">
-                        <div class="form-group">
-                            <input type="email" id="email" placeholder="trade@example.com" required autocomplete="email">
-                        </div>
-                        <button type="submit" id="submitBtn">
-                            <span id="btnText">Continue with Email</span>
-                            <div class="loader" id="loader"></div>
-                        </button>
-                    </form>
-                    <p class="form-note">No password needed — we'll email you a secure sign-in link.</p>
-                </div>
-
-                <div id="success-state">
-                    <div class="success-icon">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            <div class="container">
+                <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
+                <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
+                <p class="hero-sub">
+                    Send a voice note, snap a photo of your notes, or type the job in Telegram — your AI agent generates
+                    a branded, professional quote and sends it straight back to you.
+                </p>
+                <div class="hero-actions">
+                    <a href="#signup" class="btn-primary">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                    </div>
-                    <h2>Check your email</h2>
-                    <p>We've sent a sign-in link to <strong id="sentEmailDisplay"></strong>. Click it to access your account — the link expires in 30 minutes.</p>
-                    <p style="color:var(--secondary);font-size:0.85rem;margin-top:16px;">Didn't get it? Check your spam folder, or <a href="#" id="resendLink" style="color:var(--accent);">try again</a>.</p>
+                        Start for Free
+                    </a>
+                    <a href="#how-it-works" class="btn-ghost">See how it works</a>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Footer -->
-    <footer>
-        <div class="container">
-            <p>© 2026 Quote Me · Built for tradespeople, by Antigravity</p>
-        </div>
-    </footer>
+        <!-- How it works -->
+        <section id="how-it-works" class="section"
+            style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="container">
+                <div class="section-label fade-up">How it works</div>
+                <h2 class="section-title fade-up">Up and running in minutes</h2>
+                <p class="section-sub fade-up">Three steps to never manually create another quote again.</p>
 
-</div>
+                <div class="how-it-works-layout">
 
-<script>
-    // ── Session check & auth error handling ──
-    const AUTH_ERRORS = {
-        '1':            'Sign-in failed. Please try again.',
-        'csrf':         'Security check failed. Please try again.',
-        'exchange':     'Google authentication failed. Please try again.',
-        'no_email':     "Couldn't get your email from Google. Please try again.",
-        'db':           'Account error. Please contact support.',
-        'invalid_link': 'This sign-in link has expired or already been used. Please request a new one.',
-    };
+                    <!-- Left: Demo widget -->
+                    <div class="demo-card fade-up">
+                        <div class="demo-card-header">
+                            <div class="demo-avatar">QM</div>
+                            <div>
+                                <div class="demo-name">Quote Me</div>
+                                <div class="demo-sub-name">AI Assistant · Online</div>
+                            </div>
+                        </div>
 
-    (async function initPage() {
-        const params = new URLSearchParams(window.location.search);
+                        <div class="demo-tabs-label">Try it →</div>
+                        <div class="demo-tabs">
+                            <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
+                            <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
+                            <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
+                        </div>
 
-        // Show auth error if redirected back with ?auth_error=
-        const authErr = params.get('auth_error');
-        if (authErr) {
-            history.replaceState({}, '', '/');
-            const errEl = document.createElement('p');
-            errEl.style.cssText = 'color:#f87171;font-size:0.85rem;margin-bottom:16px;text-align:center;';
-            errEl.textContent = AUTH_ERRORS[authErr] || 'Sign-in failed. Please try again.';
-            const initialState = document.getElementById('initial-state');
-            initialState.insertBefore(errEl, initialState.firstChild);
-        }
+                        <!-- Voice tab -->
+                        <div class="demo-panel active" id="tab-voice">
+                            <div>
+                                <div class="msg msg-user">🎙️ Voice note — 0:12</div>
+                                <div class="msg-time" style="text-align:right">Just now</div>
+                            </div>
+                            <div>
+                                <div class="msg msg-bot">
+                                    Got it! Here's what I extracted:<br><br>
+                                    <strong>Quote for John Smith</strong><br>
+                                    • Replace boiler — 1 × £850<br>
+                                    • Labour (4hrs) — 4 × £65<br>
+                                    <strong>Total: £1,110.00</strong><br><br>
+                                    Does this look right? Press YES or tell me what to change.
+                                </div>
+                            </div>
+                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
+                            <div>
+                                <div class="msg-doc">
+                                    <span class="doc-icon">📄</span>
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
+                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
+                                            finalise and send from your computer</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-        // Check if already logged in
-        try {
-            const res = await fetch('/api/account', { credentials: 'include' });
-            if (res.ok) {
-                const d = await res.json();
-                // Update nav to logged-in state
-                document.getElementById('navRight').innerHTML =
-                    `<span style="font-size:0.82rem;color:var(--muted)">${d.email}</span>` +
-                    `<a href="/account" class="nav-cta">My Account</a>`;
-                // Replace signup section with signed-in state
-                document.getElementById('initial-state').innerHTML = `
+                        <!-- Photo tab -->
+                        <div class="demo-panel" id="tab-photo">
+                            <div>
+                                <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
+                                <div class="msg-time" style="text-align:right">Just now</div>
+                            </div>
+                            <div>
+                                <div class="msg msg-bot">
+                                    Read your notes! Here's what I found:<br><br>
+                                    <strong>Quote for D. Patel</strong><br>
+                                    • Rewire kitchen sockets — 1 × £220<br>
+                                    • New consumer unit — 1 × £480<br>
+                                    <strong>Total: £700.00</strong><br><br>
+                                    Does this look right? Press YES or tell me what to change.
+                                </div>
+                            </div>
+                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
+                            <div>
+                                <div class="msg-doc">
+                                    <span class="doc-icon">📄</span>
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
+                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
+                                            finalise and send from your computer</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Text tab -->
+                        <div class="demo-panel" id="tab-text">
+                            <div>
+                                <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55,
+                                    parts £90</div>
+                                <div class="msg-time" style="text-align:right">Just now</div>
+                            </div>
+                            <div>
+                                <div class="msg msg-bot">
+                                    Here's your quote:<br><br>
+                                    <strong>Quote for Sarah Jones</strong><br>
+                                    • Fit new radiator — 1 × £90<br>
+                                    • Labour (3hrs) — 3 × £55<br>
+                                    <strong>Total: £255.00</strong><br><br>
+                                    Does this look right? Press YES or tell me what to change.
+                                </div>
+                            </div>
+                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
+                            <div>
+                                <div class="msg-doc">
+                                    <span class="doc-icon">📄</span>
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
+                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
+                                            finalise and send from your computer</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Steps stacked vertically -->
+                    <div class="steps">
+                        <div class="telegram-prereq fade-up">
+                            <span class="tg-prereq-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path
+                                        d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z"
+                                        fill="#2AABEE" />
+                                </svg>
+                            </span>
+                            <span>
+                                You'll need <strong>Telegram</strong> on your phone to send quotes on the go, and we
+                                recommend the <strong>desktop app</strong> to review and send finished quotes from your
+                                computer.
+                                <span class="tg-links">
+                                    <a href="https://telegram.org/dl/android" target="_blank" rel="noopener">Android</a>
+                                    <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener">iOS</a>
+                                    <a href="https://desktop.telegram.org" target="_blank" rel="noopener">Desktop</a>
+                                </span>
+                            </span>
+                        </div>
+
+                        <div class="step-card" style="transition-delay:0.05s">
+                            <div class="step-number">1</div>
+                            <h3>Register &amp; Link</h3>
+                            <p>Enter your email below. We generate a unique link that connects your account to Telegram
+                                in a single tap.</p>
+                        </div>
+                        <div class="step-card" style="transition-delay:0.18s">
+                            <div class="step-number">2</div>
+                            <h3>Train Your AI</h3>
+                            <p>Upload 3–10 past invoices or quotes (PDF or photo). The AI extracts your business name,
+                                VAT rate, bank details, and pricing style automatically.</p>
+                        </div>
+                        <div class="step-card" style="transition-delay:0.31s">
+                            <div class="step-number">3</div>
+                            <h3>Generate Quotes</h3>
+                            <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded
+                                Word or Excel quote back in seconds. Review it on your computer in the evening, then
+                                email it straight to the client.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section id="features" class="section">
+            <div class="container">
+                <div class="section-label fade-up">Features</div>
+                <h2 class="section-title fade-up">Everything a tradesperson needs</h2>
+                <div class="features-grid">
+                    <div class="feature-card fade-up">
+                        <div class="feature-icon fi-blue">🎙️</div>
+                        <h3>Voice Notes</h3>
+                        <p>Describe the job out loud on the way to the van. The AI transcribes, structures, and prices
+                            it for you.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.08s">
+                        <div class="feature-icon fi-purple">📸</div>
+                        <h3>Photo Capture</h3>
+                        <p>Snap a photo of your handwritten notes or a job spec sheet. The AI reads and formats the
+                            details automatically.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.16s">
+                        <div class="feature-icon fi-green">🧬</div>
+                        <h3>Brand DNA</h3>
+                        <p>Your business name, address, bank info, and VAT rate are pulled from your existing invoices
+                            and applied to every quote.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.24s">
+                        <div class="feature-icon fi-orange">📄</div>
+                        <h3>Word &amp; Excel Output</h3>
+                        <p>Get your quotes as .docx or .xlsx — your choice — fully editable and ready to email straight
+                            to the client.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.32s">
+                        <div class="feature-icon fi-blue">✏️</div>
+                        <h3>Interactive Refinement</h3>
+                        <p>Review a summary before the doc is generated. Change a price, add a line item, or fix a name
+                            — all in plain English.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.4s">
+                        <div class="feature-icon fi-purple">☁️</div>
+                        <h3>Quote History</h3>
+                        <p>Every quote is saved to your account so you can re-use, reference, or rebill past jobs
+                            without digging through paperwork.</p>
+                    </div>
+                    <div class="feature-card fade-up" style="transition-delay: 0.48s; opacity: 0.75;">
+                        <div class="feature-icon fi-green">📧</div>
+                        <h3>Email Delivery <span class="coming-soon">Coming Soon</span></h3>
+                        <p>Send the finished quote directly to your client from Telegram with one tap — no computer
+                            needed.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing -->
+        <section id="pricing" class="section">
+            <div class="container">
+                <div class="section-label fade-up">Pricing</div>
+                <h2 class="section-title fade-up">Simple, honest pricing</h2>
+                <p class="section-sub fade-up">Start free. Upgrade when you need more quotes.</p>
+
+                <div class="pricing-grid">
+                    <!-- Free -->
+                    <div class="pricing-card fade-up">
+                        <div class="pricing-name">Free</div>
+                        <div class="pricing-price"><sup>£</sup>0</div>
+                        <div class="pricing-period">forever</div>
+                        <ul class="pricing-features">
+                            <li><span class="check">✓</span> 10 quotes per month</li>
+                            <li><span class="check">✓</span> Voice, photo &amp; text input</li>
+                            <li><span class="check">✓</span> Brand DNA training</li>
+                            <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> Quote history</li>
+                        </ul>
+                        <a href="#signup" class="pricing-cta pricing-cta-ghost">Get started free</a>
+                    </div>
+
+                    <!-- Premium -->
+                    <div class="pricing-card featured fade-up" style="transition-delay:0.1s">
+                        <div class="pricing-badge">Most Popular</div>
+                        <div class="pricing-name">Premium</div>
+                        <div class="pricing-price"><sup>£</sup>10</div>
+                        <div class="pricing-period">per month</div>
+                        <ul class="pricing-features">
+                            <li><span class="check">✓</span> <strong>100 quotes per month</strong></li>
+                            <li><span class="check">✓</span> Voice, photo &amp; text input</li>
+                            <li><span class="check">✓</span> Brand DNA training</li>
+                            <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> Quote history</li>
+                            <li><span class="check">✓</span> Priority support</li>
+                        </ul>
+                        <a href="/auth/google?intent=premium" class="pricing-cta pricing-cta-primary">Start with
+                            Premium</a>
+                    </div>
+                </div>
+
+                <!-- Email Delivery Coming Soon -->
+                <div class="email-coming-soon fade-up" style="transition-delay:0.15s">
+                    <div class="ecs-icon">📧</div>
+                    <div class="ecs-text">
+                        <h4>Email Delivery — coming soon</h4>
+                        <p>Send the finished quote directly to your client from Telegram with one tap — no computer needed. Launching for all plans.</p>
+                    </div>
+                    <div class="ecs-badge">Coming Soon</div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Signup CTA -->
+        <section id="signup" class="section">
+            <div class="container">
+                <div class="cta-card">
+                    <div id="initial-state">
+                        <div class="badge" style="margin-bottom: 20px;"><span class="badge-dot"></span> Free to get
+                            started</div>
+                        <h2>Sign in or create your account</h2>
+                        <p>Use Google or enter your email — works for new and existing accounts alike.</p>
+
+                        <a href="/auth/google" class="google-btn">
+                            <svg width="18" height="18" viewBox="0 0 48 48">
+                                <path fill="#EA4335"
+                                    d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.7 0 6.8 5.4 3 13.3l7.8 6C12.7 13.3 17.9 9.5 24 9.5z" />
+                                <path fill="#4285F4"
+                                    d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z" />
+                                <path fill="#FBBC05"
+                                    d="M10.8 28.7A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7L2.5 13.3A23.9 23.9 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.3-5.9z" />
+                                <path fill="#34A853"
+                                    d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.1 0-11.3-4.1-13.2-9.6l-8.1 6.3C6.7 42.5 14.8 48 24 48z" />
+                            </svg>
+                            Continue with Google
+                        </a>
+
+                        <div class="divider">or sign up with email</div>
+
+                        <form id="handshakeForm">
+                            <div class="form-group">
+                                <input type="email" id="email" placeholder="trade@example.com" required
+                                    autocomplete="email">
+                            </div>
+                            <button type="submit" id="submitBtn">
+                                <span id="btnText">Continue with Email</span>
+                                <div class="loader" id="loader"></div>
+                            </button>
+                        </form>
+                        <p class="form-note">No password needed — we'll email you a secure sign-in link.</p>
+                    </div>
+
+                    <div id="success-state">
+                        <div class="success-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <h2>Check your email</h2>
+                        <p>We've sent a sign-in link to <strong id="sentEmailDisplay"></strong>. Click it to access your
+                            account — the link expires in 30 minutes.</p>
+                        <p style="color:var(--secondary);font-size:0.85rem;margin-top:16px;">Didn't get it? Check your
+                            spam folder, or <a href="#" id="resendLink" style="color:var(--accent);">try again</a>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="container">
+                <p>© 2026 Quote Me · Built for tradespeople, by Antigravity</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        // ── Session check & auth error handling ──
+        const AUTH_ERRORS = {
+            '1': 'Sign-in failed. Please try again.',
+            'csrf': 'Security check failed. Please try again.',
+            'exchange': 'Google authentication failed. Please try again.',
+            'no_email': "Couldn't get your email from Google. Please try again.",
+            'db': 'Account error. Please contact support.',
+            'invalid_link': 'This sign-in link has expired or already been used. Please request a new one.',
+        };
+
+        (async function initPage() {
+            const params = new URLSearchParams(window.location.search);
+
+            // Show auth error if redirected back with ?auth_error=
+            const authErr = params.get('auth_error');
+            if (authErr) {
+                history.replaceState({}, '', '/');
+                const errEl = document.createElement('p');
+                errEl.style.cssText = 'color:#f87171;font-size:0.85rem;margin-bottom:16px;text-align:center;';
+                errEl.textContent = AUTH_ERRORS[authErr] || 'Sign-in failed. Please try again.';
+                const initialState = document.getElementById('initial-state');
+                initialState.insertBefore(errEl, initialState.firstChild);
+            }
+
+            // Check if already logged in
+            try {
+                const res = await fetch('/api/account', { credentials: 'include' });
+                if (res.ok) {
+                    const d = await res.json();
+                    // Update nav to logged-in state
+                    document.getElementById('navRight').innerHTML =
+                        `<span style="font-size:0.82rem;color:var(--muted)">${d.email}</span>` +
+                        `<a href="/account" class="nav-cta">My Account</a>`;
+                    // Replace signup section with signed-in state
+                    document.getElementById('initial-state').innerHTML = `
                     <div style="text-align:center;padding:16px 0">
                         <div style="font-size:2.5rem;margin-bottom:16px">✓</div>
                         <h2 style="margin-bottom:12px">You're signed in</h2>
                         <p style="color:var(--secondary);margin-bottom:28px">Signed in as ${d.email}</p>
                         <a href="/account" style="display:inline-block;background:var(--accent);color:white;font-weight:600;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:1rem;">Go to My Account</a>
                     </div>`;
+                }
+            } catch (_) { }
+        })();
+
+        // ── Form logic ──
+        const form = document.getElementById('handshakeForm');
+        const emailInput = document.getElementById('email');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const initialState = document.getElementById('initial-state');
+        const successState = document.getElementById('success-state');
+
+        async function submitEmail(email) {
+            btnText.style.display = 'none';
+            loader.style.display = 'block';
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/handshake?email=${encodeURIComponent(email)}`, { method: 'POST' });
+                if (!response.ok) throw new Error('Server error. Please try again.');
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                if (data.status === 'check_email') {
+                    document.getElementById('sentEmailDisplay').textContent = email;
+                    initialState.style.display = 'none';
+                    successState.style.display = 'block';
+                } else {
+                    throw new Error('Unexpected response. Please try again.');
+                }
+
+            } catch (error) {
+                let errorEl = document.getElementById('error-msg');
+                if (!errorEl) {
+                    errorEl = document.createElement('p');
+                    errorEl.id = 'error-msg';
+                    errorEl.style.cssText = 'color:#f87171;font-size:0.85rem;margin-top:12px;';
+                    submitBtn.after(errorEl);
+                }
+                errorEl.textContent = error.message || 'An error occurred. Please try again.';
+                btnText.style.display = 'block';
+                loader.style.display = 'none';
+                submitBtn.disabled = false;
             }
-        } catch (_) {}
-    })();
-
-    // ── Form logic ──
-    const form         = document.getElementById('handshakeForm');
-    const emailInput   = document.getElementById('email');
-    const submitBtn    = document.getElementById('submitBtn');
-    const btnText      = document.getElementById('btnText');
-    const loader       = document.getElementById('loader');
-    const initialState = document.getElementById('initial-state');
-    const successState = document.getElementById('success-state');
-
-    async function submitEmail(email) {
-        btnText.style.display = 'none';
-        loader.style.display  = 'block';
-        submitBtn.disabled    = true;
-
-        try {
-            const response = await fetch(`/handshake?email=${encodeURIComponent(email)}`, { method: 'POST' });
-            if (!response.ok) throw new Error('Server error. Please try again.');
-
-            const data = await response.json();
-            if (data.error) throw new Error(data.error);
-
-            if (data.status === 'check_email') {
-                document.getElementById('sentEmailDisplay').textContent = email;
-                initialState.style.display = 'none';
-                successState.style.display = 'block';
-            } else {
-                throw new Error('Unexpected response. Please try again.');
-            }
-
-        } catch (error) {
-            let errorEl = document.getElementById('error-msg');
-            if (!errorEl) {
-                errorEl = document.createElement('p');
-                errorEl.id = 'error-msg';
-                errorEl.style.cssText = 'color:#f87171;font-size:0.85rem;margin-top:12px;';
-                submitBtn.after(errorEl);
-            }
-            errorEl.textContent = error.message || 'An error occurred. Please try again.';
-            btnText.style.display = 'block';
-            loader.style.display  = 'none';
-            submitBtn.disabled    = false;
         }
-    }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = emailInput.value.trim();
-        if (!email) return;
-        await submitEmail(email);
-    });
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = emailInput.value.trim();
+            if (!email) return;
+            await submitEmail(email);
+        });
 
-    document.getElementById('resendLink').addEventListener('click', (e) => {
-        e.preventDefault();
-        successState.style.display = 'none';
-        initialState.style.display = 'block';
-        btnText.style.display = 'block';
-        loader.style.display  = 'none';
-        submitBtn.disabled    = false;
-    });
+        document.getElementById('resendLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            successState.style.display = 'none';
+            initialState.style.display = 'block';
+            btnText.style.display = 'block';
+            loader.style.display = 'none';
+            submitBtn.disabled = false;
+        });
 
-    // Demo tabs
-    function switchTab(name, btn) {
-        document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('tab-' + name).classList.add('active');
-    }
+        // Demo tabs
+        function switchTab(name, btn) {
+            document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
 
-    // Scroll fade-in
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
-    }, { threshold: 0.15 });
-    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
-</script>
+        // Scroll fade-in
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.fade-up, .step-card, .telegram-prereq').forEach(el => observer.observe(el));
+    </script>
 
 </body>
+
 </html>
