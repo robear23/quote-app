@@ -191,27 +191,28 @@
         /* ── Hero ── */
         #hero {
             position: relative;
+            /* 75vw = 4:3 ratio matches the video natively — no cropping */
+            min-height: 75vw;
             text-align: center;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .hero-video-bg {
-            display: block;
+            position: absolute;
+            inset: 0;
             width: 100%;
-            height: auto;
-            opacity: 0.45;
+            height: 100%;
+            object-fit: cover;
             z-index: 0;
+            opacity: 0.45;
         }
 
-        #hero>.container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+        #hero > .container {
+            position: relative;
             z-index: 1;
-            width: 100%;
-            max-width: 1100px;
-            padding: 24px;
         }
 
         .badge {
