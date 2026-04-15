@@ -221,8 +221,8 @@
 
         #hero {
             position: relative;
-            margin-top: var(--nav-h); /* push section below fixed nav */
-            min-height: calc(100vh - var(--nav-h));
+            min-height: 100vh;
+            padding-top: var(--nav-h); /* content clears nav; video stays full-viewport behind translucent nav */
             text-align: center;
             overflow: hidden;
             display: flex;
