@@ -123,6 +123,7 @@
             position: relative;
             z-index: 1;
         }
+
         .badge {
             display: inline-flex;
             align-items: center;
@@ -233,16 +234,140 @@
             line-height: 1.7;
         }
 
-        .steps {
+        /* ── How it works layout ── */
+        .how-it-works-layout {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: start;
+        }
+        @media (max-width: 860px) {
+            .how-it-works-layout {
+                grid-template-columns: 1fr;
+                gap: 48px;
+            }
+        }
+
+        /* Demo card (left column) */
+        .demo-card {
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px 28px;
+            width: 100%;
+            text-align: left;
+            box-shadow: 0 32px 64px rgba(0,0,0,0.4);
+        }
+        .demo-card-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .demo-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700;
+        }
+        .demo-name { font-weight: 600; font-size: 0.9rem; }
+        .demo-sub-name { font-size: 0.75rem; color: var(--secondary); }
+        .demo-messages { display: flex; flex-direction: column; gap: 12px; }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            max-width: 88%;
+        }
+        .msg-user {
+            background: var(--accent);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .msg-bot {
+            background: rgba(255,255,255,0.07);
+            color: var(--primary);
+            border-bottom-left-radius: 4px;
+        }
+        .msg-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+        .msg-doc {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.25);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+        }
+        .doc-icon { font-size: 1.4rem; }
+        .demo-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .demo-tab {
+            flex: 1;
+            padding: 7px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--secondary);
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .demo-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+        .demo-panel { display: none; }
+        .demo-panel.active { display: flex; flex-direction: column; gap: 12px; }
+
+        /* Telegram prereq notice */
+        .telegram-prereq {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: rgba(42,171,238,0.08);
+            border: 1px solid rgba(42,171,238,0.2);
+            border-radius: 14px;
+            padding: 14px 18px;
+            font-size: 0.88rem;
+            line-height: 1.6;
+            color: var(--secondary);
+        }
+        .tg-prereq-icon { flex-shrink: 0; margin-top: 2px; }
+        .tg-links {
+            display: inline-flex;
+            gap: 10px;
+            margin-left: 8px;
+        }
+        .tg-links a {
+            color: #2AABEE;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.82rem;
+            border-bottom: 1px solid rgba(42,171,238,0.35);
+            transition: border-color 0.2s;
+        }
+        .tg-links a:hover { border-color: #2AABEE; }
+
+        /* Steps (right column) */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
         .step-card {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 20px;
-            padding: 36px 32px;
+            padding: 28px 28px;
             position: relative;
             backdrop-filter: blur(8px);
             transition: border-color 0.3s, transform 0.3s;
@@ -256,7 +381,7 @@
             background: linear-gradient(135deg, var(--accent), var(--purple));
             font-weight: 800;
             font-size: 1rem;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
         }
         .step-card h3 {
             font-size: 1.15rem;
@@ -608,23 +733,25 @@
 <div class="wrapper">
 
     <!-- Hero -->
-    <section id="hero" class="container">
+    <section id="hero">
         <video class="hero-video-bg" autoplay muted loop playsinline>
             <source src="/static/Quote me hero video.webm" type="video/webm">
             <source src="/static/Quote me hero video.mp4" type="video/mp4">
         </video>
 
-        <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
-        <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
-        <p class="hero-sub">
-            Send a voice note, snap a photo, or type the job — your AI agent generates a branded, professional quote and sends it straight back to you on Telegram.
-        </p>
-        <div class="hero-actions">
-            <a href="#signup" class="btn-primary">
-                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                Start for Free
-            </a>
-            <a href="#how-it-works" class="btn-ghost">See how it works</a>
+        <div class="container">
+            <div class="badge"><span class="badge-dot"></span> AI-Powered · Built for Tradespeople</div>
+            <h1 class="hero-title">Quotes on-site.<br>Done in seconds.</h1>
+            <p class="hero-sub">
+                Send a voice note, snap a photo, or type the job — your AI agent generates a branded, professional quote and sends it straight back to you on Telegram.
+            </p>
+            <div class="hero-actions">
+                <a href="#signup" class="btn-primary">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Start for Free
+                </a>
+                <a href="#how-it-works" class="btn-ghost">See how it works</a>
+            </div>
         </div>
     </section>
 
@@ -635,22 +762,142 @@
             <h2 class="section-title fade-up">Up and running in minutes</h2>
             <p class="section-sub fade-up">Three steps to never hand-write another quote again.</p>
 
-            <div class="steps">
-                <div class="step-card fade-up">
-                    <div class="step-number">1</div>
-                    <h3>Register &amp; Link</h3>
-                    <p>Enter your email below. We generate a unique link that connects your account to Telegram in a single tap — no app install, no extra accounts.</p>
+            <div class="how-it-works-layout">
+
+                <!-- Left: Demo widget -->
+                <div class="demo-card fade-up">
+                    <div class="demo-card-header">
+                        <div class="demo-avatar">QM</div>
+                        <div>
+                            <div class="demo-name">Quote Me</div>
+                            <div class="demo-sub-name">AI Assistant · Online</div>
+                        </div>
+                    </div>
+
+                    <div class="demo-tabs">
+                        <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
+                        <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
+                        <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
+                    </div>
+
+                    <!-- Voice tab -->
+                    <div class="demo-panel active" id="tab-voice">
+                        <div>
+                            <div class="msg msg-user">🎙️ Voice note — 0:12</div>
+                            <div class="msg-time" style="text-align:right">Just now</div>
+                        </div>
+                        <div>
+                            <div class="msg msg-bot">
+                                Got it! Here's what I extracted:<br><br>
+                                <strong>Quote for John Smith</strong><br>
+                                • Replace boiler — 1 × £850<br>
+                                • Labour (4hrs) — 4 × £65<br>
+                                <strong>Total: £1,110.00</strong><br><br>
+                                Does this look right? Reply YES or tell me what to change.
+                            </div>
+                        </div>
+                        <div><div class="msg msg-user">YES</div></div>
+                        <div>
+                            <div class="msg-doc">
+                                <span class="doc-icon">📄</span>
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
+                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Photo tab -->
+                    <div class="demo-panel" id="tab-photo">
+                        <div>
+                            <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
+                            <div class="msg-time" style="text-align:right">Just now</div>
+                        </div>
+                        <div>
+                            <div class="msg msg-bot">
+                                Read your notes! Here's what I found:<br><br>
+                                <strong>Quote for D. Patel</strong><br>
+                                • Rewire kitchen sockets — 1 × £220<br>
+                                • New consumer unit — 1 × £480<br>
+                                <strong>Total: £700.00</strong><br><br>
+                                Does this look right? Reply YES or tell me what to change.
+                            </div>
+                        </div>
+                        <div><div class="msg msg-user">YES</div></div>
+                        <div>
+                            <div class="msg-doc">
+                                <span class="doc-icon">📄</span>
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
+                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Text tab -->
+                    <div class="demo-panel" id="tab-text">
+                        <div>
+                            <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55, parts £90</div>
+                            <div class="msg-time" style="text-align:right">Just now</div>
+                        </div>
+                        <div>
+                            <div class="msg msg-bot">
+                                Here's your quote:<br><br>
+                                <strong>Quote for Sarah Jones</strong><br>
+                                • Fit new radiator — 1 × £90<br>
+                                • Labour (3hrs) — 3 × £55<br>
+                                <strong>Total: £255.00</strong><br><br>
+                                Does this look right? Reply YES or tell me what to change.
+                            </div>
+                        </div>
+                        <div><div class="msg msg-user">YES</div></div>
+                        <div>
+                            <div class="msg-doc">
+                                <span class="doc-icon">📄</span>
+                                <div>
+                                    <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
+                                    <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open, finalise and send from your computer</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="step-card fade-up" style="transition-delay: 0.1s">
-                    <div class="step-number">2</div>
-                    <h3>Train Your AI</h3>
-                    <p>Upload 3–10 past invoices or quotes (PDF or photo). The AI extracts your business name, VAT rate, bank details, and pricing style automatically.</p>
+
+                <!-- Right: Steps stacked vertically -->
+                <div class="steps">
+                    <div class="telegram-prereq fade-up">
+                        <span class="tg-prereq-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z" fill="#2AABEE"/></svg>
+                        </span>
+                        <span>
+                            You'll need <strong>Telegram</strong> on your phone to send quotes on the go, and we recommend the <strong>desktop app</strong> to review and send finished quotes from your computer.
+                            <span class="tg-links">
+                                <a href="https://telegram.org/dl/android" target="_blank" rel="noopener">Android</a>
+                                <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener">iOS</a>
+                                <a href="https://desktop.telegram.org" target="_blank" rel="noopener">Desktop</a>
+                            </span>
+                        </span>
+                    </div>
+
+                    <div class="step-card fade-up">
+                        <div class="step-number">1</div>
+                        <h3>Register &amp; Link</h3>
+                        <p>Enter your email below. We generate a unique link that connects your account to Telegram in a single tap.</p>
+                    </div>
+                    <div class="step-card fade-up" style="transition-delay: 0.1s">
+                        <div class="step-number">2</div>
+                        <h3>Train Your AI</h3>
+                        <p>Upload 3–10 past invoices or quotes (PDF or photo). The AI extracts your business name, VAT rate, bank details, and pricing style automatically.</p>
+                    </div>
+                    <div class="step-card fade-up" style="transition-delay: 0.2s">
+                        <div class="step-number">3</div>
+                        <h3>Generate Quotes</h3>
+                        <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded Word or Excel quote back in seconds. Review it on your computer in the evening, then email it straight to the client.</p>
+                    </div>
                 </div>
-                <div class="step-card fade-up" style="transition-delay: 0.2s">
-                    <div class="step-number">3</div>
-                    <h3>Generate Quotes</h3>
-                    <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded Word or Excel quote back in seconds. Review it on your computer in the evening, then email it straight to the client.</p>
-                </div>
+
             </div>
         </div>
     </section>
@@ -901,6 +1148,14 @@
         loader.style.display  = 'none';
         submitBtn.disabled    = false;
     });
+
+    // Demo tabs
+    function switchTab(name, btn) {
+        document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.demo-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + name).classList.add('active');
+    }
 
     // Scroll fade-in
     const observer = new IntersectionObserver((entries) => {
