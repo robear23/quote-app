@@ -639,7 +639,7 @@ async def stripe_webhook(request: Request):
         logger.error(f"Stripe webhook construct_event failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail="Webhook parse error")
 
-    event_type = event.get("type") or getattr(event, "type", None)
+    event_type = event["type"]
     logger.info(f"Stripe event received: {event_type}")
 
     try:
