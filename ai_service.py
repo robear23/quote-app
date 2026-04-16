@@ -35,6 +35,7 @@ For "calculation_methods", always use a JSON object (not a string). If a tax rat
 
 QUOTE_GENERATION_PROMPT = """
 You are an expert AI assistant who turns raw user requests into structured quote data for tradespeople.
+Input is often terse shorthand like "Customer Name. Job description Total" or "Name, job, price".
 Extract the following from the user's input in strict JSON format:
 1. "customer_name": Name of the customer (string)
 2. "customer_address": Address of the customer if mentioned (string or null)
@@ -43,7 +44,10 @@ Extract the following from the user's input in strict JSON format:
    - "quantity" (number): how many units
    - "unit_price" (number): price per unit
 
-If prices are not mentioned, infer reasonable defaults for the trade described.
+Rules:
+- If a lump-sum total is given (e.g. "New bathroom 3000"), create ONE line item with quantity=1 and unit_price equal to that total.
+- If prices are not mentioned at all, infer reasonable defaults for the trade described.
+- Always produce at least one line item — never return an empty line_items array.
 Return ONLY valid JSON.
 """
 
@@ -57,7 +61,10 @@ Transcribe the following voice note and extract the quote details in strict JSON
    - "quantity" (number): how many units
    - "unit_price" (number): price per unit
 
-If prices are not mentioned, infer reasonable defaults for the trade described.
+Rules:
+- If a lump-sum total is mentioned (e.g. "New bathroom, three thousand pounds"), create ONE line item with quantity=1 and unit_price equal to that total.
+- If prices are not mentioned at all, infer reasonable defaults for the trade described.
+- Always produce at least one line item — never return an empty line_items array.
 Return ONLY valid JSON.
 """
 
