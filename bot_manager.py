@@ -418,7 +418,8 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
 
     if not dna_data:
         await msg.edit_text(
-            "Sorry, I couldn't extract your details. Please try uploading clearer images/PDFs."
+            "Sorry, I wasn't able to extract your business details from those files. "
+            "Please try again — if the problem persists, contact support."
         )
         return
 

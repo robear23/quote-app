@@ -165,7 +165,11 @@ class AIService:
                 else:
                     uploaded_files.append(client.files.upload(file=path))
 
-            contents = [DNA_EXTRACTION_PROMPT] + text_contents + uploaded_files
+            if text_contents:
+                combined_text = DNA_EXTRACTION_PROMPT + "\n\n" + "\n\n".join(text_contents)
+                contents = [combined_text] + uploaded_files
+            else:
+                contents = [DNA_EXTRACTION_PROMPT] + uploaded_files
 
             response = _generate_with_retry(contents)
 
