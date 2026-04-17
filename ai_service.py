@@ -47,9 +47,15 @@ Extract the following from the user's input in strict JSON format:
    - "unit_price" (number): price per unit
 
 Rules:
+- A trailing number after the job description is ALWAYS the price — never an address, postcode, or ID.
 - If a lump-sum total is given (e.g. "New bathroom 3000"), create ONE line item with quantity=1 and unit_price equal to that total.
 - If prices are not mentioned at all, infer reasonable defaults for the trade described.
 - Always produce at least one line item — never return an empty line_items array.
+
+Example:
+Input: "Amy Smith. New bathroom 3000"
+Output: {"customer_name": "Amy Smith", "customer_address": null, "line_items": [{"description": "New bathroom", "quantity": 1, "unit_price": 3000}]}
+
 Return ONLY valid JSON.
 """
 
