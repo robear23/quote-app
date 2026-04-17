@@ -1,3 +1,5 @@
+import io
+import base64
 import os
 import re
 import logging
@@ -58,6 +60,18 @@ def _get_brand_color(brand_dna: dict) -> str:
 def _hex_to_rgb(hex_color: str) -> tuple:
     h = hex_color.lstrip('#')
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+_CURRENCY_SYMBOLS = {
+    "GBP": "£", "USD": "$", "EUR": "€", "AUD": "A$", "CAD": "C$",
+    "NZD": "NZ$", "CHF": "Fr", "JPY": "¥", "CNY": "¥", "INR": "₹",
+    "ZAR": "R", "SGD": "S$", "HKD": "HK$", "SEK": "kr", "NOK": "kr",
+    "DKK": "kr", "MXN": "$", "BRL": "R$", "AED": "د.إ",
+}
+
+
+def _sym(currency_code: str) -> str:
+    return _CURRENCY_SYMBOLS.get((currency_code or "").upper(), currency_code or "")
 
 
 def _set_cell_bg(cell, hex_color: str):
@@ -138,43 +152,15 @@ class DocumentFactory:
         section.right_margin = Inches(0.9)
 
         currency = quote_data.get("currency") or brand_dna.get("currency") or "GBP"
+        sym = _sym(currency)
         brand_hex = _get_brand_color(brand_dna)
         brand_rgb = _hex_to_rgb(brand_hex)
         b_name = (brand_dna.get("business_name") or "Your Business").upper()
         today_str = date.today().strftime("%d %B %Y")
         quote_ref = f"QTE-{date.today().strftime('%Y%m')}-{random.randint(100, 999)}"
+        logo_b64 = brand_dna.get("logo_base64")
 
-        # ── 1. HEADER BAND: business name (left) | QUOTATION (right) ─────
-        hdr_tbl = doc.add_table(rows=1, cols=2)
-        hdr_tbl.autofit = False
-        lc = hdr_tbl.cell(0, 0)
-        rc = hdr_tbl.cell(0, 1)
-        lc.width = Inches(4.0)
-        rc.width = Inches(2.5)
-        _set_cell_bg(lc, brand_hex)
-        _set_cell_bg(rc, brand_hex)
-        _remove_cell_borders(lc)
-        _remove_cell_borders(rc)
-
-        lp = lc.paragraphs[0]
-        lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        lp.paragraph_format.space_before = Pt(8)
-        lp.paragraph_format.space_after = Pt(8)
-        lr = lp.add_run(b_name)
-        lr.bold = True
-        lr.font.color.rgb = RGBColor(255, 255, 255)
-        lr.font.size = Pt(16)
-
-        rp = rc.paragraphs[0]
-        rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        rp.paragraph_format.space_before = Pt(8)
-        rp.paragraph_format.space_after = Pt(8)
-        rr = rp.add_run("QUOTATION")
-        rr.bold = True
-        rr.font.color.rgb = RGBColor(255, 255, 255)
-        rr.font.size = Pt(16)
-
-        # ── 2. COMPANY INFO ───────────────────────────────────────────────
+        # ── 1. HEADER ─────────────────────────────────────────────────────
         info_lines = []
         if brand_dna.get("contact_details"):
             info_lines.append(str(brand_dna["contact_details"]))
@@ -183,12 +169,92 @@ class DocumentFactory:
         if brand_dna.get("bank_info"):
             info_lines.append(f"Bank: {brand_dna['bank_info']}")
 
-        if info_lines:
-            ip = doc.add_paragraph()
-            ip.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            ip.paragraph_format.space_before = Pt(6)
-            ip.paragraph_format.space_after = Pt(2)
-            ip.add_run("\n".join(info_lines)).font.size = Pt(8.5)
+        if logo_b64:
+            # Logo layout: logo image left | QUOTATION right (white bg), then full-width brand bar
+            hdr_tbl = doc.add_table(rows=1, cols=2)
+            hdr_tbl.autofit = False
+            lc = hdr_tbl.cell(0, 0)
+            rc = hdr_tbl.cell(0, 1)
+            lc.width = Inches(3.5)
+            rc.width = Inches(3.0)
+            _remove_cell_borders(lc)
+            _remove_cell_borders(rc)
+
+            lp = lc.paragraphs[0]
+            lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            lp.paragraph_format.space_before = Pt(4)
+            lp.paragraph_format.space_after = Pt(4)
+            try:
+                img_stream = io.BytesIO(base64.b64decode(logo_b64))
+                lp.add_run().add_picture(img_stream, height=Inches(0.55))
+            except Exception as e:
+                logger.warning(f"Could not insert logo image: {e}")
+                lr = lp.add_run(b_name)
+                lr.bold = True
+                lr.font.size = Pt(14)
+
+            rp = rc.paragraphs[0]
+            rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            rp.paragraph_format.space_before = Pt(10)
+            rp.paragraph_format.space_after = Pt(10)
+            rr = rp.add_run("QUOTATION")
+            rr.bold = True
+            rr.font.size = Pt(20)
+
+            # Full-width brand-coloured bar below logo/title
+            bar_tbl = doc.add_table(rows=1, cols=1)
+            bar_tbl.autofit = False
+            bar_cell = bar_tbl.cell(0, 0)
+            bar_cell.width = Inches(6.5)
+            _set_cell_bg(bar_cell, brand_hex)
+            _remove_cell_borders(bar_cell)
+            bar_cell.paragraphs[0].paragraph_format.space_before = Pt(4)
+            bar_cell.paragraphs[0].paragraph_format.space_after = Pt(4)
+
+            # Company info below the bar
+            if info_lines:
+                ip = doc.add_paragraph()
+                ip.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                ip.paragraph_format.space_before = Pt(4)
+                ip.paragraph_format.space_after = Pt(2)
+                ip.add_run("\n".join(info_lines)).font.size = Pt(8.5)
+        else:
+            # Fallback: full-width brand-coloured band with business name + QUOTATION
+            hdr_tbl = doc.add_table(rows=1, cols=2)
+            hdr_tbl.autofit = False
+            lc = hdr_tbl.cell(0, 0)
+            rc = hdr_tbl.cell(0, 1)
+            lc.width = Inches(4.0)
+            rc.width = Inches(2.5)
+            _set_cell_bg(lc, brand_hex)
+            _set_cell_bg(rc, brand_hex)
+            _remove_cell_borders(lc)
+            _remove_cell_borders(rc)
+
+            lp = lc.paragraphs[0]
+            lp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            lp.paragraph_format.space_before = Pt(8)
+            lp.paragraph_format.space_after = Pt(8)
+            lr = lp.add_run(b_name)
+            lr.bold = True
+            lr.font.color.rgb = RGBColor(255, 255, 255)
+            lr.font.size = Pt(16)
+
+            rp = rc.paragraphs[0]
+            rp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            rp.paragraph_format.space_before = Pt(8)
+            rp.paragraph_format.space_after = Pt(8)
+            rr = rp.add_run("QUOTATION")
+            rr.bold = True
+            rr.font.color.rgb = RGBColor(255, 255, 255)
+            rr.font.size = Pt(16)
+
+            if info_lines:
+                ip = doc.add_paragraph()
+                ip.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                ip.paragraph_format.space_before = Pt(6)
+                ip.paragraph_format.space_after = Pt(2)
+                ip.add_run("\n".join(info_lines)).font.size = Pt(8.5)
 
         _add_rule(doc, color=brand_hex, space_before=4, space_after=4)
 
@@ -252,7 +318,7 @@ class DocumentFactory:
             WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER,
             WD_ALIGN_PARAGRAPH.RIGHT, WD_ALIGN_PARAGRAPH.RIGHT,
         ]
-        headers = ["Description", "Qty", f"Unit Price ({currency})", f"Total ({currency})"]
+        headers = ["Description", "Qty", f"Unit Price ({sym})", f"Total ({sym})"]
 
         tbl = doc.add_table(rows=1, cols=4)
         tbl.autofit = False
@@ -334,10 +400,10 @@ class DocumentFactory:
             if colored:
                 vr2.font.color.rgb = RGBColor(255, 255, 255)
 
-        _add_total_row("Subtotal:", f"{currency} {subtotal:,.2f}")
+        _add_total_row("Subtotal:", f"{sym}{subtotal:,.2f}")
         if tax_rate > 0:
-            _add_total_row(f"VAT/Tax ({tax_rate:.0f}%):", f"{currency} {tax_amount:,.2f}")
-        _add_total_row("TOTAL DUE:", f"{currency} {grand_total:,.2f}", bold=True, colored=True)
+            _add_total_row(f"VAT/Tax ({tax_rate:.0f}%):", f"{sym}{tax_amount:,.2f}")
+        _add_total_row("TOTAL DUE:", f"{sym}{grand_total:,.2f}", bold=True, colored=True)
 
         # ── 7. FOOTER ─────────────────────────────────────────────────────
         _spacer(doc, before=12, after=0)
@@ -367,6 +433,7 @@ class DocumentFactory:
     def generate_xlsx(quote_data: dict, brand_dna: dict, output_filename: str) -> dict:
         filepath = os.path.join(OUTPUT_DIR, output_filename)
         currency = quote_data.get("currency") or brand_dna.get("currency") or "GBP"
+        sym = _sym(currency)
         b_name = (brand_dna.get("business_name") or "Your Business").upper()
         brand_hex = _get_brand_color(brand_dna)
         brand_color_str = f"#{brand_hex}"
@@ -485,8 +552,8 @@ class DocumentFactory:
         # Table headers
         worksheet.write(row, 0, 'Description', header_left_fmt)
         worksheet.write(row, 1, 'Qty', header_fmt)
-        worksheet.write(row, 2, f'Unit Price ({currency})', header_right_fmt)
-        worksheet.write(row, 3, f'Total ({currency})', header_right_fmt)
+        worksheet.write(row, 2, f'Unit Price ({sym})', header_right_fmt)
+        worksheet.write(row, 3, f'Total ({sym})', header_right_fmt)
         row += 1
 
         # Line items

@@ -160,13 +160,17 @@ class AIService:
         and returns the structured JSON Brand DNA.
         """
         try:
+            import base64 as _b64
             uploaded_files = []
             text_contents = []
+            logo_b64 = None
+            _raster_exts = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'}
+
             for path in file_uris:
                 if path.lower().endswith(".docx"):
                     try:
-                        import docx
-                        doc = docx.Document(path)
+                        import docx as _docx
+                        doc = _docx.Document(path)
                         full_text = []
                         for para in doc.paragraphs:
                             full_text.append(para.text)
@@ -175,6 +179,20 @@ class AIService:
                                 for cell in row.cells:
                                     full_text.append(cell.text)
                         text_contents.append(f"\n--- Content of {os.path.basename(path)} ---\n" + "\n".join(full_text))
+
+                        # Extract first raster image as logo
+                        if logo_b64 is None:
+                            for rel in doc.part.rels.values():
+                                try:
+                                    target = getattr(rel, 'target_ref', '') or ''
+                                    ext = os.path.splitext(target.lower())[1]
+                                    if ext in _raster_exts:
+                                        blob = rel.target_part.blob
+                                        if len(blob) > 500:  # skip tiny placeholder images
+                                            logo_b64 = _b64.b64encode(blob).decode('utf-8')
+                                            break
+                                except Exception:
+                                    continue
                     except Exception as e:
                         logger.error(f"Failed to read docx {path}: {e}")
                 else:
@@ -194,7 +212,10 @@ class AIService:
                 except Exception:
                     pass
 
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            if logo_b64:
+                result["logo_base64"] = logo_b64
+            return result
 
         except RateLimitError:
             raise
