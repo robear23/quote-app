@@ -28,6 +28,8 @@ Extract the following information:
 6. "currency": The primary currency used (e.g., USD, GBP, EUR).
 7. "calculation_methods": A JSON object with keys like "tax_rate" (numeric percentage, e.g. 20 for 20% VAT), "markup_percentage", and any other observed pricing logic.
 8. "layout_preferences": Notes on visual layout (e.g., "Logo top left", "Clean modern font", "Blue color scheme").
+9. "primary_color_hex": The dominant brand/header color as a 6-digit hex code WITHOUT the # prefix (e.g., "1B3A5C" for navy blue). Look at header backgrounds, table header rows, colored banners, and logo colors. This is critical — inspect the document carefully for any colored elements.
+10. "secondary_color_hex": The secondary accent color as a 6-digit hex code WITHOUT the # prefix, if present (e.g., highlight colors, subheadings). Set to null if none.
 
 Return ONLY a valid JSON object with these keys. If a field cannot be determined, set its value to null.
 For "calculation_methods", always use a JSON object (not a string). If a tax rate is found (e.g. 20% VAT), set "tax_rate" to the numeric value (e.g. 20).
