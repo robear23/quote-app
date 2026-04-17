@@ -31,6 +31,9 @@ class Settings:
     # Supabase Storage bucket for generated quote documents
     SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
 
+    # Supabase Storage bucket for onboarding sample files (created separately in Supabase dashboard)
+    SUPABASE_ONBOARDING_BUCKET: str = os.getenv("SUPABASE_ONBOARDING_BUCKET", "onboarding")
+
     # Session signing secret — set a long random string in production
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "change-me-in-production").strip()
 

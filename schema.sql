@@ -86,3 +86,92 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- MIGRATION: Pending quote state (survives restarts, enables multi-worker)
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_quote JSONB DEFAULT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_brand_dna JSONB DEFAULT NULL;
+
+-- Fix bot_state comment to document all states
+COMMENT ON COLUMN users.bot_state IS 'States: HANDSHAKE | ONBOARDING | AWAITING_FORMAT | ACTIVE | AWAITING_CONFIRMATION';
+
+-- ============================================================
+-- MIGRATION: Login tokens table (replaces in-memory dict, works across workers)
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE login_tokens ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- MIGRATION: pg_cron cleanup for expired login tokens
+-- Run in Supabase SQL editor (pg_cron is enabled by default on Supabase)
+-- ============================================================
+
+SELECT cron.schedule(
+    'cleanup-expired-login-tokens',
+    '*/15 * * * *',
+    $$DELETE FROM login_tokens WHERE expires_at < now()$$
+);
+
+-- ============================================================
+-- MIGRATION: Atomic quota reservation function
+-- Atomically checks monthly quota and inserts a placeholder document
+-- row in a single transaction, preventing race conditions when two
+-- requests arrive simultaneously near the quota limit.
+-- Returns the new document UUID if a slot was available, NULL if quota
+-- is already reached.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION reserve_quota_slot(
+    p_user_id     UUID,
+    p_billing_start TIMESTAMPTZ,
+    p_limit       INT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_count  INT;
+    v_doc_id UUID;
+BEGIN
+    -- Per-user advisory lock scoped to this transaction.
+    -- Two concurrent calls for the same user will queue here rather than
+    -- both reading the same count and both deciding they're under the limit.
+    PERFORM pg_advisory_xact_lock(('x' || md5(p_user_id::text))::bit(64)::bigint);
+
+    SELECT COUNT(*) INTO v_count
+    FROM documents
+    WHERE user_id = p_user_id
+      AND created_at >= p_billing_start;
+
+    IF v_count >= p_limit THEN
+        RETURN NULL;
+    END IF;
+
+    -- Insert a placeholder row to claim the slot; the application fills in
+    -- the actual quote data once the document has been generated and sent.
+    INSERT INTO documents (user_id)
+    VALUES (p_user_id)
+    RETURNING id INTO v_doc_id;
+
+    RETURN v_doc_id;
+END;
+$$;
+
+-- ============================================================
+-- MIGRATION: Supabase Storage bucket for onboarding samples
+-- Run these steps in the Supabase dashboard (Storage section):
+--   1. Create a new bucket named "onboarding" (private, no public access)
+--   2. Optionally set a lifecycle rule to auto-delete files older than 7 days
+-- No SQL required — bucket creation is done via the dashboard or Management API.
+-- ============================================================

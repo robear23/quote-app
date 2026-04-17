@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import re
-import glob
 import uuid
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -21,23 +20,63 @@ logger = logging.getLogger(__name__)
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# In-memory store for files uploaded during ONBOARDING
-# Dict mapping telegram_id -> list of local file paths
-onboarding_files = {}
+_ONBOARDING_CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
 
-# Restore any files left in the temp directory from previous sessions
-for filepath in glob.glob(os.path.join(TEMP_DIR, "*")):
-    filename = os.path.basename(filepath)
-    if "_" in filename:
-        user_id_str = filename.split("_")[0]
+
+# ---------------------------------------------------------------------------
+# Supabase Storage helpers for onboarding sample files
+# ---------------------------------------------------------------------------
+
+async def _upload_onboarding_file(telegram_id: int, filename: str, file_bytes: bytes) -> str:
+    """Upload a sample file to Supabase Storage. Returns the storage path."""
+    storage_path = f"onboarding/{telegram_id}/{filename}"
+    ext = os.path.splitext(filename)[1].lower()
+    ct = _ONBOARDING_CONTENT_TYPES.get(ext, "application/octet-stream")
+    await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).upload(
+        storage_path, file_bytes, file_options={"content-type": ct}
+    )
+    return storage_path
+
+
+async def _list_onboarding_storage_paths(telegram_id: int) -> list[str]:
+    """List all onboarding files in Supabase Storage for a user. Returns storage paths."""
+    folder = f"onboarding/{telegram_id}"
+    items = await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).list(folder)
+    return [
+        f"{folder}/{item['name']}"
+        for item in (items or [])
+        if item.get("name") and not item["name"].startswith(".")
+    ]
+
+
+async def _delete_onboarding_storage_files(telegram_id: int) -> None:
+    """Delete all onboarding files from Supabase Storage for a user."""
+    paths = await _list_onboarding_storage_paths(telegram_id)
+    if paths:
+        await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).remove(paths)
+
+
+async def _download_onboarding_files_to_temp(paths: list[str]) -> list[str]:
+    """Download storage files to local temp dir for AI processing. Returns local temp paths."""
+    local_paths = []
+    for storage_path in paths:
         try:
-            user_id = int(user_id_str)
-            if user_id not in onboarding_files:
-                onboarding_files[user_id] = []
-            if filepath not in onboarding_files[user_id]:
-                onboarding_files[user_id].append(filepath)
-        except ValueError:
-            pass
+            file_bytes = await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).download(storage_path)
+            filename = storage_path.split("/")[-1]
+            local_path = os.path.join(TEMP_DIR, f"onboarding_{uuid.uuid4().hex}_{filename}")
+            with open(local_path, "wb") as f:
+                f.write(file_bytes)
+            local_paths.append(local_path)
+        except Exception as e:
+            logger.error(f"Failed to download onboarding file {storage_path}: {e}")
+    return local_paths
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +98,22 @@ async def get_brand_dna(user_id: str) -> dict:
     """Retrieves the user's Brand DNA config from Supabase."""
     res = await database.supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
     return res.data[0] if res.data else {}
+
+
+async def set_pending_state(telegram_id: int, quote_data: dict, brand_dna: dict):
+    """Persists pending quote and brand DNA to Supabase (survives restarts and multi-worker deploys)."""
+    await database.supabase.table("users").update({
+        "pending_quote": quote_data,
+        "pending_brand_dna": brand_dna,
+    }).eq("telegram_id", telegram_id).execute()
+
+
+async def clear_pending_state(telegram_id: int):
+    """Clears the pending quote state after generation or cancellation."""
+    await database.supabase.table("users").update({
+        "pending_quote": None,
+        "pending_brand_dna": None,
+    }).eq("telegram_id", telegram_id).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -116,14 +171,34 @@ async def generate_and_send_quote(
     """Generates the quote document, uploads to Supabase Storage, sends via URL, and cleans up."""
     user = update.effective_user
 
-    # Monthly usage limit — based on subscription tier
-    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier
+    # Atomically check quota and reserve a document slot via Postgres RPC.
+    # reserve_quota_slot() uses an advisory lock so two simultaneous requests
+    # for the same user cannot both slip through the count check.
+    from subscription_service import get_user_tier, monthly_limit_for_tier, get_billing_period_start
     from config import settings as _settings
     tier = await get_user_tier(db_user["id"])
     monthly_limit = monthly_limit_for_tier(tier)
-    monthly_count = await get_monthly_usage(db_user["id"])
+    billing_start = await get_billing_period_start(db_user["id"])
 
-    if monthly_count >= monthly_limit:
+    doc_id = None
+    quota_exceeded = False
+    try:
+        rpc_res = await database.supabase.rpc("reserve_quota_slot", {
+            "p_user_id": db_user["id"],
+            "p_billing_start": billing_start.isoformat(),
+            "p_limit": monthly_limit,
+        }).execute()
+        doc_id = rpc_res.data  # UUID string if slot reserved, None if quota exceeded
+        quota_exceeded = (doc_id is None)
+    except Exception as e:
+        # RPC unavailable (e.g. migration not yet run) — fall back to a non-atomic
+        # count check so existing users are not blocked during the migration window.
+        logger.warning(f"reserve_quota_slot RPC failed, falling back to count check: {e}")
+        from subscription_service import get_monthly_usage
+        monthly_count = await get_monthly_usage(db_user["id"])
+        quota_exceeded = monthly_count >= monthly_limit
+
+    if quota_exceeded:
         account_url = f"{_settings.APP_URL}/account"
         if tier == "free":
             msg_text = (
@@ -139,8 +214,7 @@ async def generate_and_send_quote(
             await status_msg.edit_text(msg_text)
         else:
             await update.message.reply_text(msg_text)
-        context.user_data.pop("pending_quote", None)
-        context.user_data.pop("pending_brand_dna", None)
+        await clear_pending_state(user.id)
         await update_user_state(user.id, "ACTIVE")
         return
 
@@ -156,54 +230,47 @@ async def generate_and_send_quote(
     surname = re.sub(r'[^A-Za-z0-9]', '', raw_name.strip().split()[-1]) or "Client"
     try:
         total_res = await database.supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
-        quote_num = (total_res.count or 0) + 1
+        quote_num = (total_res.count or 0)
     except Exception:
         quote_num = 1
     unique_id = uuid.uuid4().hex[:6]
     output_filename = f"Quote_{surname}_{quote_num:03d}_{unique_id}.{output_ext}"
 
-    if preferred_format == "xlsx":
-        result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
-    else:
-        result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
-
-    doc_path = result["filepath"]
-
-    if not os.path.exists(doc_path):
+    # Generate the document; release the reserved slot on any failure
+    result = None
+    doc_path = None
+    try:
+        if preferred_format == "xlsx":
+            result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
+        else:
+            result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
+        doc_path = result["filepath"]
+        if not os.path.exists(doc_path):
+            raise RuntimeError("Generated file not found on disk")
+    except Exception as e:
+        logger.error(f"Document generation failed: {e}")
+        if doc_id:
+            try:
+                await database.supabase.table("documents").delete().eq("id", doc_id).execute()
+            except Exception:
+                pass
         await status_msg.edit_text("Failed to generate the document. Please try again.")
         return
 
-    # Upload to Supabase Storage and send to Telegram via signed URL
+    # Send document directly to Telegram; release reserved slot on failure
     try:
         with open(doc_path, 'rb') as f:
-            file_bytes = f.read()
-
-        storage_path = f"{db_user['id']}/{output_filename}"
-        mime = (
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            if output_ext == "xlsx" else
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-        await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
-            storage_path, file_bytes, {"content-type": mime}
-        )
-        url_data = await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).create_signed_url(
-            storage_path, 3600
-        )
-        signed_url = url_data.get("signedURL") or url_data.get("signedUrl", "")
-        await context.bot.send_document(chat_id=user.id, document=signed_url, filename=output_filename)
-
-        # Cleanup storage after Telegram has fetched the file
-        try:
-            await database.supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove([storage_path])
-        except Exception as e:
-            logger.warning(f"Failed to remove document from storage: {e}")
+            await context.bot.send_document(chat_id=user.id, document=f, filename=output_filename)
     except Exception as e:
-        logger.error(f"Storage upload/send failed: {e}")
+        logger.error(f"Failed to send document to Telegram: {e}")
+        if doc_id:
+            try:
+                await database.supabase.table("documents").delete().eq("id", doc_id).execute()
+            except Exception:
+                pass
         await status_msg.edit_text("Failed to send the document. Please try again.")
         return
     finally:
-        # Always clean up the local file
         try:
             os.remove(doc_path)
         except Exception:
@@ -216,25 +283,27 @@ async def generate_and_send_quote(
         "/feedback along with a message to give us feedback and tell us what features you want added."
     )
 
-    # Persist to Supabase documents table
+    # Persist the document record: update the reserved placeholder if we have one,
+    # otherwise insert a new row (fallback path when the RPC was unavailable).
+    doc_fields = {
+        "customer_name": quote_data.get("customer_name"),
+        "customer_address": quote_data.get("customer_address"),
+        "line_items": quote_data.get("line_items", []),
+        "subtotal": result["subtotal"],
+        "tax_amount": result["tax_amount"],
+        "total": result["total"],
+    }
     try:
-        doc_record = {
-            "user_id": db_user["id"],
-            "customer_name": quote_data.get("customer_name"),
-            "customer_address": quote_data.get("customer_address"),
-            "line_items": quote_data.get("line_items", []),
-            "subtotal": result["subtotal"],
-            "tax_amount": result["tax_amount"],
-            "total": result["total"],
-        }
-        await database.supabase.table("documents").insert(doc_record).execute()
-        logger.info(f"Document stored for user {db_user['id']} (telegram_id={user.id})")
+        if doc_id:
+            await database.supabase.table("documents").update(doc_fields).eq("id", doc_id).execute()
+        else:
+            await database.supabase.table("documents").insert({"user_id": db_user["id"], **doc_fields}).execute()
+        logger.info(f"Document recorded for user {db_user['id']} (telegram_id={user.id})")
     except Exception as e:
-        logger.error(f"Failed to store quote in Supabase for user {db_user['id']}: {e}")
+        logger.error(f"Failed to persist document record for user {db_user['id']}: {e}")
 
     # Clear pending state and return user to ACTIVE
-    context.user_data.pop("pending_quote", None)
-    context.user_data.pop("pending_brand_dna", None)
+    await clear_pending_state(user.id)
     await update_user_state(user.id, "ACTIVE")
 
 
@@ -315,8 +384,11 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Failed to delete user_configs during restart: {e}")
 
-    # Clear any in-memory onboarding files
-    onboarding_files.pop(user.id, None)
+    # Delete any uploaded onboarding samples from Supabase Storage
+    try:
+        await _delete_onboarding_storage_files(user.id)
+    except Exception as e:
+        logger.error(f"Failed to delete onboarding storage files during restart: {e}")
 
     # Reset state to ONBOARDING
     await update_user_state(user.id, "ONBOARDING")
@@ -401,20 +473,40 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("You are not currently in the onboarding phase.")
         return
 
-    files = onboarding_files.get(user.id, [])
-    if len(files) < 1:
+    # List files uploaded to Supabase Storage for this user
+    try:
+        storage_paths = await _list_onboarding_storage_paths(user.id)
+    except Exception as e:
+        logger.error(f"Failed to list onboarding storage files: {e}")
+        await update.message.reply_text("Failed to load your uploaded files. Please try again.")
+        return
+
+    if len(storage_paths) < 1:
         await update.message.reply_text("Please upload at least 1 sample invoice before finishing.")
         return
 
     msg = await update.message.reply_text(
-        f"Processing {len(files)} document(s) to extract your Brand DNA. This might take a minute..."
+        f"Processing {len(storage_paths)} document(s) to extract your Brand DNA. This might take a minute..."
     )
 
+    # Download storage files to temp dir for AI processing
+    local_files = await _download_onboarding_files_to_temp(storage_paths)
+    if not local_files:
+        await msg.edit_text("Failed to load your uploaded files. Please try again.")
+        return
+
     try:
-        dna_data = await run_ai(AIService.extract_brand_dna, files)
+        dna_data = await run_ai(AIService.extract_brand_dna, local_files)
     except RateLimitError:
         await msg.edit_text(RATE_LIMIT_MSG)
         return
+    finally:
+        # Always clean up temp files
+        for f in local_files:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
 
     if not dna_data:
         await msg.edit_text(
@@ -427,14 +519,11 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
     try:
         await database.supabase.table("user_configs").upsert(dna_data).execute()
 
-        # Cleanup temp files
-        for f in files:
-            if os.path.exists(f):
-                try:
-                    os.remove(f)
-                except Exception:
-                    pass
-        onboarding_files.pop(user.id, None)
+        # Delete onboarding samples from Supabase Storage
+        try:
+            await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).remove(storage_paths)
+        except Exception as e:
+            logger.error(f"Failed to delete onboarding storage files after processing: {e}")
 
         # Move to format selection step
         await update_user_state(user.id, "AWAITING_FORMAT")
@@ -481,15 +570,33 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ext = ".jpg"
 
         if file_obj:
-            filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}{ext}")
-            await file_obj.download_to_drive(custom_path=filepath)
+            # Download from Telegram to a temp file, then upload to Supabase Storage
+            tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}{ext}")
+            await file_obj.download_to_drive(custom_path=tmp_path)
+            try:
+                storage_filename = f"{uuid.uuid4().hex}{ext}"
+                with open(tmp_path, "rb") as f:
+                    file_bytes = f.read()
+                await _upload_onboarding_file(user.id, storage_filename, file_bytes)
+            except Exception as e:
+                logger.error(f"Failed to upload onboarding file to storage: {e}")
+                await update.message.reply_text("Failed to save your file. Please try again.")
+                return
+            finally:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
-            if user.id not in onboarding_files:
-                onboarding_files[user.id] = []
-            onboarding_files[user.id].append(filepath)
+            # Count files now in storage so the user knows their running total
+            try:
+                stored = await _list_onboarding_storage_paths(user.id)
+                count = len(stored)
+            except Exception:
+                count = 1
 
             await update.message.reply_text(
-                f"Received sample {len(onboarding_files[user.id])}. "
+                f"Received sample {count}. "
                 "Send more or type /finish\\_onboarding.",
                 parse_mode="Markdown"
             )
@@ -522,8 +629,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
             quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
-            context.user_data["pending_quote"] = quote_data
-            context.user_data["pending_brand_dna"] = brand_dna
+            await set_pending_state(user.id, quote_data, brand_dna)
             await update_user_state(user.id, "AWAITING_CONFIRMATION")
 
             summary = format_quote_summary(quote_data, brand_dna)
@@ -602,8 +708,8 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return
 
-        pending_quote = context.user_data.get("pending_quote")
-        pending_brand_dna = context.user_data.get("pending_brand_dna")
+        pending_quote = db_user.get("pending_quote")
+        pending_brand_dna = db_user.get("pending_brand_dna")
 
         if not pending_quote:
             # State lost on restart — reset gracefully
@@ -629,7 +735,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         else:
             updated_quote = result.get("updated_quote", pending_quote)
-            context.user_data["pending_quote"] = updated_quote
+            await set_pending_state(user.id, updated_quote, pending_brand_dna)
             summary = format_quote_summary(updated_quote, pending_brand_dna)
             await msg.edit_text(f"Updated quote:\n\n{summary}", parse_mode="Markdown", reply_markup=_yes_keyboard())
         return
@@ -690,8 +796,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     # Show summary and move to confirmation state
     brand_dna = await get_brand_dna(db_user["id"])
     quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
-    context.user_data["pending_quote"] = quote_data
-    context.user_data["pending_brand_dna"] = brand_dna
+    await set_pending_state(user.id, quote_data, brand_dna)
     await update_user_state(user.id, "AWAITING_CONFIRMATION")
 
     summary = format_quote_summary(quote_data, brand_dna)
@@ -713,8 +818,8 @@ async def handle_confirm_yes(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_reply_markup(reply_markup=None)
         return
 
-    pending_quote = context.user_data.get("pending_quote")
-    pending_brand_dna = context.user_data.get("pending_brand_dna")
+    pending_quote = db_user.get("pending_quote")
+    pending_brand_dna = db_user.get("pending_brand_dna")
 
     if not pending_quote:
         await query.edit_message_reply_markup(reply_markup=None)
@@ -745,7 +850,12 @@ def build_application():
         logger.error("No TELEGRAM_BOT_TOKEN provided.")
         return None
 
-    application = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    application = (
+        ApplicationBuilder()
+        .token(settings.TELEGRAM_BOT_TOKEN)
+        .updater(None)  # webhooks only — no polling updater needed
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("finish_onboarding", finish_onboarding))

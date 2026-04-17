@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import httpx
 import resend
 import stripe
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -66,29 +66,42 @@ if settings.STRIPE_SECRET_KEY:
 
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
+# Simple per-email rate limiter for /handshake — prevents email-spam abuse.
+# In-process dict is fine: the goal is DoS prevention, not correctness guarantees.
+_handshake_last_sent: dict[str, float] = {}
+HANDSHAKE_COOLDOWN_SECONDS = 60
+
 # ---------------------------------------------------------------------------
-# Magic-link token store (in-memory, single-use, 30-minute TTL)
+# Magic-link token store (Supabase-backed, single-use, 30-minute TTL)
+# Works across multiple workers and survives restarts.
 # ---------------------------------------------------------------------------
 
-# token -> (user_id, expires_at)
-_login_tokens: dict[str, tuple[str, float]] = {}
-
-
-def _generate_login_token(user_id: str) -> str:
+async def _generate_login_token(user_id: str) -> str:
     token = secrets.token_urlsafe(32)
-    _login_tokens[token] = (user_id, time.time() + 1800)
+    expires_at = datetime.fromtimestamp(time.time() + 1800, tz=timezone.utc).isoformat()
+    await database.supabase.table("login_tokens").insert({
+        "token": token,
+        "user_id": user_id,
+        "expires_at": expires_at,
+    }).execute()
     return token
 
 
-def _consume_login_token(token: str) -> str | None:
-    """Returns user_id if token is valid and unexpired, then deletes it."""
-    entry = _login_tokens.pop(token, None)
-    if entry is None:
+async def _consume_login_token(token: str) -> str | None:
+    """Returns user_id if token is valid and unexpired, then deletes it (single-use)."""
+    try:
+        res = await database.supabase.table("login_tokens").select("user_id, expires_at").eq("token", token).execute()
+        if not res.data:
+            return None
+        row = res.data[0]
+        await database.supabase.table("login_tokens").delete().eq("token", token).execute()
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if datetime.now(tz=timezone.utc) > expires_at:
+            return None
+        return row["user_id"]
+    except Exception as e:
+        logger.error(f"Failed to consume login token: {e}")
         return None
-    user_id, expires_at = entry
-    if time.time() > expires_at:
-        return None
-    return user_id
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +320,12 @@ def health_check():
 
 
 @app.post("/telegram")
-async def telegram_webhook(request: Request):
-    """Receives updates from Telegram and dispatches them to the bot."""
+async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Receives updates from Telegram and dispatches them to the bot.
+
+    Returns 200 immediately so Telegram never times out or retries, then
+    processes the update (including slow Gemini calls) in the background.
+    """
     if settings.WEBHOOK_SECRET:
         token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if token != settings.WEBHOOK_SECRET:
@@ -317,7 +334,7 @@ async def telegram_webhook(request: Request):
         raise HTTPException(status_code=503, detail="Bot not ready")
     data = await request.json()
     update = Update.de_json(data, bot_app.bot)
-    await bot_app.process_update(update)
+    background_tasks.add_task(bot_app.process_update, update)
     return {"ok": True}
 
 
@@ -343,6 +360,13 @@ async def initiate_handshake(email: str):
     if not email or not EMAIL_RE.match(email) or len(email) > 254:
         raise HTTPException(status_code=400, detail="Invalid email address")
 
+    # Rate limit: one email per address per 60 seconds
+    now = time.time()
+    if now - _handshake_last_sent.get(email, 0) < HANDSHAKE_COOLDOWN_SECONDS:
+        # Return the same response as success so as not to reveal rate limiting
+        return JSONResponse({"status": "check_email"})
+    _handshake_last_sent[email] = now
+
     if not settings.RESEND_API_KEY:
         raise HTTPException(status_code=503, detail="Email service not configured")
 
@@ -354,7 +378,7 @@ async def initiate_handshake(email: str):
         if res.data:
             # Existing user: send magic link only — do NOT grant a session
             user_id = res.data[0]["id"]
-            token = _generate_login_token(user_id)
+            token = await _generate_login_token(user_id)
             await asyncio.to_thread(send_magic_link_email, email, token, False)
         else:
             # New user: create account then send welcome + magic link
@@ -367,12 +391,12 @@ async def initiate_handshake(email: str):
                     retry = await database.supabase.table("users").select("id").eq("email", email).execute()
                     if retry.data:
                         user_id = retry.data[0]["id"]
-                        token = _generate_login_token(user_id)
+                        token = await _generate_login_token(user_id)
                         await asyncio.to_thread(send_magic_link_email, email, token, False)
                         return JSONResponse({"status": "check_email"})
                 raise
             telegram_link = f"https://t.me/{bot_username}?start={user_id}"
-            token = _generate_login_token(user_id)
+            token = await _generate_login_token(user_id)
             await asyncio.to_thread(send_magic_link_email, email, token, True, telegram_link)
 
         return JSONResponse({"status": "check_email"})
@@ -451,7 +475,7 @@ async def auth_google_callback(
 @app.get("/auth/email/verify")
 async def auth_email_verify(token: str):
     """Validates a magic link token and creates a session."""
-    user_id = _consume_login_token(token)
+    user_id = await _consume_login_token(token)
     if not user_id:
         return RedirectResponse("/?auth_error=invalid_link")
     redirect = RedirectResponse("/account")

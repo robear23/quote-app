@@ -131,7 +131,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 40px;
+            gap: 80px;
         }
 
         .nav-logo {
@@ -175,13 +175,13 @@
         .nav-right {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 32px;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 24px;
+            gap: 48px;
         }
 
         .nav-link {
@@ -230,15 +230,16 @@
             justify-content: center;
         }
 
-        .hero-video-bg {
+        /* ── Hero Background ── */
+        .hero-bg {
             position: absolute;
             inset: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            object-position: center center;
+            object-position: center;
             z-index: 0;
-            opacity: 0.65;
+            opacity: 0.55;
         }
 
         #hero > .container {
@@ -1372,10 +1373,7 @@
 
         <!-- Hero -->
         <section id="hero">
-            <video class="hero-video-bg" autoplay muted loop playsinline oncanplay="this.playbackRate=0.6">
-                <source src="/static/Quote me hero video.webm" type="video/webm">
-                <source src="/static/Quote me hero video.mp4" type="video/mp4">
-            </video>
+            <img src="/static/hero_photo_trade.png" class="hero-bg" alt="Tradesperson taking a photo of a quote illustration">
             <div class="hero-overlay"></div>
 
             <div class="container">
@@ -1825,6 +1823,7 @@
                     document.getElementById('sentEmailDisplay').textContent = email;
                     initialState.style.display = 'none';
                     successState.style.display = 'block';
+                    requestAnimationFrame(() => { successState.style.opacity = '1'; });
                 } else {
                     throw new Error('Unexpected response. Please try again.');
                 }
@@ -1881,6 +1880,7 @@
             entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
         }, { threshold: 0.12 });
         document.querySelectorAll('.fade-up, .step-card, .telegram-prereq').forEach(el => observer.observe(el));
+
     </script>
 
 </body>

@@ -43,13 +43,14 @@
         /* Nav */
         nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-            padding: 18px 0;
-            background: rgba(10,15,30,0.85);
-            backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border);
+            padding: 20px 0;
+            background: rgba(10,15,30,0.25);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         nav .inner { max-width: 900px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
-        .nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; color: var(--primary); text-decoration: none; }
+        .nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; color: var(--primary); text-decoration: none; }
         .logo-dot { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg,var(--accent),var(--purple)); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; }
         .nav-right { display: flex; align-items: center; gap: 14px; }
         .nav-logout {
@@ -199,7 +200,8 @@
 <nav>
     <div class="inner">
         <a href="/" class="nav-logo">
-            <img src="/static/logo.png" alt="Quote Me" style="height:32px;width:auto;display:block;">
+            <img src="/static/quote-me-logo-dark.png" alt="Quote Me" style="height:44px;width:auto;display:block;">
+            <span>Quote Me</span>
         </a>
         <div class="nav-right" id="navRight">
             <!-- populated by JS -->
