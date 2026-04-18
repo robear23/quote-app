@@ -130,17 +130,16 @@
         nav .container {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 80px;
+            justify-content: space-between;
         }
 
         .nav-logo {
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            letter-spacing: -0.02em;
+            gap: 12px;
+            font-weight: 750;
+            font-size: 1.25rem;
+            letter-spacing: -0.03em;
             color: var(--primary);
             text-decoration: none;
         }
@@ -159,12 +158,13 @@
         .nav-cta {
             background: var(--accent);
             color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 0.9rem;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
             text-decoration: none;
             transition: background 0.2s, transform 0.2s;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
         }
 
         .nav-cta:hover {
@@ -175,21 +175,22 @@
         .nav-right {
             display: flex;
             align-items: center;
-            gap: 32px;
+            gap: 28px;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 48px;
+            gap: 40px;
         }
 
         .nav-link {
             color: var(--secondary);
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 1rem;
+            font-weight: 600;
             text-decoration: none;
             transition: color 0.2s;
+            white-space: nowrap;
         }
 
         .nav-link:hover {
@@ -204,10 +205,11 @@
 
         .nav-sign-in {
             color: var(--secondary);
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 1rem;
+            font-weight: 600;
             text-decoration: none;
             transition: color 0.2s;
+            white-space: nowrap;
         }
 
         .nav-sign-in:hover {
@@ -1361,6 +1363,7 @@
                 <a href="#how-it-works" class="nav-link">How it works</a>
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="#contact" class="nav-link">Contact</a>
             </div>
             <div class="nav-right" id="navRight">
                 <a href="#signup" class="nav-sign-in">Sign in</a>
@@ -1740,6 +1743,15 @@
                             spam folder, or <a href="#" id="resendLink" style="color:var(--accent);">try again</a>.</p>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- Contact -->
+        <section id="contact" class="section" style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="container">
+                <div class="section-label fade-up">Contact</div>
+                <h2 class="section-title fade-up">Get in touch</h2>
+                <p class="section-sub fade-up" style="margin-bottom: 0;">Have any questions? Need any support?<br>Email us at <a href="mailto:contact@foresttechsolutions.net" style="color: var(--accent); text-decoration: none; font-weight: 600;">contact@foresttechsolutions.net</a></p>
             </div>
         </section>
 
