@@ -3,40 +3,137 @@ Subscription and usage helpers shared between main.py (web) and bot_manager.py (
 Uses the async Supabase client — all DB calls are native async (no asyncio.to_thread).
 """
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import database
 
-FREE_MONTHLY_LIMIT = 10
+FREE_MONTHLY_LIMIT = 5
 PREMIUM_MONTHLY_LIMIT = 100
 
 
 async def get_user_tier(user_id: str) -> str:
     """
-    Returns 'premium' if the user has an active subscription whose period
-    has not yet ended, otherwise 'free'.
+    Returns 'premium' if the user has an active Stripe subscription or an active
+    premium_months promo redemption, otherwise 'free'.
     """
+    now = datetime.now(timezone.utc)
+
+    # Check Stripe subscription
     res = await database.supabase.table("subscriptions") \
         .select("plan_tier, status, current_period_end") \
         .eq("user_id", user_id) \
         .execute()
     sub = res.data[0] if res.data else None
-    if not sub:
-        return "free"
+    if sub and sub.get("plan_tier") == "premium" and sub.get("status") in ("active", "trialing"):
+        end_str = sub.get("current_period_end")
+        if not end_str or datetime.fromisoformat(end_str.replace("Z", "+00:00")) > now:
+            return "premium"
 
-    if sub.get("plan_tier") != "premium":
-        return "free"
+    # Check active premium_months promo
+    promo_res = await database.supabase.table("user_promo_redemptions") \
+        .select("expires_at") \
+        .eq("user_id", user_id) \
+        .eq("benefit_type", "premium_months") \
+        .gt("expires_at", now.isoformat()) \
+        .execute()
+    if promo_res.data:
+        return "premium"
 
-    if sub.get("status") not in ("active", "trialing"):
-        return "free"
+    return "free"
 
-    end_str = sub.get("current_period_end")
-    if end_str:
-        end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-        if end_dt <= datetime.now(timezone.utc):
-            return "free"
 
-    return "premium"
+async def get_active_extra_quotes_limit(user_id: str) -> int | None:
+    """
+    Returns the quote limit from an active extra_quotes promo, or None if none active.
+    """
+    now = datetime.now(timezone.utc)
+    res = await database.supabase.table("user_promo_redemptions") \
+        .select("benefit_value") \
+        .eq("user_id", user_id) \
+        .eq("benefit_type", "extra_quotes") \
+        .gt("expires_at", now.isoformat()) \
+        .execute()
+    if res.data:
+        return max(row["benefit_value"] for row in res.data)
+    return None
+
+
+async def redeem_promo_code(user_id: str, code: str) -> dict:
+    """
+    Validates and redeems a promo code for a user.
+    Returns {"success": True, "message": "..."} or {"success": False, "error": "..."}.
+    """
+    now = datetime.now(timezone.utc)
+    code = code.strip().lower()
+
+    # Fetch the code
+    code_res = await database.supabase.table("promo_codes") \
+        .select("*") \
+        .eq("code", code) \
+        .execute()
+    if not code_res.data:
+        return {"success": False, "error": "That code doesn't exist. Check for typos and try again."}
+
+    promo = code_res.data[0]
+
+    if not promo.get("is_active"):
+        return {"success": False, "error": "That code is no longer active."}
+
+    if promo.get("expires_at"):
+        exp = datetime.fromisoformat(promo["expires_at"].replace("Z", "+00:00"))
+        if exp <= now:
+            return {"success": False, "error": "That code has expired."}
+
+    max_uses = promo.get("max_uses")
+    if max_uses is not None and promo.get("uses_count", 0) >= max_uses:
+        return {"success": False, "error": "That code has reached its maximum number of uses."}
+
+    # Check if user already redeemed it
+    existing = await database.supabase.table("user_promo_redemptions") \
+        .select("id") \
+        .eq("user_id", user_id) \
+        .eq("code", code) \
+        .execute()
+    if existing.data:
+        return {"success": False, "error": "You've already redeemed that code."}
+
+    # Calculate expiry
+    benefit_type = promo["benefit_type"]
+    benefit_value = promo["benefit_value"]
+    if benefit_type == "extra_quotes":
+        expires_at = now + timedelta(days=30)
+        description = f"{benefit_value} quotes/month for 30 days"
+    elif benefit_type == "premium_months":
+        # Add N calendar months
+        month = now.month + benefit_value
+        year = now.year + (month - 1) // 12
+        month = ((month - 1) % 12) + 1
+        max_day = calendar.monthrange(year, month)[1]
+        expires_at = now.replace(year=year, month=month, day=min(now.day, max_day))
+        description = f"full premium access for {benefit_value} month{'s' if benefit_value != 1 else ''}"
+    else:
+        return {"success": False, "error": "Unknown benefit type."}
+
+    # Insert redemption
+    await database.supabase.table("user_promo_redemptions").insert({
+        "user_id": user_id,
+        "code": code,
+        "expires_at": expires_at.isoformat(),
+        "benefit_type": benefit_type,
+        "benefit_value": benefit_value,
+    }).execute()
+
+    # Increment uses_count
+    await database.supabase.table("promo_codes") \
+        .update({"uses_count": promo.get("uses_count", 0) + 1}) \
+        .eq("code", code) \
+        .execute()
+
+    expires_str = expires_at.strftime("%-d %B %Y")
+    return {
+        "success": True,
+        "message": f"Code applied! You now have {description} until {expires_str}.",
+    }
 
 
 def _subtract_one_month(dt: datetime) -> datetime:

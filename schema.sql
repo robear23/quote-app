@@ -185,3 +185,40 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS template_docx_path TEXT;
 
 -- Also create a new private Storage bucket named "quote-templates" in the
 -- Supabase dashboard (Storage section). No public access needed.
+
+-- ============================================================
+-- MIGRATION: Promo code system
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS promo_codes (
+    code           TEXT PRIMARY KEY,
+    benefit_type   TEXT NOT NULL,        -- 'extra_quotes' | 'premium_months'
+    benefit_value  INT  NOT NULL,        -- e.g. 10 (quote limit) or 3 (months of premium)
+    max_uses       INT,                  -- NULL = unlimited
+    uses_count     INT  NOT NULL DEFAULT 0,
+    is_active      BOOLEAN NOT NULL DEFAULT true,
+    expires_at     TIMESTAMP WITH TIME ZONE
+);
+
+ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS user_promo_redemptions (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code         TEXT NOT NULL REFERENCES promo_codes(code),
+    redeemed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc', now()),
+    expires_at   TIMESTAMP WITH TIME ZONE NOT NULL,
+    benefit_type TEXT NOT NULL,
+    benefit_value INT NOT NULL,
+    UNIQUE(user_id, code)
+);
+
+ALTER TABLE user_promo_redemptions ENABLE ROW LEVEL SECURITY;
+
+-- Seed the initial promo codes
+INSERT INTO promo_codes (code, benefit_type, benefit_value, max_uses)
+VALUES
+    ('first50',     'extra_quotes',   10, 50),
+    ('materate123', 'premium_months',  3, NULL)
+ON CONFLICT (code) DO NOTHING;

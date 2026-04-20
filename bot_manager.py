@@ -197,10 +197,14 @@ async def generate_and_send_quote(
     # Atomically check quota and reserve a document slot via Postgres RPC.
     # reserve_quota_slot() uses an advisory lock so two simultaneous requests
     # for the same user cannot both slip through the count check.
-    from subscription_service import get_user_tier, monthly_limit_for_tier, get_billing_period_start
+    from subscription_service import get_user_tier, monthly_limit_for_tier, get_billing_period_start, get_active_extra_quotes_limit
     from config import settings as _settings
     tier = await get_user_tier(db_user["id"])
     monthly_limit = monthly_limit_for_tier(tier)
+    if tier == "free":
+        promo_limit = await get_active_extra_quotes_limit(db_user["id"])
+        if promo_limit is not None:
+            monthly_limit = promo_limit
     billing_start = await get_billing_period_start(db_user["id"])
 
     doc_id = None
@@ -489,10 +493,34 @@ async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         "/restart — Re-upload your quote DNA documents\n"
         "/feedback — Send feedback to the developers\n"
         "/whoami — Check which email is linked to your account\n"
+        "/redeem — Apply a promo code\n"
         "/commands — Show this list of commands\n"
         "/finish\\_onboarding — Complete the onboarding process after uploading samples",
         parse_mode="Markdown"
     )
+
+
+async def redeem(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Redeems a promo code for the user."""
+    user = update.effective_user
+    db_user = await get_user(user.id)
+    if not db_user:
+        await update.message.reply_text("Please register first at our website.")
+        return
+
+    text = (update.message.text or "").strip()
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await update.message.reply_text("Usage: /redeem YOUR\\_CODE", parse_mode="Markdown")
+        return
+
+    code = parts[1].strip()
+    from subscription_service import redeem_promo_code
+    result = await redeem_promo_code(db_user["id"], code)
+    if result["success"]:
+        await update.message.reply_text(result["message"])
+    else:
+        await update.message.reply_text(f"Could not apply code: {result['error']}")
 
 
 async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -912,6 +940,7 @@ def build_application():
     application.add_handler(CommandHandler("feedback", feedback))
     application.add_handler(CommandHandler("whoami", whoami))
     application.add_handler(CommandHandler("commands", commands))
+    application.add_handler(CommandHandler("redeem", redeem))
     application.add_handler(CallbackQueryHandler(handle_confirm_yes, pattern="^confirm_yes$"))
 
     # Photos and file documents
