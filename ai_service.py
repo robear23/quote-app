@@ -182,13 +182,15 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
 
 class AIService:
     @staticmethod
-    def extract_brand_dna(file_uris: list[str]) -> dict:
+    def extract_brand_dna(file_uris: list[str]) -> dict | None:
         """
         Takes a list of local file paths, sends them to Gemini,
-        and returns the structured JSON Brand DNA.
+        and returns the structured JSON Brand DNA, or None on failure.
         """
         try:
             import base64 as _b64
+            import docx as _docx
+            from docx.oxml.ns import qn as _qn
             uploaded_files = []
             text_contents = []
             logo_b64 = None
@@ -197,16 +199,50 @@ class AIService:
             for path in file_uris:
                 if path.lower().endswith(".docx"):
                     try:
-                        import docx as _docx
                         doc = _docx.Document(path)
                         full_text = []
+
+                        # Regular paragraphs
                         for para in doc.paragraphs:
-                            full_text.append(para.text)
+                            if para.text.strip():
+                                full_text.append(para.text)
+
+                        # Table cells
                         for table in doc.tables:
                             for row in table.rows:
                                 for cell in row.cells:
-                                    full_text.append(cell.text)
-                        text_contents.append(f"\n--- Content of {os.path.basename(path)} ---\n" + "\n".join(full_text))
+                                    if cell.text.strip():
+                                        full_text.append(cell.text)
+
+                        # Text boxes (w:txbxContent) — often used for company name/address
+                        try:
+                            for txbx in doc.element.body.iter(_qn('w:txbxContent')):
+                                for t_el in txbx.iter(_qn('w:t')):
+                                    if t_el.text and t_el.text.strip():
+                                        full_text.append(t_el.text)
+                        except Exception:
+                            pass
+
+                        # Headers and footers — often contain business name/address
+                        try:
+                            for section in doc.sections:
+                                for hdr_ftr in (section.header, section.footer):
+                                    if getattr(hdr_ftr, 'is_linked_to_previous', True):
+                                        continue
+                                    for para in hdr_ftr.paragraphs:
+                                        if para.text.strip():
+                                            full_text.append(para.text)
+                                    for tbl in hdr_ftr.tables:
+                                        for row in tbl.rows:
+                                            for cell in row.cells:
+                                                if cell.text.strip():
+                                                    full_text.append(cell.text)
+                        except Exception:
+                            pass
+
+                        extracted = "\n".join(full_text)
+                        logger.info(f"DOCX text extracted from {os.path.basename(path)}: {len(extracted)} chars")
+                        text_contents.append(f"\n--- Content of {os.path.basename(path)} ---\n{extracted}")
 
                         # Extract first raster image as logo
                         if logo_b64 is None:
@@ -216,15 +252,28 @@ class AIService:
                                     ext = os.path.splitext(target.lower())[1]
                                     if ext in _raster_exts:
                                         blob = rel.target_part.blob
-                                        if len(blob) > 500:  # skip tiny placeholder images
+                                        if len(blob) > 500:
                                             logo_b64 = _b64.b64encode(blob).decode('utf-8')
                                             break
                                 except Exception:
                                     continue
                     except Exception as e:
-                        logger.error(f"Failed to read docx {path}: {e}")
+                        logger.error(f"Failed to read docx {path}: {e}", exc_info=True)
                 else:
                     uploaded_files.append(client.files.upload(file=path))
+
+            # If DOCX text was extracted, check it has meaningful content
+            total_text_chars = sum(len(t) for t in text_contents)
+            if text_contents and total_text_chars < 100 and not uploaded_files:
+                logger.warning(
+                    f"DOCX text extraction yielded only {total_text_chars} chars — "
+                    "files may use unsupported layout (text boxes only, encrypted, etc.)"
+                )
+
+            # Don't call Gemini if there's nothing to analyze
+            if not text_contents and not uploaded_files:
+                logger.error("No extractable content from any onboarding file")
+                return None
 
             if text_contents:
                 combined_text = DNA_EXTRACTION_PROMPT + "\n\n" + "\n\n".join(text_contents)
@@ -240,7 +289,21 @@ class AIService:
                 except Exception:
                     pass
 
-            result = json.loads(response.text)
+            raw = response.text if response.text else ""
+            # Strip markdown code fences if Gemini wraps the JSON
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            raw = raw.strip()
+            if not raw:
+                logger.error("Gemini returned empty response for Brand DNA extraction")
+                return None
+
+            result = json.loads(raw)
+            if not isinstance(result, dict) or not result:
+                logger.error(f"Gemini returned non-dict or empty result: {result!r}")
+                return None
             if logo_b64:
                 result["logo_base64"] = logo_b64
             return result
@@ -248,8 +311,8 @@ class AIService:
         except RateLimitError:
             raise
         except Exception as e:
-            logger.error(f"Failed to extract Brand DNA: {e}")
-            return {}
+            logger.error(f"Failed to extract Brand DNA: {e}", exc_info=True)
+            return None
 
     @staticmethod
     def generate_quote_data(text: str) -> dict:
