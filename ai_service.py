@@ -171,13 +171,13 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
             return response
         except Exception as e:
             error_str = str(e)
-            if "429" in error_str or "quota" in error_str.lower():
+            if "429" in error_str or "quota" in error_str.lower() or "503" in error_str or "UNAVAILABLE" in error_str:
                 wait_time = RETRY_DELAY * (2 ** attempt)
-                logger.warning(f"Rate limited (attempt {attempt + 1}/{MAX_RETRIES}). Retrying in {wait_time}s...")
+                logger.warning(f"Gemini transient error (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {wait_time}s: {e}")
                 time.sleep(wait_time)
             else:
                 raise
-    raise RateLimitError("Gemini API rate limit reached — please try again shortly.")
+    raise RateLimitError("Gemini API is unavailable — please try again in a moment.")
 
 
 class AIService:
