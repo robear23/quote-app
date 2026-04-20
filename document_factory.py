@@ -6,6 +6,7 @@ import logging
 import random
 from datetime import date
 from docx import Document
+from docxtpl import DocxTemplate
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -606,3 +607,53 @@ class DocumentFactory:
         workbook.close()
         logger.info(f"Generated XLSX: {filepath}")
         return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}
+
+    @staticmethod
+    def generate_from_template(template_bytes: bytes, quote_data: dict, brand_dna: dict, output_filename: str) -> dict:
+        """
+        Renders a docxtpl quote template with actual quote data.
+        Falls back to generate_docx if rendering fails.
+        """
+        filepath = os.path.join(OUTPUT_DIR, output_filename)
+        currency = quote_data.get("currency") or brand_dna.get("currency") or "GBP"
+        sym = _sym(currency)
+        tax_rate = _extract_tax_rate(brand_dna)
+        today_str = date.today().strftime("%d %B %Y")
+        quote_ref = f"QTE-{date.today().strftime('%Y%m')}-{random.randint(100, 999)}"
+
+        subtotal = sum(
+            float(item.get("quantity", 1)) * float(item.get("unit_price", 0))
+            for item in quote_data.get("line_items", [])
+        )
+        tax_amount = subtotal * (tax_rate / 100)
+        grand_total = subtotal + tax_amount
+
+        context = {
+            "customer_name": quote_data.get("customer_name", ""),
+            "customer_address": quote_data.get("customer_address") or "",
+            "quote_ref": quote_ref,
+            "quote_date": today_str,
+            "subtotal": f"{sym}{subtotal:,.2f}",
+            "tax_label": f"VAT/Tax ({tax_rate:.0f}%)" if tax_rate > 0 else "",
+            "tax_amount": f"{sym}{tax_amount:,.2f}" if tax_rate > 0 else "",
+            "grand_total": f"{sym}{grand_total:,.2f}",
+            "line_items": [
+                {
+                    "description": str(item.get("description", "")),
+                    "qty": f"{float(item.get('quantity', 1)):.0f}",
+                    "unit_price_str": f"{sym}{float(item.get('unit_price', 0)):,.2f}",
+                    "total_str": f"{sym}{float(item.get('quantity', 1)) * float(item.get('unit_price', 0)):,.2f}",
+                }
+                for item in quote_data.get("line_items", [])
+            ],
+        }
+
+        try:
+            tpl = DocxTemplate(io.BytesIO(template_bytes))
+            tpl.render(context)
+            tpl.save(filepath)
+            logger.info(f"Generated DOCX from template: {filepath}")
+            return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}
+        except Exception as e:
+            logger.error(f"Template rendering failed, falling back to scratch generation: {e}")
+            return DocumentFactory.generate_docx(quote_data, brand_dna, output_filename)

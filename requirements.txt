@@ -4,6 +4,7 @@ python-telegram-bot>=20.6
 supabase>=2.3.0
 google-genai>=1.0.0
 python-docx>=1.1.0
+docxtpl>=0.16.0
 XlsxWriter>=3.1.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0

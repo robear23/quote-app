@@ -175,3 +175,13 @@ $$;
 --   2. Optionally set a lifecycle rule to auto-delete files older than 7 days
 -- No SQL required — bucket creation is done via the dashboard or Management API.
 -- ============================================================
+
+-- ============================================================
+-- MIGRATION: docxtpl quote template per user
+-- Run in Supabase SQL editor:
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS template_docx_path TEXT;
+
+-- Also create a new private Storage bucket named "quote-templates" in the
+-- Supabase dashboard (Storage section). No public access needed.

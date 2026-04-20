@@ -1,10 +1,12 @@
 from google import genai
 from google.genai import types
 import asyncio
+import io
 import json
 import logging
 import time
 import os
+import base64 as _b64
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,32 @@ If the user requests a currency change (e.g. "currency is £", "use GBP", "chang
 Return a JSON object with exactly these two keys:
 - "confirmed": true if confirming, false if requesting changes
 - "updated_quote": the complete updated quote JSON (unchanged if confirmed, with modifications applied if changes were requested)
+"""
+
+TEMPLATE_MAP_PROMPT = """
+You are analyzing a DOCX quote/invoice document to identify which cells contain VARIABLE data that changes per quote.
+
+Document structure (JSON):
+{structure}
+
+Business info already extracted (static — do NOT mark these as variable):
+{business_info}
+
+Identify the locations of these VARIABLE fields. Return null for any field you cannot locate.
+
+Respond with ONLY a valid JSON object with these keys:
+- "customer_name": location where the customer/client name appears
+- "customer_address": location of customer address (null if absent)
+- "quote_ref": location of quote/invoice reference number (null if absent)
+- "quote_date": location of the date (null if absent)
+- "line_items_table_index": integer index (0-based) of the table containing line items rows (description, qty, price, total columns)
+- "line_item_header_rows": list of row indices (0-based) that are header rows in the line items table
+- "subtotal_value_location": location of the subtotal numeric value cell (null if absent)
+- "tax_amount_value_location": location of the tax/VAT amount numeric value cell (null if absent)
+- "grand_total_value_location": location of the grand total / total due numeric value cell
+
+Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
+  OR {{"type": "paragraph", "paragraph_index": N}} (use 0-based index into the non-empty paragraphs list)
 """
 
 MAX_RETRIES = 3
@@ -312,3 +340,141 @@ class AIService:
         except Exception as e:
             logger.error(f"Failed to refine quote: {e}")
             return {"confirmed": True, "updated_quote": current_quote}
+
+    @staticmethod
+    def build_quote_template(docx_path: str, brand_dna: dict) -> bytes | None:
+        """
+        Takes a sample quote DOCX, asks Gemini to map variable fields, injects
+        docxtpl Jinja2 placeholders via python-docx, and returns the modified
+        DOCX as bytes. Returns None if the document cannot be processed.
+        """
+        try:
+            import docx as _docx
+            from docx.oxml import OxmlElement
+            from docx.oxml.ns import qn
+
+            doc = _docx.Document(docx_path)
+        except Exception as e:
+            logger.error(f"Failed to open DOCX for template building: {e}")
+            return None
+
+        # Build a compact structure summary to send to Gemini
+        non_empty_paras = [p for p in doc.paragraphs if p.text.strip()]
+        structure = {
+            "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:60])],
+            "tables": [],
+        }
+        for ti, table in enumerate(doc.tables):
+            table_data = {"index": ti, "rows": []}
+            for ri, row in enumerate(table.rows[:20]):
+                cells = [{"col": ci, "text": cell.text.strip()} for ci, cell in enumerate(row.cells)]
+                table_data["rows"].append(cells)
+            structure["tables"].append(table_data)
+
+        business_info = {k: brand_dna.get(k) for k in (
+            "business_name", "business_address", "contact_details", "bank_info", "vat_tax_status"
+        ) if brand_dna.get(k)}
+
+        prompt = TEMPLATE_MAP_PROMPT.format(
+            structure=json.dumps(structure, indent=2),
+            business_info=json.dumps(business_info, indent=2),
+        )
+
+        try:
+            response = _generate_with_retry(prompt)
+            field_map = json.loads(response.text)
+        except Exception as e:
+            logger.error(f"Gemini template mapping failed: {e}")
+            return None
+
+        # ── Helpers ─────────────────────────────────────────────────────────
+
+        def _set_para_text(para, text: str):
+            """Replace paragraph text, preserving formatting of the first run."""
+            for run in para.runs:
+                run.text = ""
+            if para.runs:
+                para.runs[0].text = text
+            else:
+                para.add_run(text)
+
+        def _set_cell_text(cell, text: str):
+            _set_para_text(cell.paragraphs[0], text)
+
+        def _inject_location(loc, placeholder: str):
+            if not loc or not isinstance(loc, dict):
+                return
+            try:
+                if loc.get("type") == "paragraph":
+                    idx = loc["paragraph_index"]
+                    if idx < len(non_empty_paras):
+                        _set_para_text(non_empty_paras[idx], placeholder)
+                elif loc.get("type") == "table":
+                    cell = doc.tables[loc["table_index"]].rows[loc["row_index"]].cells[loc["col_index"]]
+                    _set_cell_text(cell, placeholder)
+            except (IndexError, KeyError, TypeError) as e:
+                logger.warning(f"Failed to inject placeholder '{placeholder}': {e}")
+
+        # ── Inject simple field placeholders ────────────────────────────────
+        _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
+        _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
+        _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
+        _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
+        _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
+        _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
+        _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
+
+        # ── Inject line items table loop ─────────────────────────────────────
+        li_ti = field_map.get("line_items_table_index")
+        if li_ti is not None:
+            try:
+                li_table = doc.tables[int(li_ti)]
+                header_rows = set(field_map.get("line_item_header_rows") or [0])
+                data_row_indices = [i for i in range(len(li_table.rows)) if i not in header_rows]
+
+                if data_row_indices:
+                    first_idx = data_row_indices[0]
+                    template_row = li_table.rows[first_idx]
+                    num_cols = len(template_row.cells)
+
+                    # Placeholders per column: first cell gets the {% tr for %} tag
+                    col_tpls = [
+                        "{% tr for item in line_items %}{{ item.description }}",
+                        "{{ item.qty }}",
+                        "{{ item.unit_price_str }}",
+                        "{{ item.total_str }}",
+                    ]
+                    for ci in range(min(num_cols, len(col_tpls))):
+                        _set_cell_text(template_row.cells[ci], col_tpls[ci])
+                    # Clear any extra columns beyond our 4
+                    for ci in range(len(col_tpls), num_cols):
+                        _set_cell_text(template_row.cells[ci], "")
+
+                    # Delete extra data rows (keep only the first as the loop template)
+                    for ri in reversed(data_row_indices[1:]):
+                        row_elem = li_table.rows[ri]._tr
+                        li_table._tbl.remove(row_elem)
+
+                    # Add {% tr endfor %} row after the template row
+                    endfor_tr = OxmlElement('w:tr')
+                    for ci in range(num_cols):
+                        tc = OxmlElement('w:tc')
+                        tc.append(OxmlElement('w:tcPr'))
+                        wp = OxmlElement('w:p')
+                        if ci == 0:
+                            wr = OxmlElement('w:r')
+                            wt = OxmlElement('w:t')
+                            wt.text = "{% tr endfor %}"
+                            wr.append(wt)
+                            wp.append(wr)
+                        tc.append(wp)
+                        endfor_tr.append(tc)
+                    template_row._tr.addnext(endfor_tr)
+
+            except (IndexError, TypeError) as e:
+                logger.warning(f"Failed to inject line items loop: {e}")
+
+        output = io.BytesIO()
+        doc.save(output)
+        output.seek(0)
+        return output.getvalue()

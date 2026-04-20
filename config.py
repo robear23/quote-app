@@ -34,6 +34,9 @@ class Settings:
     # Supabase Storage bucket for onboarding sample files (created separately in Supabase dashboard)
     SUPABASE_ONBOARDING_BUCKET: str = os.getenv("SUPABASE_ONBOARDING_BUCKET", "onboarding")
 
+    # Supabase Storage bucket for per-user docxtpl quote templates
+    SUPABASE_TEMPLATES_BUCKET: str = os.getenv("SUPABASE_TEMPLATES_BUCKET", "quote-templates")
+
     # Session signing secret — set a long random string in production
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "change-me-in-production").strip()
 

@@ -63,6 +63,29 @@ async def _delete_onboarding_storage_files(telegram_id: int) -> None:
         await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).remove(paths)
 
 
+async def _upload_quote_template(user_id: str, template_bytes: bytes) -> str:
+    """Upload a per-user docxtpl template to Supabase Storage. Returns the storage path."""
+    storage_path = f"templates/{user_id}/quote_template.docx"
+    try:
+        await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
+    except Exception:
+        pass
+    await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
+        storage_path, template_bytes,
+        file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    )
+    return storage_path
+
+
+async def _download_quote_template(template_path: str) -> bytes | None:
+    """Download a user's docxtpl template from Supabase Storage. Returns bytes or None."""
+    try:
+        return await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).download(template_path)
+    except Exception as e:
+        logger.warning(f"Could not download quote template {template_path}: {e}")
+        return None
+
+
 async def _download_onboarding_files_to_temp(paths: list[str]) -> list[str]:
     """Download storage files to local temp dir for AI processing. Returns local temp paths."""
     local_paths = []
@@ -243,7 +266,14 @@ async def generate_and_send_quote(
         if preferred_format == "xlsx":
             result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
         else:
-            result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
+            template_path = brand_dna.get("template_docx_path")
+            template_bytes = await _download_quote_template(template_path) if template_path else None
+            if template_bytes:
+                result = await asyncio.to_thread(
+                    DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
+                )
+            else:
+                result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
         doc_path = result["filepath"]
         if not os.path.exists(doc_path):
             raise RuntimeError("Generated file not found on disk")
@@ -495,8 +525,18 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         await msg.edit_text("Failed to load your uploaded files. Please try again.")
         return
 
+    template_bytes = None
     try:
         dna_data = await run_ai(AIService.extract_brand_dna, local_files)
+
+        # Build docxtpl template from the first DOCX sample (non-blocking)
+        docx_files = [f for f in local_files if f.lower().endswith(".docx")]
+        if docx_files and dna_data:
+            try:
+                template_bytes = await run_ai(AIService.build_quote_template, docx_files[0], dna_data)
+            except Exception as e:
+                logger.warning(f"Template building failed (non-fatal): {e}")
+
     except RateLimitError:
         await msg.edit_text(RATE_LIMIT_MSG)
         return
@@ -514,6 +554,15 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
             "Please try again — if the problem persists, contact support."
         )
         return
+
+    # Upload docxtpl template to Supabase Storage and record the path
+    if template_bytes:
+        try:
+            template_path = await _upload_quote_template(db_user["id"], template_bytes)
+            dna_data["template_docx_path"] = template_path
+            logger.info(f"Quote template stored at {template_path} for user {db_user['id']}")
+        except Exception as e:
+            logger.warning(f"Failed to upload quote template (non-fatal): {e}")
 
     dna_data["user_id"] = db_user["id"]
     try:
