@@ -607,6 +607,7 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         except Exception as e:
             logger.warning(f"Failed to upload quote template (non-fatal): {e}")
 
+    dna_data.pop("logo_base64", None)  # stored in template DOCX, not a DB column
     dna_data["user_id"] = db_user["id"]
     try:
         await database.supabase.table("user_configs").upsert(dna_data).execute()
