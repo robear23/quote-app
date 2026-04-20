@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+import random
 import time
 import os
 import base64 as _b64
@@ -14,8 +15,6 @@ logger = logging.getLogger(__name__)
 client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
 if not client:
     logger.warning("GEMINI_API_KEY not found in environment.")
-
-MODEL = "gemini-2.5-flash"
 
 DNA_EXTRACTION_PROMPT = """
 You are a highly capable AI assistant helping a tradesperson set up their automated quoting system.
@@ -138,8 +137,10 @@ Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index
   OR {{"type": "paragraph", "paragraph_index": N}} (use 0-based index into the non-empty paragraphs list)
 """
 
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # seconds
+MODEL = "gemini-2.5-flash"
+FALLBACK_MODEL = "gemini-2.5-flash-lite"
+MAX_RETRIES = 5
+BASE_RETRY_DELAY = 3  # seconds
 
 JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
 
@@ -159,24 +160,35 @@ class RateLimitError(Exception):
     pass
 
 
+def _is_transient(error_str: str) -> bool:
+    return "429" in error_str or "quota" in error_str.lower() or "503" in error_str or "UNAVAILABLE" in error_str
+
+
 def _generate_with_retry(contents, config=JSON_CONFIG):
-    """Calls Gemini with exponential backoff retry logic."""
+    """Calls Gemini with exponential backoff + jitter, falling back to lite model if primary exhausts."""
     for attempt in range(MAX_RETRIES):
         try:
-            response = client.models.generate_content(
-                model=MODEL,
-                contents=contents,
-                config=config,
-            )
-            return response
+            return client.models.generate_content(model=MODEL, contents=contents, config=config)
         except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "quota" in error_str.lower() or "503" in error_str or "UNAVAILABLE" in error_str:
-                wait_time = RETRY_DELAY * (2 ** attempt)
-                logger.warning(f"Gemini transient error (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {wait_time}s: {e}")
+            if _is_transient(str(e)):
+                wait_time = BASE_RETRY_DELAY * (2 ** attempt) + random.uniform(0, 2)
+                logger.warning(f"Gemini {MODEL} transient error (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {wait_time:.1f}s: {e}")
                 time.sleep(wait_time)
             else:
                 raise
+
+    logger.warning(f"{MODEL} exhausted after {MAX_RETRIES} attempts, trying fallback {FALLBACK_MODEL}")
+    for attempt in range(2):
+        try:
+            return client.models.generate_content(model=FALLBACK_MODEL, contents=contents, config=config)
+        except Exception as e:
+            if _is_transient(str(e)):
+                wait_time = BASE_RETRY_DELAY * (2 ** attempt) + random.uniform(0, 2)
+                logger.warning(f"Gemini {FALLBACK_MODEL} transient error (attempt {attempt + 1}/2), retrying in {wait_time:.1f}s: {e}")
+                time.sleep(wait_time)
+            else:
+                raise
+
     raise RateLimitError("Gemini API is unavailable — please try again in a moment.")
 
 

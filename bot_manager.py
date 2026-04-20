@@ -11,6 +11,20 @@ from config import settings
 import database
 from ai_service import AIService, RateLimitError, run_ai
 
+
+async def run_ai_notify(func, *args, msg=None):
+    """Like run_ai, but updates msg after 10s so the user knows we're still working."""
+    task = asyncio.create_task(run_ai(func, *args))
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+    except asyncio.TimeoutError:
+        if msg:
+            try:
+                await msg.edit_text("The AI is taking a moment, please hold on...")
+            except Exception:
+                pass
+        return await task
+
 RATE_LIMIT_MSG = "The AI service is temporarily busy. Please wait a moment and try again."
 from document_factory import DocumentFactory, _extract_tax_rate
 
@@ -689,7 +703,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             brand_dna = await get_brand_dna(db_user["id"])
             try:
-                quote_data = await run_ai(AIService.extract_quote_from_image, filepath)
+                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, msg=msg)
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
@@ -799,7 +813,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
         msg = await update.message.reply_text("Checking your response...")
         try:
-            result = await run_ai(AIService.refine_quote, pending_quote, update.message.text or "")
+            result = await run_ai_notify(AIService.refine_quote, pending_quote, update.message.text or "", msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -836,7 +850,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await run_ai(AIService.transcribe_and_extract_voice, filepath)
+            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -855,7 +869,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await run_ai(AIService.generate_quote_data, update.message.text)
+            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
