@@ -11,7 +11,7 @@ from config import settings
 import database
 from ai_service import AIService, RateLimitError, run_ai
 
-RATE_LIMIT_MSG = "I'm a bit overwhelmed right now — please try again in a minute."
+RATE_LIMIT_MSG = "The AI service is temporarily busy. Please wait a moment and try again."
 from document_factory import DocumentFactory, _extract_tax_rate
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
