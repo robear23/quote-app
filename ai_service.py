@@ -206,6 +206,7 @@ class AIService:
             uploaded_files = []
             text_contents = []
             logo_b64 = None
+            docx_primary_color = None  # extracted directly from XML, overrides Gemini's guess
             _raster_exts = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'}
 
             for path in file_uris:
@@ -255,6 +256,32 @@ class AIService:
                         extracted = "\n".join(full_text)
                         logger.info(f"DOCX text extracted from {os.path.basename(path)}: {len(extracted)} chars")
                         text_contents.append(f"\n--- Content of {os.path.basename(path)} ---\n{extracted}")
+
+                        # Extract primary brand color directly from DOCX XML (overrides Gemini's guess)
+                        if docx_primary_color is None:  # only from first DOCX
+                            try:
+                                from collections import Counter as _Counter
+                                import re as _re
+                                _IGNORE_COLORS = {
+                                    'FFFFFF', 'F0F4F8', 'EEF2F7', 'F5F5F5', 'EEEEEE',
+                                    'E0E0E0', 'DDDDDD', 'CCCCCC', 'AUTO', 'NONE', '',
+                                }
+                                color_counts = _Counter()
+                                for table in doc.tables:
+                                    for row in table.rows:
+                                        for cell in row.cells:
+                                            tcPr = cell._tc.find(_qn('w:tcPr'))
+                                            if tcPr is not None:
+                                                shd = tcPr.find(_qn('w:shd'))
+                                                if shd is not None:
+                                                    fill = shd.get(_qn('w:fill'), '').upper().strip()
+                                                    if fill not in _IGNORE_COLORS and _re.fullmatch(r'[0-9A-F]{6}', fill):
+                                                        color_counts[fill] += 1
+                                if color_counts:
+                                    docx_primary_color = color_counts.most_common(1)[0][0]
+                                    logger.info(f"DOCX primary color extracted from XML: {docx_primary_color}")
+                            except Exception as _ce:
+                                logger.warning(f"DOCX color extraction failed (non-fatal): {_ce}")
 
                         # Extract first raster image as logo
                         if logo_b64 is None:
@@ -330,6 +357,8 @@ class AIService:
                 return None
             if logo_b64:
                 result["logo_base64"] = logo_b64
+            if docx_primary_color:
+                result["primary_color_hex"] = docx_primary_color
             return result
 
         except RateLimitError:

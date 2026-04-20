@@ -100,6 +100,33 @@ async def _download_quote_template(template_path: str) -> bytes | None:
         return None
 
 
+async def _upload_logo(user_id: str, logo_b64: str) -> str:
+    """Upload a user's logo PNG to Supabase Storage. Returns the storage path."""
+    import base64 as _b64
+    storage_path = f"templates/{user_id}/logo.png"
+    logo_bytes = _b64.b64decode(logo_b64)
+    try:
+        await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
+    except Exception:
+        pass
+    await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
+        storage_path, logo_bytes,
+        file_options={"content-type": "image/png"},
+    )
+    return storage_path
+
+
+async def _download_logo(logo_path: str) -> str | None:
+    """Download a user's logo from Supabase Storage. Returns base64 string or None."""
+    import base64 as _b64
+    try:
+        logo_bytes = await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).download(logo_path)
+        return _b64.b64encode(logo_bytes).decode("utf-8")
+    except Exception as e:
+        logger.warning(f"Could not download logo {logo_path}: {e}")
+        return None
+
+
 async def _download_onboarding_files_to_temp(paths: list[str]) -> list[str]:
     """Download storage files to local temp dir for AI processing. Returns local temp paths."""
     local_paths = []
@@ -264,6 +291,12 @@ async def generate_and_send_quote(
         await status_msg.edit_text("Generating your quote document...")
     else:
         status_msg = await update.message.reply_text("Generating your quote document...")
+
+    # Inject logo into brand_dna for scratch generation if not already present
+    if not brand_dna.get("logo_base64") and brand_dna.get("logo_path"):
+        logo_b64 = await _download_logo(brand_dna["logo_path"])
+        if logo_b64:
+            brand_dna = {**brand_dna, "logo_base64": logo_b64}
 
     # Build filename: Quote_Smith_001_a3f2bc.docx (UUID suffix prevents collisions)
     preferred_format = brand_dna.get("preferred_format") or "docx"
@@ -607,7 +640,14 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
         except Exception as e:
             logger.warning(f"Failed to upload quote template (non-fatal): {e}")
 
-    dna_data.pop("logo_base64", None)  # stored in template DOCX, not a DB column
+    logo_b64 = dna_data.pop("logo_base64", None)
+    if logo_b64:
+        try:
+            logo_path = await _upload_logo(db_user["id"], logo_b64)
+            dna_data["logo_path"] = logo_path
+            logger.info(f"Logo stored at {logo_path} for user {db_user['id']}")
+        except Exception as e:
+            logger.warning(f"Failed to upload logo (non-fatal): {e}")
     dna_data["user_id"] = db_user["id"]
     try:
         await database.supabase.table("user_configs").upsert(dna_data).execute()

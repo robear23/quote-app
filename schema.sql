@@ -195,6 +195,13 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS primary_color_hex TEXT;
 ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS secondary_color_hex TEXT;
 
 -- ============================================================
+-- MIGRATION: logo storage for scratch document generation
+-- Run in Supabase SQL editor:
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS logo_path TEXT;
+
+-- ============================================================
 -- MIGRATION: Promo code system
 -- Run in Supabase SQL editor
 -- ============================================================
