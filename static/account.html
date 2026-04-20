@@ -286,6 +286,19 @@
             </div>
         </div>
 
+        <!-- Promo code -->
+        <div class="card">
+            <div class="card-title">Promo Code</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <input id="promoInput" type="text" placeholder="Enter code" style="
+                    flex:1; min-width:160px; padding:8px 12px;
+                    background:rgba(255,255,255,0.06); border:1px solid var(--border);
+                    border-radius:8px; color:var(--primary); font-size:0.9rem; outline:none;
+                " />
+                <button class="btn btn-ghost btn-sm" id="promoBtn" onclick="redeemPromo()">Apply</button>
+            </div>
+        </div>
+
         <!-- Telegram -->
         <div class="card">
             <div class="card-title">Telegram Bot</div>
@@ -477,6 +490,36 @@
         t.style.background = isError ? 'rgba(239,68,68,0.9)' : 'rgba(16,185,129,0.9)';
         t.classList.add('show');
         setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    async function redeemPromo() {
+        const input = document.getElementById('promoInput');
+        const btn = document.getElementById('promoBtn');
+        const code = input.value.trim();
+        if (!code) return;
+        btn.textContent = 'Applying…';
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/redeem-promo', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(data.message);
+                input.value = '';
+                loadAccount();
+            } else {
+                showToast(data.error || 'Invalid code.', true);
+            }
+        } catch (e) {
+            showToast('Something went wrong — please try again.', true);
+        } finally {
+            btn.textContent = 'Apply';
+            btn.disabled = false;
+        }
     }
 
     loadAccount();

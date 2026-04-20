@@ -549,6 +549,24 @@ async def api_account(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Promo code redemption
+# ---------------------------------------------------------------------------
+
+@app.post("/api/redeem-promo")
+async def redeem_promo(request: Request):
+    user_id = get_session_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    body = await request.json()
+    code = (body.get("code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="No code provided")
+    from subscription_service import redeem_promo_code
+    result = await redeem_promo_code(user_id, code)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Stripe checkout & billing portal
 # ---------------------------------------------------------------------------
 
