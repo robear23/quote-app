@@ -96,9 +96,10 @@ async def _download_onboarding_files_to_temp(paths: list[str]) -> list[str]:
             local_path = os.path.join(TEMP_DIR, f"onboarding_{uuid.uuid4().hex}_{filename}")
             with open(local_path, "wb") as f:
                 f.write(file_bytes)
+            logger.info(f"Downloaded onboarding file {filename}: {len(file_bytes)} bytes -> {local_path}")
             local_paths.append(local_path)
         except Exception as e:
-            logger.error(f"Failed to download onboarding file {storage_path}: {e}")
+            logger.error(f"Failed to download onboarding file {storage_path}: {e}", exc_info=True)
     return local_paths
 
 

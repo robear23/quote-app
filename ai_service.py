@@ -277,11 +277,14 @@ class AIService:
 
             if text_contents:
                 combined_text = DNA_EXTRACTION_PROMPT + "\n\n" + "\n\n".join(text_contents)
-                contents = [combined_text] + uploaded_files
+                # Pass plain string when there are no file objects (list wrapping can confuse SDK)
+                contents = combined_text if not uploaded_files else [combined_text] + uploaded_files
             else:
                 contents = [DNA_EXTRACTION_PROMPT] + uploaded_files
 
+            logger.info(f"Calling Gemini for Brand DNA extraction, content length: {len(str(contents))} chars")
             response = _generate_with_retry(contents)
+            logger.info(f"Gemini Brand DNA response received, finish_reason: {getattr(response, 'candidates', [{}])[0]}")
 
             for f in uploaded_files:
                 try:
@@ -289,7 +292,16 @@ class AIService:
                 except Exception:
                     pass
 
-            raw = response.text if response.text else ""
+            # response.text raises ValueError in the Google GenAI SDK if the response
+            # has no candidates or was blocked — must be caught explicitly
+            try:
+                raw = response.text or ""
+            except Exception as e:
+                logger.error(f"response.text raised: {e}", exc_info=True)
+                return None
+
+            logger.info(f"Brand DNA raw response (first 300 chars): {raw[:300]!r}")
+
             # Strip markdown code fences if Gemini wraps the JSON
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
