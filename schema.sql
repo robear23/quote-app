@@ -187,6 +187,14 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS template_docx_path TEXT;
 -- Supabase dashboard (Storage section). No public access needed.
 
 -- ============================================================
+-- MIGRATION: brand color columns for document theming
+-- Run in Supabase SQL editor:
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS primary_color_hex TEXT;
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS secondary_color_hex TEXT;
+
+-- ============================================================
 -- MIGRATION: Promo code system
 -- Run in Supabase SQL editor
 -- ============================================================
