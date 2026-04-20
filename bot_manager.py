@@ -579,10 +579,8 @@ async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE)
 
     if not dna_data:
         await msg.edit_text(
-            "Sorry, I wasn't able to extract your business details from those files.\n\n"
-            "If your files are Word (.docx) documents, try uploading them as PDFs instead "
-            "(File → Export → PDF in Word). PDF format gives me the best results.\n\n"
-            "If the problem persists, contact support."
+            "Sorry, the AI service is temporarily unavailable. Please try /finish\\_onboarding again in a moment.",
+            parse_mode="Markdown"
         )
         return
 
