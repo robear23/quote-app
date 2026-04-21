@@ -659,8 +659,21 @@ class AIService:
             try:
                 li_table = all_tables_in_doc[int(li_ti)]
                 header_rows = set(field_map.get("line_item_header_rows") or [0])
-                data_row_indices = [i for i in range(len(li_table.rows)) if i not in header_rows]
-                logger.info(f"Line items table {li_ti}: {len(li_table.rows)} rows, header_rows={header_rows}, data_rows={data_row_indices}")
+
+                # Rows that hold totals must not be deleted when we strip extra data rows.
+                # Gemini sometimes places subtotal/tax/total inside the same table.
+                protected_rows = set()
+                for loc_key in ("subtotal_value_location", "tax_amount_value_location", "grand_total_value_location"):
+                    loc = field_map.get(loc_key)
+                    if (loc and isinstance(loc, dict) and loc.get("type") == "table"
+                            and int(loc.get("table_index", -1)) == int(li_ti)):
+                        protected_rows.add(loc["row_index"])
+
+                data_row_indices = [
+                    i for i in range(len(li_table.rows))
+                    if i not in header_rows and i not in protected_rows
+                ]
+                logger.info(f"Line items table {li_ti}: {len(li_table.rows)} rows, header_rows={header_rows}, protected_rows={protected_rows}, data_rows={data_row_indices}")
 
                 if not data_row_indices:
                     # Template has only a header row — add a blank row to host the loop tag
@@ -726,6 +739,36 @@ class AIService:
 
             except (IndexError, TypeError) as e:
                 logger.warning(f"Failed to inject line items loop: {e}")
+
+        # ── Final sweep: clear any remaining [Placeholder] bracket text ─────
+        # Catches fields not in the regex/Gemini map: [Town, Postcode],
+        # [client@email.com], [07xxx xxx xxx], etc.
+        # [DD/MM/YYYY] on a second occurrence → valid_until placeholder.
+        _PH_RE = re.compile(r'^\s*\[.+\]\s*$')
+        _DATE_PH_RE = re.compile(r'^\s*\[DD[/\-.]MM[/\-.]YYYY\]\s*$', re.I)
+        cleared = [0]
+
+        def _sweep_para(para):
+            txt = para.text.strip()
+            if not txt:
+                return
+            if _DATE_PH_RE.match(txt):
+                _set_para_text(para, "{{ valid_until }}")
+                cleared[0] += 1
+            elif _PH_RE.match(txt):
+                _set_para_text(para, "")
+                cleared[0] += 1
+
+        for p in doc.paragraphs:
+            _sweep_para(p)
+        for table in all_tables_in_doc:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        _sweep_para(para)
+
+        if cleared[0]:
+            logger.info(f"Placeholder sweep cleared {cleared[0]} remaining bracket field(s)")
 
         output = io.BytesIO()
         doc.save(output)

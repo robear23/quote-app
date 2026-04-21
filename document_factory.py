@@ -4,7 +4,7 @@ import os
 import re
 import logging
 import random
-from datetime import date
+from datetime import date, timedelta
 from docx import Document
 from docxtpl import DocxTemplate
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -632,11 +632,13 @@ class DocumentFactory:
 
         line_items_data = quote_data.get("line_items", [])
         logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
+        valid_until_str = (date.today() + timedelta(days=30)).strftime("%d %B %Y")
         context = {
             "customer_name": quote_data.get("customer_name", ""),
             "customer_address": quote_data.get("customer_address") or "",
             "quote_ref": quote_ref,
             "quote_date": today_str,
+            "valid_until": valid_until_str,
             "subtotal": f"{sym}{subtotal:,.2f}",
             "tax_label": f"VAT/Tax ({tax_rate:.0f}%)" if tax_rate > 0 else "",
             "tax_amount": f"{sym}{tax_amount:,.2f}" if tax_rate > 0 else "",
