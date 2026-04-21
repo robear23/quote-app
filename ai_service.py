@@ -1,6 +1,7 @@
 from google import genai
 from google.genai import types
 import asyncio
+import copy
 import io
 import json
 import logging
@@ -190,6 +191,58 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
                 raise
 
     raise RateLimitError("Gemini API is unavailable — please try again in a moment.")
+
+
+def _detect_line_items_table(all_tables_in_doc) -> int | None:
+    """Fallback: score tables by header keywords to find the line items table."""
+    desc_kw = {'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material'}
+    qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
+    price_kw = {'price', 'rate', 'cost', 'unit price', 'unit rate', 'charge', 'fee', 'each'}
+    total_kw = {'total', 'amount', 'sum', 'net', 'gross', 'line total', 'ex. vat', 'inc. vat'}
+
+    best_idx, best_score = None, 0
+    for idx, table in enumerate(all_tables_in_doc):
+        if not table.rows or len(table.rows[0].cells) < 2:
+            continue
+        score = 0
+        for cell in table.rows[0].cells:
+            txt = cell.text.strip().lower()
+            if any(k in txt for k in desc_kw):
+                score += 3
+            if any(k in txt for k in qty_kw):
+                score += 2
+            if any(k in txt for k in price_kw):
+                score += 2
+            if any(k in txt for k in total_kw):
+                score += 1
+        if score > best_score:
+            best_score, best_idx = score, idx
+    return best_idx
+
+
+def _map_line_item_columns(header_cells) -> dict:
+    """Map column indices to field names based on header text. Returns {col_idx: field_name}."""
+    desc_kw = {'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material'}
+    qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
+    # 'unit' alone (without 'price'/'cost') → unit-of-measure column
+    unit_kw = {'unit', 'uom', 'measure'}
+    price_kw = {'unit price', 'unit rate', 'rate', 'per unit', 'unit cost', 'each', 'price'}
+    total_kw = {'total', 'amount', 'sum', 'net', 'gross', 'line total', 'ex. vat', 'inc. vat'}
+
+    col_map: dict[int, str] = {}
+    for ci, cell in enumerate(header_cells):
+        txt = cell.text.strip().lower()
+        if any(k in txt for k in desc_kw):
+            col_map[ci] = 'description'
+        elif any(k in txt for k in qty_kw):
+            col_map[ci] = 'qty'
+        elif any(k in txt for k in price_kw):
+            col_map[ci] = 'unit_price'
+        elif any(k in txt for k in total_kw):
+            col_map[ci] = 'total'
+        elif any(k in txt for k in unit_kw):
+            col_map[ci] = 'unit'
+    return col_map
 
 
 class AIService:
@@ -592,11 +645,22 @@ class AIService:
 
         # ── Inject line items table loop ─────────────────────────────────────
         li_ti = field_map.get("line_items_table_index")
+        logger.info(f"Gemini field_map: {json.dumps({k: v for k, v in field_map.items() if k != 'line_items'}, default=str)}")
+
+        # Fallback: if Gemini couldn't locate the line items table, detect it ourselves
+        if li_ti is None:
+            li_ti = _detect_line_items_table(all_tables_in_doc)
+            if li_ti is not None:
+                logger.info(f"Gemini returned null for line_items_table_index — fallback detected table {li_ti}")
+            else:
+                logger.warning("Could not detect line items table by any method — line items will be missing from template")
+
         if li_ti is not None:
             try:
                 li_table = all_tables_in_doc[int(li_ti)]
                 header_rows = set(field_map.get("line_item_header_rows") or [0])
                 data_row_indices = [i for i in range(len(li_table.rows)) if i not in header_rows]
+                logger.info(f"Line items table {li_ti}: {len(li_table.rows)} rows, header_rows={header_rows}, data_rows={data_row_indices}")
 
                 if not data_row_indices:
                     # Template has only a header row — add a blank row to host the loop tag
@@ -608,29 +672,46 @@ class AIService:
                     template_row = li_table.rows[first_idx]
                     num_cols = len(template_row.cells)
 
-                    # Placeholders per column: first cell gets the {%tr for %} tag
-                    col_tpls = [
-                        "{%tr for item in line_items %}{{ item.description }}",
-                        "{{ item.qty }}",
-                        "{{ item.unit_price_str }}",
-                        "{{ item.total_str }}",
-                    ]
-                    for ci in range(min(num_cols, len(col_tpls))):
-                        _set_cell_text(template_row.cells[ci], col_tpls[ci])
-                    # Clear any extra columns beyond our 4
-                    for ci in range(len(col_tpls), num_cols):
-                        _set_cell_text(template_row.cells[ci], "")
+                    # Map columns intelligently from the header row
+                    header_row_idx = min(header_rows) if header_rows else 0
+                    header_cells = li_table.rows[header_row_idx].cells if li_table.rows else []
+                    col_field_map = _map_line_item_columns(header_cells)
+                    # Positional fallback when header detection yields nothing
+                    if not col_field_map:
+                        _POSITIONAL = {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+                        col_field_map = {ci: f for ci, f in _POSITIONAL.items() if ci < num_cols}
+                        logger.info(f"Header detection empty — using positional column fallback")
+                    logger.info(f"Line items column field map (from headers): {col_field_map}")
+
+                    _FIELD_JINJA = {
+                        'description': '{{ item.description }}',
+                        'qty': '{{ item.qty }}',
+                        'unit': '{{ item.unit_str }}',
+                        'unit_price': '{{ item.unit_price_str }}',
+                        'total': '{{ item.total_str }}',
+                    }
+                    for ci in range(num_cols):
+                        field = col_field_map.get(ci)
+                        jinja_expr = _FIELD_JINJA.get(field, '') if field else ''
+                        if ci == 0:
+                            _set_cell_text(template_row.cells[ci], f"{{%tr for item in line_items %}}{jinja_expr}")
+                        else:
+                            _set_cell_text(template_row.cells[ci], jinja_expr)
 
                     # Delete extra data rows (keep only the first as the loop template)
                     for ri in reversed(data_row_indices[1:]):
                         row_elem = li_table.rows[ri]._tr
                         li_table._tbl.remove(row_elem)
 
-                    # Add {% tr endfor %} row after the template row
+                    # Add {%tr endfor %} row after the template row, copying cell widths
                     endfor_tr = OxmlElement('w:tr')
                     for ci in range(num_cols):
                         tc = OxmlElement('w:tc')
-                        tc.append(OxmlElement('w:tcPr'))
+                        try:
+                            orig_tcPr = template_row.cells[ci]._tc.find(qn('w:tcPr'))
+                            tc.append(copy.deepcopy(orig_tcPr) if orig_tcPr is not None else OxmlElement('w:tcPr'))
+                        except Exception:
+                            tc.append(OxmlElement('w:tcPr'))
                         wp = OxmlElement('w:p')
                         if ci == 0:
                             wr = OxmlElement('w:r')
@@ -641,6 +722,7 @@ class AIService:
                         tc.append(wp)
                         endfor_tr.append(tc)
                     template_row._tr.addnext(endfor_tr)
+                    logger.info(f"Line items loop injected: {num_cols} columns, col_map={col_field_map}")
 
             except (IndexError, TypeError) as e:
                 logger.warning(f"Failed to inject line items loop: {e}")

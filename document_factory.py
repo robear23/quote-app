@@ -630,6 +630,8 @@ class DocumentFactory:
         tax_amount = subtotal * (tax_rate / 100)
         grand_total = subtotal + tax_amount
 
+        line_items_data = quote_data.get("line_items", [])
+        logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
         context = {
             "customer_name": quote_data.get("customer_name", ""),
             "customer_address": quote_data.get("customer_address") or "",
@@ -643,10 +645,11 @@ class DocumentFactory:
                 {
                     "description": str(item.get("description", "")),
                     "qty": f"{float(item.get('quantity', 1)):.0f}",
+                    "unit_str": "",
                     "unit_price_str": f"{sym}{float(item.get('unit_price', 0)):,.2f}",
                     "total_str": f"{sym}{float(item.get('quantity', 1)) * float(item.get('unit_price', 0)):,.2f}",
                 }
-                for item in quote_data.get("line_items", [])
+                for item in line_items_data
             ],
         }
 
