@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import random
+import re
 import time
 import os
 import base64 as _b64
@@ -444,7 +445,71 @@ class AIService:
             logger.error(f"Failed to open DOCX for template building: {e}")
             return None
 
-        # Build a compact structure summary to send to Gemini
+        # ── Helpers ─────────────────────────────────────────────────────────
+
+        def _set_para_text(para, text: str):
+            for run in para.runs:
+                run.text = ""
+            if para.runs:
+                para.runs[0].text = text
+            else:
+                para.add_run(text)
+
+        def _set_cell_text(cell, text: str):
+            _set_para_text(cell.paragraphs[0], text)
+
+        # ── Pass 1: regex scan for [Placeholder] style fields ────────────────
+        # Many templates use [Client Name], [Street Address] etc. Match these
+        # directly so we don't rely on AI spatial reasoning for simple fields.
+        _BRACKET_PATTERNS = {
+            "customer_name": re.compile(
+                r'^\[?\s*(client\s*name|customer\s*name|name)\s*\]?$', re.I
+            ),
+            "customer_address": re.compile(
+                r'^\[?\s*(client\s*address|customer\s*address|street\s*address|address\s*line\s*1?|address)\s*\]?$', re.I
+            ),
+            "quote_ref": re.compile(
+                r'^\[?\s*(quote\s*(no|ref|number|#)|invoice\s*(no|ref|number|#)|ref\s*(no|#)?)\s*\]?$', re.I
+            ),
+            "quote_date": re.compile(
+                r'^\[?\s*(date|quote\s*date|invoice\s*date|dd[/\-\.]mm[/\-\.]yyyy)\s*\]?$', re.I
+            ),
+        }
+        _JINJA_FOR_FIELD = {
+            "customer_name": "{{ customer_name }}",
+            "customer_address": "{{ customer_address }}",
+            "quote_ref": "{{ quote_ref }}",
+            "quote_date": "{{ quote_date }}",
+        }
+        regex_matched = set()
+
+        def _try_regex_inject_para(para):
+            txt = para.text.strip()
+            for field, pat in _BRACKET_PATTERNS.items():
+                if field not in regex_matched and pat.match(txt):
+                    _set_para_text(para, _JINJA_FOR_FIELD[field])
+                    regex_matched.add(field)
+                    logger.info(f"Regex-matched field '{field}' in paragraph: {txt!r}")
+                    return
+
+        def _try_regex_inject_cell(cell):
+            for para in cell.paragraphs:
+                txt = para.text.strip()
+                for field, pat in _BRACKET_PATTERNS.items():
+                    if field not in regex_matched and pat.match(txt):
+                        _set_para_text(para, _JINJA_FOR_FIELD[field])
+                        regex_matched.add(field)
+                        logger.info(f"Regex-matched field '{field}' in cell: {txt!r}")
+                        return
+
+        for p in doc.paragraphs:
+            _try_regex_inject_para(p)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    _try_regex_inject_cell(cell)
+
+        # ── Pass 2: Build compact structure and call Gemini for remaining fields
         non_empty_paras = [p for p in doc.paragraphs if p.text.strip()]
         structure = {
             "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:60])],
@@ -473,20 +538,6 @@ class AIService:
             logger.error(f"Gemini template mapping failed: {e}")
             return None
 
-        # ── Helpers ─────────────────────────────────────────────────────────
-
-        def _set_para_text(para, text: str):
-            """Replace paragraph text, preserving formatting of the first run."""
-            for run in para.runs:
-                run.text = ""
-            if para.runs:
-                para.runs[0].text = text
-            else:
-                para.add_run(text)
-
-        def _set_cell_text(cell, text: str):
-            _set_para_text(cell.paragraphs[0], text)
-
         def _inject_location(loc, placeholder: str):
             if not loc or not isinstance(loc, dict):
                 return
@@ -501,11 +552,15 @@ class AIService:
             except (IndexError, KeyError, TypeError) as e:
                 logger.warning(f"Failed to inject placeholder '{placeholder}': {e}")
 
-        # ── Inject simple field placeholders ────────────────────────────────
-        _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
-        _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
-        _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
-        _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
+        # ── Inject simple field placeholders (skip fields matched by regex) ──
+        if "customer_name" not in regex_matched:
+            _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
+        if "customer_address" not in regex_matched:
+            _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
+        if "quote_ref" not in regex_matched:
+            _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
+        if "quote_date" not in regex_matched:
+            _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
         _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
         _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
         _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
