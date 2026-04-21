@@ -120,6 +120,8 @@ Business info already extracted (static — do NOT mark these as variable):
 
 Identify the locations of these VARIABLE fields. Return null for any field you cannot locate.
 
+Note: tables are indexed in document order (0-based), including nested tables (e.g. inner tables used for side-by-side layouts). Outer layout/container cells will appear empty — focus on inner cells with specific field text.
+
 Respond with ONLY a valid JSON object with these keys:
 - "customer_name": location where the customer/client name appears
 - "customer_address": location of customer address (null if absent)
@@ -439,6 +441,7 @@ class AIService:
             import docx as _docx
             from docx.oxml import OxmlElement
             from docx.oxml.ns import qn
+            from docx.table import Table as _DocxTable
 
             doc = _docx.Document(docx_path)
         except Exception as e:
@@ -457,6 +460,26 @@ class AIService:
 
         def _set_cell_text(cell, text: str):
             _set_para_text(cell.paragraphs[0], text)
+
+        def _cell_own_text(cell) -> str:
+            """Direct paragraph text only — excludes text that lives in nested tables."""
+            return ' '.join(p.text.strip() for p in cell.paragraphs if p.text.strip())
+
+        def _collect_all_tables(tables_list):
+            """Collect all tables recursively, including those nested inside cells."""
+            result = []
+            for tbl in tables_list:
+                result.append(tbl)
+                for row in tbl.rows:
+                    for cell in row.cells:
+                        nested = [_DocxTable(e, doc) for e in cell._tc.findall(qn('w:tbl'))]
+                        if nested:
+                            result.extend(_collect_all_tables(nested))
+            return result
+
+        # doc.tables only returns top-level tables, missing nested ones used
+        # for side-by-side layouts (e.g. "Quote Details" / "Client Details").
+        all_tables_in_doc = _collect_all_tables(doc.tables)
 
         # ── Pass 1: regex scan for [Placeholder] style fields ────────────────
         # Many templates use [Client Name], [Street Address] etc. Match these
@@ -504,7 +527,7 @@ class AIService:
 
         for p in doc.paragraphs:
             _try_regex_inject_para(p)
-        for table in doc.tables:
+        for table in all_tables_in_doc:
             for row in table.rows:
                 for cell in row.cells:
                     _try_regex_inject_cell(cell)
@@ -515,10 +538,12 @@ class AIService:
             "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:60])],
             "tables": [],
         }
-        for ti, table in enumerate(doc.tables):
+        for ti, table in enumerate(all_tables_in_doc):
             table_data = {"index": ti, "rows": []}
             for ri, row in enumerate(table.rows[:20]):
-                cells = [{"col": ci, "text": cell.text.strip()} for ci, cell in enumerate(row.cells)]
+                # Use only direct paragraph text so outer layout cells appear
+                # empty and Gemini focuses on the inner cells with real content.
+                cells = [{"col": ci, "text": _cell_own_text(cell)} for ci, cell in enumerate(row.cells)]
                 table_data["rows"].append(cells)
             structure["tables"].append(table_data)
 
@@ -547,7 +572,7 @@ class AIService:
                     if idx < len(non_empty_paras):
                         _set_para_text(non_empty_paras[idx], placeholder)
                 elif loc.get("type") == "table":
-                    cell = doc.tables[loc["table_index"]].rows[loc["row_index"]].cells[loc["col_index"]]
+                    cell = all_tables_in_doc[loc["table_index"]].rows[loc["row_index"]].cells[loc["col_index"]]
                     _set_cell_text(cell, placeholder)
             except (IndexError, KeyError, TypeError) as e:
                 logger.warning(f"Failed to inject placeholder '{placeholder}': {e}")
@@ -569,9 +594,14 @@ class AIService:
         li_ti = field_map.get("line_items_table_index")
         if li_ti is not None:
             try:
-                li_table = doc.tables[int(li_ti)]
+                li_table = all_tables_in_doc[int(li_ti)]
                 header_rows = set(field_map.get("line_item_header_rows") or [0])
                 data_row_indices = [i for i in range(len(li_table.rows)) if i not in header_rows]
+
+                if not data_row_indices:
+                    # Template has only a header row — add a blank row to host the loop tag
+                    li_table.add_row()
+                    data_row_indices = [len(li_table.rows) - 1]
 
                 if data_row_indices:
                     first_idx = data_row_indices[0]
