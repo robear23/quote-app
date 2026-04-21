@@ -523,9 +523,9 @@ class AIService:
                     template_row = li_table.rows[first_idx]
                     num_cols = len(template_row.cells)
 
-                    # Placeholders per column: first cell gets the {% tr for %} tag
+                    # Placeholders per column: first cell gets the {%tr for %} tag
                     col_tpls = [
-                        "{% tr for item in line_items %}{{ item.description }}",
+                        "{%tr for item in line_items %}{{ item.description }}",
                         "{{ item.qty }}",
                         "{{ item.unit_price_str }}",
                         "{{ item.total_str }}",
@@ -550,7 +550,7 @@ class AIService:
                         if ci == 0:
                             wr = OxmlElement('w:r')
                             wt = OxmlElement('w:t')
-                            wt.text = "{% tr endfor %}"
+                            wt.text = "{%tr endfor %}"
                             wr.append(wt)
                             wp.append(wr)
                         tc.append(wp)

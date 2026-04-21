@@ -655,7 +655,10 @@ class DocumentFactory:
             tpl.render(context)
             tpl.save(filepath)
             logger.info(f"Generated DOCX from template: {filepath}")
-            return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}
+            return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total, "used_template": True}
         except Exception as e:
             logger.error(f"Template rendering failed, falling back to scratch generation: {e}")
-            return DocumentFactory.generate_docx(quote_data, brand_dna, output_filename)
+            result = DocumentFactory.generate_docx(quote_data, brand_dna, output_filename)
+            result["used_template"] = False
+            result["template_error"] = str(e)
+            return result

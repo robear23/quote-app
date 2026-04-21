@@ -313,7 +313,23 @@ async def generate_and_send_quote(
                 result = await asyncio.to_thread(
                     DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
                 )
+                if not result.get("used_template"):
+                    await status_msg.edit_text(
+                        "⚠️ Your saved template couldn't be rendered, so I used the default layout instead.\n\n"
+                        f"Error: {result.get('template_error', 'unknown')}\n\n"
+                        "Generating your quote now..."
+                    )
             else:
+                if template_path:
+                    logger.warning(f"template_docx_path set but download failed for user {db_user['id']}")
+                    await status_msg.edit_text(
+                        "⚠️ Couldn't load your saved template (storage error), using default layout instead.\n\nGenerating your quote now..."
+                    )
+                else:
+                    await status_msg.edit_text(
+                        "ℹ️ No custom template found — using default layout.\n\n"
+                        "If you uploaded a template during setup, try /restart to re-run onboarding.\n\nGenerating your quote now..."
+                    )
                 result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
         doc_path = result["filepath"]
         if not os.path.exists(doc_path):
@@ -632,14 +648,27 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 logger.warning(f"Failed to upload blank template (non-fatal): {e}")
 
             # Build Jinja2-mapped template from the blank DOCX
+            template_mapped = False
             try:
                 jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
                 if jinja_bytes:
                     tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
                     dna_data["template_docx_path"] = tpl_path
+                    template_mapped = True
                     logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
+                else:
+                    logger.warning(f"build_quote_template returned None for user {db_user['id']}")
             except Exception as e:
                 logger.warning(f"Template building failed (non-fatal): {e}")
+
+            if not template_mapped:
+                await status_msg.edit_text(
+                    "⚠️ I saved your brand info, but couldn't map your template layout for auto-fill. "
+                    "Quotes will use a default layout instead of your uploaded template.\n\n"
+                    "You can try /restart to re-upload your template.\n\n"
+                    "Continuing setup..."
+                )
+                await asyncio.sleep(3)
 
             # Extract and upload logo if present in the DOCX
             logo_b64 = dna_data.pop("logo_base64", None)
