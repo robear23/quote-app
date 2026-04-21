@@ -415,7 +415,8 @@ class DocumentFactory:
             footer_parts.append(str(brand_dna["contact_details"]))
         if brand_dna.get("vat_tax_status"):
             vat = str(brand_dna["vat_tax_status"])
-            footer_parts.append(vat if "vat" in vat.lower() else f"VAT No: {vat}")
+            _tax_kw = ("vat", "tax", "gst", "hst", "no tax")
+            footer_parts.append(vat if any(k in vat.lower() for k in _tax_kw) else f"VAT No: {vat}")
         if brand_dna.get("bank_info"):
             footer_parts.append(str(brand_dna["bank_info"]))
 
@@ -599,7 +600,8 @@ class DocumentFactory:
             footer_parts.append(str(brand_dna["contact_details"]))
         if brand_dna.get("vat_tax_status"):
             vat = str(brand_dna["vat_tax_status"])
-            footer_parts.append(vat if "vat" in vat.lower() else f"VAT No: {vat}")
+            _tax_kw = ("vat", "tax", "gst", "hst", "no tax")
+            footer_parts.append(vat if any(k in vat.lower() for k in _tax_kw) else f"VAT No: {vat}")
         if brand_dna.get("bank_info"):
             footer_parts.append(str(brand_dna["bank_info"]))
         worksheet.merge_range(row, 0, row, 3, " | ".join(footer_parts), small_grey)

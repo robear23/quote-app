@@ -18,22 +18,19 @@ if not client:
 
 DNA_EXTRACTION_PROMPT = """
 You are a highly capable AI assistant helping a tradesperson set up their automated quoting system.
-Analyze the provided sample invoices/quotes and extract their "Brand DNA" into a strict JSON format.
+Analyze the provided blank quote template and extract the business's "Brand DNA" into a strict JSON format.
+The template contains the business's branding and structure but no client or job details.
 
 Extract the following information:
 1. "business_name": The name of the business issuing the quotes.
 2. "business_address": The physical address of the business.
 3. "contact_details": Phone numbers, emails, or websites.
 4. "bank_info": Bank details for payment (Account Number, Sort Code, IBAN, etc.).
-5. "vat_tax_status": Information regarding VAT registration, tax rates applied, or tax IDs.
-6. "currency": The primary currency used (e.g., USD, GBP, EUR).
-7. "calculation_methods": A JSON object with keys like "tax_rate" (numeric percentage, e.g. 20 for 20% VAT), "markup_percentage", and any other observed pricing logic.
-8. "layout_preferences": Notes on visual layout (e.g., "Logo top left", "Clean modern font", "Blue color scheme").
-9. "primary_color_hex": The dominant brand/header color as a 6-digit hex code WITHOUT the # prefix (e.g., "1B3A5C" for navy blue). Look at header backgrounds, table header rows, colored banners, and logo colors. This is critical — inspect the document carefully for any colored elements.
-10. "secondary_color_hex": The secondary accent color as a 6-digit hex code WITHOUT the # prefix, if present (e.g., highlight colors, subheadings). Set to null if none.
+5. "layout_preferences": Notes on visual layout (e.g., "Logo top left", "Clean modern font", "Blue color scheme").
+6. "primary_color_hex": The dominant brand/header color as a 6-digit hex code WITHOUT the # prefix (e.g., "1B3A5C" for navy blue). Look at header backgrounds, table header rows, colored banners, and logo colors. This is critical — inspect the document carefully for any colored elements.
+7. "secondary_color_hex": The secondary accent color as a 6-digit hex code WITHOUT the # prefix, if present (e.g., highlight colors, subheadings). Set to null if none.
 
 Return ONLY a valid JSON object with these keys. If a field cannot be determined, set its value to null.
-For "calculation_methods", always use a JSON object (not a string). If a tax rate is found (e.g. 20% VAT), set "tax_rate" to the numeric value (e.g. 20).
 """
 
 QUOTE_GENERATION_PROMPT = """
@@ -194,145 +191,116 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
 
 class AIService:
     @staticmethod
-    def extract_brand_dna(file_uris: list[str]) -> dict | None:
+    def extract_brand_dna_from_blank(docx_path: str) -> dict | None:
         """
-        Takes a list of local file paths, sends them to Gemini,
-        and returns the structured JSON Brand DNA, or None on failure.
+        Takes a single blank DOCX template path, extracts brand identity (name,
+        address, colors, logo) and returns the structured JSON Brand DNA dict,
+        or None on failure. Currency and tax are NOT extracted here — they are
+        collected via direct Q&A during onboarding.
         """
         try:
             import base64 as _b64
             import docx as _docx
             from docx.oxml.ns import qn as _qn
-            uploaded_files = []
-            text_contents = []
+
             logo_b64 = None
-            docx_primary_color = None  # extracted directly from XML, overrides Gemini's guess
+            docx_primary_color = None
             _raster_exts = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'}
 
-            for path in file_uris:
-                if path.lower().endswith(".docx"):
-                    try:
-                        doc = _docx.Document(path)
-                        full_text = []
+            try:
+                doc = _docx.Document(docx_path)
+            except Exception as e:
+                logger.error(f"Failed to open DOCX for brand DNA extraction: {e}")
+                return None
 
-                        # Regular paragraphs
-                        for para in doc.paragraphs:
+            full_text = []
+
+            # Regular paragraphs
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    full_text.append(para.text)
+
+            # Table cells
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            full_text.append(cell.text)
+
+            # Text boxes — often used for company name/address
+            try:
+                for txbx in doc.element.body.iter(_qn('w:txbxContent')):
+                    for t_el in txbx.iter(_qn('w:t')):
+                        if t_el.text and t_el.text.strip():
+                            full_text.append(t_el.text)
+            except Exception:
+                pass
+
+            # Headers and footers — often contain business name/address
+            try:
+                for section in doc.sections:
+                    for hdr_ftr in (section.header, section.footer):
+                        if getattr(hdr_ftr, 'is_linked_to_previous', True):
+                            continue
+                        for para in hdr_ftr.paragraphs:
                             if para.text.strip():
                                 full_text.append(para.text)
-
-                        # Table cells
-                        for table in doc.tables:
-                            for row in table.rows:
+                        for tbl in hdr_ftr.tables:
+                            for row in tbl.rows:
                                 for cell in row.cells:
                                     if cell.text.strip():
                                         full_text.append(cell.text)
+            except Exception:
+                pass
 
-                        # Text boxes (w:txbxContent) — often used for company name/address
-                        try:
-                            for txbx in doc.element.body.iter(_qn('w:txbxContent')):
-                                for t_el in txbx.iter(_qn('w:t')):
-                                    if t_el.text and t_el.text.strip():
-                                        full_text.append(t_el.text)
-                        except Exception:
-                            pass
+            extracted = "\n".join(full_text)
+            logger.info(f"DOCX text extracted: {len(extracted)} chars")
 
-                        # Headers and footers — often contain business name/address
-                        try:
-                            for section in doc.sections:
-                                for hdr_ftr in (section.header, section.footer):
-                                    if getattr(hdr_ftr, 'is_linked_to_previous', True):
-                                        continue
-                                    for para in hdr_ftr.paragraphs:
-                                        if para.text.strip():
-                                            full_text.append(para.text)
-                                    for tbl in hdr_ftr.tables:
-                                        for row in tbl.rows:
-                                            for cell in row.cells:
-                                                if cell.text.strip():
-                                                    full_text.append(cell.text)
-                        except Exception:
-                            pass
+            if len(extracted) < 50:
+                logger.warning("DOCX text extraction yielded very little content — template may use unsupported layout")
 
-                        extracted = "\n".join(full_text)
-                        logger.info(f"DOCX text extracted from {os.path.basename(path)}: {len(extracted)} chars")
-                        text_contents.append(f"\n--- Content of {os.path.basename(path)} ---\n{extracted}")
+            # Extract primary brand color directly from DOCX XML (overrides Gemini's guess)
+            try:
+                from collections import Counter as _Counter
+                import re as _re
+                _IGNORE_COLORS = {
+                    'FFFFFF', 'F0F4F8', 'EEF2F7', 'F5F5F5', 'EEEEEE',
+                    'E0E0E0', 'DDDDDD', 'CCCCCC', 'AUTO', 'NONE', '',
+                }
+                color_counts = _Counter()
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            tcPr = cell._tc.find(_qn('w:tcPr'))
+                            if tcPr is not None:
+                                shd = tcPr.find(_qn('w:shd'))
+                                if shd is not None:
+                                    fill = shd.get(_qn('w:fill'), '').upper().strip()
+                                    if fill not in _IGNORE_COLORS and _re.fullmatch(r'[0-9A-F]{6}', fill):
+                                        color_counts[fill] += 1
+                if color_counts:
+                    docx_primary_color = color_counts.most_common(1)[0][0]
+                    logger.info(f"DOCX primary color extracted from XML: {docx_primary_color}")
+            except Exception as _ce:
+                logger.warning(f"DOCX color extraction failed (non-fatal): {_ce}")
 
-                        # Extract primary brand color directly from DOCX XML (overrides Gemini's guess)
-                        if docx_primary_color is None:  # only from first DOCX
-                            try:
-                                from collections import Counter as _Counter
-                                import re as _re
-                                _IGNORE_COLORS = {
-                                    'FFFFFF', 'F0F4F8', 'EEF2F7', 'F5F5F5', 'EEEEEE',
-                                    'E0E0E0', 'DDDDDD', 'CCCCCC', 'AUTO', 'NONE', '',
-                                }
-                                color_counts = _Counter()
-                                for table in doc.tables:
-                                    for row in table.rows:
-                                        for cell in row.cells:
-                                            tcPr = cell._tc.find(_qn('w:tcPr'))
-                                            if tcPr is not None:
-                                                shd = tcPr.find(_qn('w:shd'))
-                                                if shd is not None:
-                                                    fill = shd.get(_qn('w:fill'), '').upper().strip()
-                                                    if fill not in _IGNORE_COLORS and _re.fullmatch(r'[0-9A-F]{6}', fill):
-                                                        color_counts[fill] += 1
-                                if color_counts:
-                                    docx_primary_color = color_counts.most_common(1)[0][0]
-                                    logger.info(f"DOCX primary color extracted from XML: {docx_primary_color}")
-                            except Exception as _ce:
-                                logger.warning(f"DOCX color extraction failed (non-fatal): {_ce}")
-
-                        # Extract first raster image as logo
-                        if logo_b64 is None:
-                            for rel in doc.part.rels.values():
-                                try:
-                                    target = getattr(rel, 'target_ref', '') or ''
-                                    ext = os.path.splitext(target.lower())[1]
-                                    if ext in _raster_exts:
-                                        blob = rel.target_part.blob
-                                        if len(blob) > 500:
-                                            logo_b64 = _b64.b64encode(blob).decode('utf-8')
-                                            break
-                                except Exception:
-                                    continue
-                    except Exception as e:
-                        logger.error(f"Failed to read docx {path}: {e}", exc_info=True)
-                else:
-                    uploaded_files.append(client.files.upload(file=path))
-
-            # If DOCX text was extracted, check it has meaningful content
-            total_text_chars = sum(len(t) for t in text_contents)
-            if text_contents and total_text_chars < 100 and not uploaded_files:
-                logger.warning(
-                    f"DOCX text extraction yielded only {total_text_chars} chars — "
-                    "files may use unsupported layout (text boxes only, encrypted, etc.)"
-                )
-
-            # Don't call Gemini if there's nothing to analyze
-            if not text_contents and not uploaded_files:
-                logger.error("No extractable content from any onboarding file")
-                return None
-
-            if text_contents:
-                combined_text = DNA_EXTRACTION_PROMPT + "\n\n" + "\n\n".join(text_contents)
-                # Pass plain string when there are no file objects (list wrapping can confuse SDK)
-                contents = combined_text if not uploaded_files else [combined_text] + uploaded_files
-            else:
-                contents = [DNA_EXTRACTION_PROMPT] + uploaded_files
-
-            logger.info(f"Calling Gemini for Brand DNA extraction, content length: {len(str(contents))} chars")
-            response = _generate_with_retry(contents)
-            logger.info(f"Gemini Brand DNA response received, finish_reason: {getattr(response, 'candidates', [{}])[0]}")
-
-            for f in uploaded_files:
+            # Extract first raster image as logo
+            for rel in doc.part.rels.values():
                 try:
-                    client.files.delete(name=f.name)
+                    target = getattr(rel, 'target_ref', '') or ''
+                    ext = os.path.splitext(target.lower())[1]
+                    if ext in _raster_exts:
+                        blob = rel.target_part.blob
+                        if len(blob) > 500:
+                            logo_b64 = _b64.b64encode(blob).decode('utf-8')
+                            break
                 except Exception:
-                    pass
+                    continue
 
-            # response.text raises ValueError in the Google GenAI SDK if the response
-            # has no candidates or was blocked — must be caught explicitly
+            combined_text = DNA_EXTRACTION_PROMPT + f"\n\n--- Blank template content ---\n{extracted}"
+            logger.info(f"Calling Gemini for brand DNA extraction, content length: {len(combined_text)} chars")
+            response = _generate_with_retry(combined_text)
+
             try:
                 raw = response.text or ""
             except Exception as e:
@@ -348,13 +316,15 @@ class AIService:
                     raw = raw[4:]
             raw = raw.strip()
             if not raw:
-                logger.error("Gemini returned empty response for Brand DNA extraction")
+                logger.error("Gemini returned empty response for brand DNA extraction")
                 return None
 
             result = json.loads(raw)
             if not isinstance(result, dict) or not result:
                 logger.error(f"Gemini returned non-dict or empty result: {result!r}")
                 return None
+
+            # DOCX-extracted values take priority over Gemini's text analysis
             if logo_b64:
                 result["logo_base64"] = logo_b64
             if docx_primary_color:
@@ -364,7 +334,7 @@ class AIService:
         except RateLimitError:
             raise
         except Exception as e:
-            logger.error(f"Failed to extract Brand DNA: {e}", exc_info=True)
+            logger.error(f"Failed to extract brand DNA: {e}", exc_info=True)
             return None
 
     @staticmethod

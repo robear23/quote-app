@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 from config import settings
 import database
-from ai_service import AIService, RateLimitError, run_ai
+from ai_service import AIService, RateLimitError, run_ai  # noqa: F401 (run_ai re-exported)
 
 
 async def run_ai_notify(func, *args, msg=None):
@@ -34,47 +34,7 @@ logger = logging.getLogger(__name__)
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-_ONBOARDING_CONTENT_TYPES = {
-    ".pdf": "application/pdf",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-}
-
-
-# ---------------------------------------------------------------------------
-# Supabase Storage helpers for onboarding sample files
-# ---------------------------------------------------------------------------
-
-async def _upload_onboarding_file(telegram_id: int, filename: str, file_bytes: bytes) -> str:
-    """Upload a sample file to Supabase Storage. Returns the storage path."""
-    storage_path = f"onboarding/{telegram_id}/{filename}"
-    ext = os.path.splitext(filename)[1].lower()
-    ct = _ONBOARDING_CONTENT_TYPES.get(ext, "application/octet-stream")
-    await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).upload(
-        storage_path, file_bytes, file_options={"content-type": ct}
-    )
-    return storage_path
-
-
-async def _list_onboarding_storage_paths(telegram_id: int) -> list[str]:
-    """List all onboarding files in Supabase Storage for a user. Returns storage paths."""
-    folder = f"onboarding/{telegram_id}"
-    items = await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).list(folder)
-    return [
-        f"{folder}/{item['name']}"
-        for item in (items or [])
-        if item.get("name") and not item["name"].startswith(".")
-    ]
-
-
-async def _delete_onboarding_storage_files(telegram_id: int) -> None:
-    """Delete all onboarding files from Supabase Storage for a user."""
-    paths = await _list_onboarding_storage_paths(telegram_id)
-    if paths:
-        await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).remove(paths)
+_DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 async def _upload_quote_template(user_id: str, template_bytes: bytes) -> str:
@@ -127,21 +87,50 @@ async def _download_logo(logo_path: str) -> str | None:
         return None
 
 
-async def _download_onboarding_files_to_temp(paths: list[str]) -> list[str]:
-    """Download storage files to local temp dir for AI processing. Returns local temp paths."""
-    local_paths = []
-    for storage_path in paths:
-        try:
-            file_bytes = await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).download(storage_path)
-            filename = storage_path.split("/")[-1]
-            local_path = os.path.join(TEMP_DIR, f"onboarding_{uuid.uuid4().hex}_{filename}")
-            with open(local_path, "wb") as f:
-                f.write(file_bytes)
-            logger.info(f"Downloaded onboarding file {filename}: {len(file_bytes)} bytes -> {local_path}")
-            local_paths.append(local_path)
-        except Exception as e:
-            logger.error(f"Failed to download onboarding file {storage_path}: {e}", exc_info=True)
-    return local_paths
+async def _upload_blank_template(user_id: str, template_bytes: bytes) -> str:
+    """Upload the original blank DOCX template to Supabase Storage. Returns the storage path."""
+    storage_path = f"templates/{user_id}/blank_template.docx"
+    try:
+        await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
+    except Exception:
+        pass
+    await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
+        storage_path, template_bytes,
+        file_options={"content-type": _DOCX_CONTENT_TYPE},
+    )
+    return storage_path
+
+
+def _currency_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("£ GBP", callback_data="onboarding_currency_GBP"),
+            InlineKeyboardButton("$ USD", callback_data="onboarding_currency_USD"),
+            InlineKeyboardButton("€ EUR", callback_data="onboarding_currency_EUR"),
+        ],
+        [
+            InlineKeyboardButton("A$ AUD", callback_data="onboarding_currency_AUD"),
+            InlineKeyboardButton("R ZAR", callback_data="onboarding_currency_ZAR"),
+            InlineKeyboardButton("C$ CAD", callback_data="onboarding_currency_CAD"),
+        ],
+        [InlineKeyboardButton("Other — type your currency code", callback_data="onboarding_currency_OTHER")],
+    ])
+
+
+async def _save_currency_and_ask_tax(
+    update: Update, _context: ContextTypes.DEFAULT_TYPE, db_user: dict, currency_code: str
+) -> None:
+    telegram_id = update.effective_user.id
+    await database.supabase.table("user_configs").update({"currency": currency_code}).eq("user_id", db_user["id"]).execute()
+    await update_user_state(telegram_id, "ONBOARDING_TAX")
+    reply_fn = update.message.reply_text if update.message else update.callback_query.message.reply_text
+    await reply_fn(
+        f"Currency set to *{currency_code}*.\n\n"
+        "What's your tax/VAT rate?\n\n"
+        "• Enter a number — e.g. *20* for 20% VAT, *10* for 10% GST\n"
+        "• Type *0* or *none* if you don't charge tax",
+        parse_mode="Markdown"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +350,7 @@ async def generate_and_send_quote(
     await status_msg.edit_text(
         "Here is your generated quote!\n\n"
         "Use commands:\n"
-        "/restart to change your uploaded quote DNA documents\n"
+        "/restart to re-upload your quote template\n"
         "/feedback along with a message to give us feedback and tell us what features you want added."
     )
 
@@ -404,14 +393,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if state == "HANDSHAKE":
             await update_user_state(user.id, "ONBOARDING")
             await update.message.reply_text(
-                "Welcome! Let's get started. Please send me 3–10 examples of your past quotes or invoices "
-                "(PDF or Images). When you're done, type /finish\\_onboarding.",
-                parse_mode="Markdown"
+                "Welcome! Let's set up your quote template.\n\n"
+                "Please upload your blank quote template as a Word (.docx) file. "
+                "This should have your branding — logo, colours, company details — but no client details filled in."
             )
         elif state == "ONBOARDING":
             await update.message.reply_text(
-                "You are currently setting up your Brand DNA. "
-                "Please upload sample quotes/invoices or type /finish\\_onboarding.",
+                "You're in the setup phase. Please upload your blank .docx quote template to continue."
+            )
+        elif state in ("ONBOARDING_CURRENCY",):
+            await update.message.reply_text(
+                "Please select your currency to continue setup."
+            )
+        elif state in ("ONBOARDING_TAX",):
+            await update.message.reply_text(
+                "Please enter your tax/VAT rate to continue setup (e.g. *20* for 20%, or *0* for none).",
                 parse_mode="Markdown"
             )
         elif state == "AWAITING_FORMAT":
@@ -437,10 +433,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     "bot_state": "ONBOARDING"
                 }).eq("id", payload).execute()
                 await update.message.reply_text(
-                    f"Hi {user.first_name}! Account linked. Let's learn your Brand DNA.\n\n"
-                    "Please upload 3–10 past invoices or quotes (PDF/Image). "
-                    "Type /finish\\_onboarding when done.",
-                    parse_mode="Markdown"
+                    f"Hi {user.first_name}! Account linked.\n\n"
+                    "Please upload your blank .docx quote template to get started. "
+                    "This should have your branding but no client details filled in."
                 )
             else:
                 await update.message.reply_text("Invalid registration link. Please register on the website first.")
@@ -466,19 +461,23 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Failed to delete user_configs during restart: {e}")
 
-    # Delete any uploaded onboarding samples from Supabase Storage
+    # Delete stored templates from Supabase Storage
     try:
-        await _delete_onboarding_storage_files(user.id)
+        paths_to_remove = [
+            f"templates/{db_user['id']}/blank_template.docx",
+            f"templates/{db_user['id']}/quote_template.docx",
+            f"templates/{db_user['id']}/logo.png",
+        ]
+        await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove(paths_to_remove)
     except Exception as e:
-        logger.error(f"Failed to delete onboarding storage files during restart: {e}")
+        logger.warning(f"Failed to delete template storage files during restart (non-fatal): {e}")
 
     # Reset state to ONBOARDING
     await update_user_state(user.id, "ONBOARDING")
 
     await update.message.reply_text(
-        "Your Brand DNA has been reset! Let's start fresh.\n\n"
-        "Please upload 3–10 past invoices or quotes (PDF/Image). "
-        "Type /finish\\_onboarding when you're done.",
+        "Your template has been reset! Let's start fresh.\n\n"
+        "Please upload your blank .docx quote template to continue.",
         parse_mode="Markdown"
     )
 
@@ -538,12 +537,11 @@ async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "📋 *Available Commands*\n\n"
         "/start — Link your account and get started\n"
-        "/restart — Re-upload your quote DNA documents\n"
+        "/restart — Reset and re-upload your quote template\n"
         "/feedback — Send feedback to the developers\n"
         "/whoami — Check which email is linked to your account\n"
         "/redeem — Apply a promo code\n"
-        "/commands — Show this list of commands\n"
-        "/finish\\_onboarding — Complete the onboarding process after uploading samples",
+        "/commands — Show this list of commands",
         parse_mode="Markdown"
     )
 
@@ -571,114 +569,12 @@ async def redeem(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Could not apply code: {result['error']}")
 
 
-async def finish_onboarding(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    db_user = await get_user(user.id)
-
-    if not db_user or db_user.get("bot_state") != "ONBOARDING":
-        await update.message.reply_text("You are not currently in the onboarding phase.")
-        return
-
-    # List files uploaded to Supabase Storage for this user
-    try:
-        storage_paths = await _list_onboarding_storage_paths(user.id)
-    except Exception as e:
-        logger.error(f"Failed to list onboarding storage files: {e}")
-        await update.message.reply_text("Failed to load your uploaded files. Please try again.")
-        return
-
-    if len(storage_paths) < 1:
-        await update.message.reply_text("Please upload at least 1 sample invoice before finishing.")
-        return
-
-    msg = await update.message.reply_text(
-        f"Processing {len(storage_paths)} document(s) to extract your Brand DNA. This might take a minute..."
-    )
-
-    # Download storage files to temp dir for AI processing
-    local_files = await _download_onboarding_files_to_temp(storage_paths)
-    if not local_files:
-        await msg.edit_text("Failed to load your uploaded files. Please try again.")
-        return
-
-    template_bytes = None
-    try:
-        dna_data = await run_ai(AIService.extract_brand_dna, local_files)
-
-        # Build docxtpl template from the first DOCX sample (non-blocking)
-        docx_files = [f for f in local_files if f.lower().endswith(".docx")]
-        if docx_files and dna_data:
-            try:
-                template_bytes = await run_ai(AIService.build_quote_template, docx_files[0], dna_data)
-            except Exception as e:
-                logger.warning(f"Template building failed (non-fatal): {e}")
-
-    except RateLimitError:
-        await msg.edit_text(RATE_LIMIT_MSG)
-        return
-    finally:
-        # Always clean up temp files
-        for f in local_files:
-            try:
-                os.remove(f)
-            except Exception:
-                pass
-
-    if not dna_data:
-        await msg.edit_text(
-            "Sorry, the AI service is temporarily unavailable. Please try /finish\\_onboarding again in a moment.",
-            parse_mode="Markdown"
-        )
-        return
-
-    # Upload docxtpl template to Supabase Storage and record the path
-    if template_bytes:
-        try:
-            template_path = await _upload_quote_template(db_user["id"], template_bytes)
-            dna_data["template_docx_path"] = template_path
-            logger.info(f"Quote template stored at {template_path} for user {db_user['id']}")
-        except Exception as e:
-            logger.warning(f"Failed to upload quote template (non-fatal): {e}")
-
-    logo_b64 = dna_data.pop("logo_base64", None)
-    if logo_b64:
-        try:
-            logo_path = await _upload_logo(db_user["id"], logo_b64)
-            dna_data["logo_path"] = logo_path
-            logger.info(f"Logo stored at {logo_path} for user {db_user['id']}")
-        except Exception as e:
-            logger.warning(f"Failed to upload logo (non-fatal): {e}")
-    dna_data["user_id"] = db_user["id"]
-    try:
-        await database.supabase.table("user_configs").upsert(dna_data).execute()
-
-        # Delete onboarding samples from Supabase Storage
-        try:
-            await database.supabase.storage.from_(settings.SUPABASE_ONBOARDING_BUCKET).remove(storage_paths)
-        except Exception as e:
-            logger.error(f"Failed to delete onboarding storage files after processing: {e}")
-
-        # Move to format selection step
-        await update_user_state(user.id, "AWAITING_FORMAT")
-        await msg.edit_text(
-            "✅ Brand DNA extracted!\n\n"
-            "One last thing — what format would you like your quotes in?\n\n"
-            "Reply *1* for Word (.docx)\n"
-            "Reply *2* for Excel (.xlsx)",
-            parse_mode="Markdown"
-        )
-
-    except Exception as e:
-        logger.error(f"Failed saving config: {e}")
-        await msg.edit_text("Failed to save your configuration. Please try again.")
-
-
 # ---------------------------------------------------------------------------
 # Message handlers
 # ---------------------------------------------------------------------------
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles Photos and Documents (PDFs) in ONBOARDING and ACTIVE states."""
+    """Handles file uploads in ONBOARDING and ACTIVE states."""
     user = update.effective_user
     db_user = await get_user(user.id)
 
@@ -689,50 +585,98 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     state = db_user.get("bot_state")
 
     if state == "ONBOARDING":
-        file_obj = None
-        ext = ""
-        if update.message.document:
-            file_obj = await context.bot.get_file(update.message.document.file_id)
-            filename = update.message.document.file_name
-            if filename and '.' in filename:
-                ext = f".{filename.split('.')[-1]}"
-            else:
-                ext = ".pdf"
-        elif update.message.photo:
-            file_obj = await context.bot.get_file(update.message.photo[-1].file_id)
-            ext = ".jpg"
-
-        if file_obj:
-            # Download from Telegram to a temp file, then upload to Supabase Storage
-            tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}{ext}")
-            await file_obj.download_to_drive(custom_path=tmp_path)
-            try:
-                storage_filename = f"{uuid.uuid4().hex}{ext}"
-                with open(tmp_path, "rb") as f:
-                    file_bytes = f.read()
-                await _upload_onboarding_file(user.id, storage_filename, file_bytes)
-            except Exception as e:
-                logger.error(f"Failed to upload onboarding file to storage: {e}")
-                await update.message.reply_text("Failed to save your file. Please try again.")
-                return
-            finally:
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-
-            # Count files now in storage so the user knows their running total
-            try:
-                stored = await _list_onboarding_storage_paths(user.id)
-                count = len(stored)
-            except Exception:
-                count = 1
-
+        # Only accept DOCX — reject anything else with a clear message
+        if not update.message.document:
             await update.message.reply_text(
-                f"Received sample {count}. "
-                "Send more or type /finish\\_onboarding.",
-                parse_mode="Markdown"
+                "Please upload your blank quote template as a Word (.docx) file."
             )
+            return
+
+        filename = update.message.document.file_name or ""
+        if not filename.lower().endswith(".docx"):
+            await update.message.reply_text(
+                "Please upload a Word document (.docx). "
+                "PDF and image templates are not supported — your template must be a .docx file."
+            )
+            return
+
+        status_msg = await update.message.reply_text("Got it! Processing your template, just a moment...")
+
+        file_obj = await context.bot.get_file(update.message.document.file_id)
+        tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.docx")
+        await file_obj.download_to_drive(custom_path=tmp_path)
+
+        try:
+            with open(tmp_path, "rb") as f:
+                template_bytes = f.read()
+
+            # Extract brand DNA from the blank template
+            try:
+                dna_data = await run_ai_notify(AIService.extract_brand_dna_from_blank, tmp_path, msg=status_msg)
+            except RateLimitError:
+                await status_msg.edit_text(RATE_LIMIT_MSG)
+                return
+
+            if not dna_data:
+                await status_msg.edit_text(
+                    "Sorry, I couldn't read that template. "
+                    "Please make sure it's a valid .docx file and try again."
+                )
+                return
+
+            # Store original blank template permanently
+            try:
+                blank_path = await _upload_blank_template(db_user["id"], template_bytes)
+                dna_data["blank_template_path"] = blank_path
+            except Exception as e:
+                logger.warning(f"Failed to upload blank template (non-fatal): {e}")
+
+            # Build Jinja2-mapped template from the blank DOCX
+            try:
+                jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
+                if jinja_bytes:
+                    tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
+                    dna_data["template_docx_path"] = tpl_path
+                    logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
+            except Exception as e:
+                logger.warning(f"Template building failed (non-fatal): {e}")
+
+            # Extract and upload logo if present in the DOCX
+            logo_b64 = dna_data.pop("logo_base64", None)
+            if logo_b64:
+                try:
+                    logo_path = await _upload_logo(db_user["id"], logo_b64)
+                    dna_data["logo_path"] = logo_path
+                except Exception as e:
+                    logger.warning(f"Failed to upload logo (non-fatal): {e}")
+
+            # Persist brand DNA (currency/tax come from Q&A next)
+            dna_data["user_id"] = db_user["id"]
+            await database.supabase.table("user_configs").upsert(dna_data).execute()
+
+            await update_user_state(user.id, "ONBOARDING_CURRENCY")
+            await status_msg.edit_text(
+                "Template saved!\n\n"
+                "What currency do you use for your quotes?\n\n"
+                "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
+                reply_markup=_currency_keyboard()
+            )
+
+        except Exception as e:
+            logger.error(f"Error during template onboarding: {e}", exc_info=True)
+            await status_msg.edit_text(
+                "Something went wrong processing your template. Please try again."
+            )
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    elif state in ("ONBOARDING_CURRENCY", "ONBOARDING_TAX"):
+        await update.message.reply_text(
+            "Please answer the setup question above before uploading files."
+        )
 
     elif state == "ACTIVE":
         if update.message.photo:
@@ -797,6 +741,80 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     state = db_user.get("bot_state")
+
+    # ------------------------------------------------------------------
+    # ONBOARDING_CURRENCY: user is choosing their invoice currency
+    # ------------------------------------------------------------------
+    if state == "ONBOARDING_CURRENCY":
+        text = (update.message.text or "").strip().upper()
+        currency_aliases = {
+            "GBP": "GBP", "£": "GBP", "POUNDS": "GBP", "STERLING": "GBP",
+            "USD": "USD", "$": "USD", "DOLLARS": "USD",
+            "EUR": "EUR", "€": "EUR", "EUROS": "EUR",
+            "AUD": "AUD", "A$": "AUD", "AU$": "AUD",
+            "CAD": "CAD", "C$": "CAD",
+            "ZAR": "ZAR", "RAND": "ZAR",
+        }
+        chosen = currency_aliases.get(text)
+        if not chosen:
+            # Accept any 2-5 char uppercase string as a custom currency code
+            import re as _re
+            if _re.fullmatch(r'[A-Z]{2,5}', text):
+                chosen = text
+        if chosen:
+            await _save_currency_and_ask_tax(update, context, db_user, chosen)
+        else:
+            await update.message.reply_text(
+                "Please press one of the currency buttons, or type the 3-letter code (e.g. *GBP*, *USD*, *NZD*).",
+                parse_mode="Markdown"
+            )
+        return
+
+    # ------------------------------------------------------------------
+    # ONBOARDING_TAX: user is entering their tax/VAT rate
+    # ------------------------------------------------------------------
+    if state == "ONBOARDING_TAX":
+        text = (update.message.text or "").strip().lower()
+        tax_rate = None
+
+        if text in ("0", "none", "no", "no tax", "0%", "n/a", "nil", "exempt"):
+            tax_rate = 0.0
+        else:
+            cleaned = text.rstrip('%').strip()
+            try:
+                val = float(cleaned)
+                if 0 <= val <= 100:
+                    tax_rate = val
+            except ValueError:
+                pass
+
+        if tax_rate is None:
+            await update.message.reply_text(
+                "Please enter a number between 0 and 100 (e.g. *20* for 20% VAT), "
+                "or type *none* if you don't charge tax.",
+                parse_mode="Markdown"
+            )
+            return
+
+        vat_status = "No tax" if tax_rate == 0 else f"Tax {tax_rate:.0f}%"
+        calc_methods = {"tax_rate": tax_rate}
+        try:
+            await database.supabase.table("user_configs").update({
+                "vat_tax_status": vat_status,
+                "calculation_methods": calc_methods,
+            }).eq("user_id", db_user["id"]).execute()
+            await update_user_state(user.id, "AWAITING_FORMAT")
+            await update.message.reply_text(
+                f"Tax rate set to *{tax_rate:.0f}%*.\n\n"
+                "Almost done! What format would you like your quotes in?\n\n"
+                "Reply *1* for Word (.docx)\n"
+                "Reply *2* for Excel (.xlsx)",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to save tax rate: {e}")
+            await update.message.reply_text("Failed to save your tax rate. Please try again.")
+        return
 
     # ------------------------------------------------------------------
     # AWAITING_FORMAT: user is selecting their preferred output format
@@ -973,6 +991,36 @@ async def handle_confirm_yes(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 
+async def handle_onboarding_currency_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle currency selection inline button presses during onboarding."""
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    db_user = await get_user(user.id)
+    if not db_user or db_user.get("bot_state") != "ONBOARDING_CURRENCY":
+        return
+
+    currency_code = query.data.replace("onboarding_currency_", "")
+
+    if currency_code == "OTHER":
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await query.message.reply_text(
+            "Please type your currency as a 3-letter code (e.g. *NZD* for New Zealand Dollar, *CHF* for Swiss Franc).",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await _save_currency_and_ask_tax(update, context, db_user, currency_code)
+
+
 # ---------------------------------------------------------------------------
 # Bot runner
 # ---------------------------------------------------------------------------
@@ -991,13 +1039,13 @@ def build_application():
     )
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("finish_onboarding", finish_onboarding))
     application.add_handler(CommandHandler("restart", restart))
     application.add_handler(CommandHandler("feedback", feedback))
     application.add_handler(CommandHandler("whoami", whoami))
     application.add_handler(CommandHandler("commands", commands))
     application.add_handler(CommandHandler("redeem", redeem))
     application.add_handler(CallbackQueryHandler(handle_confirm_yes, pattern="^confirm_yes$"))
+    application.add_handler(CallbackQueryHandler(handle_onboarding_currency_callback, pattern="^onboarding_currency_"))
 
     # Photos and file documents
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document))

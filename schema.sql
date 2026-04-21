@@ -237,3 +237,15 @@ VALUES
     ('first50',     'extra_quotes',   10, 50),
     ('materate123', 'premium_months',  3, NULL)
 ON CONFLICT (code) DO NOTHING;
+
+-- ============================================================
+-- MIGRATION: Template-based onboarding redesign
+-- Run in Supabase SQL editor
+-- ============================================================
+
+-- Store the original blank template (before Jinja2 mapping)
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS blank_template_path TEXT;
+
+-- Document the new intermediate onboarding states
+COMMENT ON COLUMN users.bot_state IS
+'States: HANDSHAKE | ONBOARDING | ONBOARDING_CURRENCY | ONBOARDING_TAX | AWAITING_FORMAT | ACTIVE | AWAITING_CONFIRMATION';
