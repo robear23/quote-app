@@ -1,7 +1,6 @@
 from google import genai
 from google.genai import types
 import asyncio
-import copy
 import io
 import json
 import logging
@@ -492,7 +491,6 @@ class AIService:
         """
         try:
             import docx as _docx
-            from docx.oxml import OxmlElement
             from docx.oxml.ns import qn
             from docx.table import Table as _DocxTable
 
@@ -703,38 +701,35 @@ class AIService:
                         'unit_price': '{{ item.unit_price_str }}',
                         'total': '{{ item.total_str }}',
                     }
+                    # Set the template row to field expressions ONLY — no loop control tag.
+                    # docxtpl replaces the ENTIRE <w:tr> that contains {%tr for %}, discarding
+                    # all cell content. The for/endfor tags must live in their own dedicated
+                    # rows so the field-expression row is preserved and repeated.
                     for ci in range(num_cols):
                         field = col_field_map.get(ci)
                         jinja_expr = _FIELD_JINJA.get(field, '') if field else ''
-                        if ci == 0:
-                            _set_cell_text(template_row.cells[ci], f"{{%tr for item in line_items %}}{jinja_expr}")
-                        else:
-                            _set_cell_text(template_row.cells[ci], jinja_expr)
+                        _set_cell_text(template_row.cells[ci], jinja_expr)
 
                     # Delete extra data rows (keep only the first as the loop template)
                     for ri in reversed(data_row_indices[1:]):
                         row_elem = li_table.rows[ri]._tr
                         li_table._tbl.remove(row_elem)
 
-                    # Add {%tr endfor %} row after the template row, copying cell widths
-                    endfor_tr = OxmlElement('w:tr')
-                    for ci in range(num_cols):
-                        tc = OxmlElement('w:tc')
-                        try:
-                            orig_tcPr = template_row.cells[ci]._tc.find(qn('w:tcPr'))
-                            tc.append(copy.deepcopy(orig_tcPr) if orig_tcPr is not None else OxmlElement('w:tcPr'))
-                        except Exception:
-                            tc.append(OxmlElement('w:tcPr'))
-                        wp = OxmlElement('w:p')
-                        if ci == 0:
-                            wr = OxmlElement('w:r')
-                            wt = OxmlElement('w:t')
-                            wt.text = "{%tr endfor %}"
-                            wr.append(wt)
-                            wp.append(wr)
-                        tc.append(wp)
-                        endfor_tr.append(tc)
-                    template_row._tr.addnext(endfor_tr)
+                    # Insert a {%tr for %} row immediately before the template row.
+                    # add_row() appends at the end; addprevious() moves it into position.
+                    for_row = li_table.add_row()
+                    _set_cell_text(for_row.cells[0], "{%tr for item in line_items %}")
+                    for ci in range(1, num_cols):
+                        _set_cell_text(for_row.cells[ci], "")
+                    template_row._tr.addprevious(for_row._tr)
+
+                    # Insert a {%tr endfor %} row immediately after the template row.
+                    endfor_row = li_table.add_row()
+                    _set_cell_text(endfor_row.cells[0], "{%tr endfor %}")
+                    for ci in range(1, len(endfor_row.cells)):
+                        _set_cell_text(endfor_row.cells[ci], "")
+                    template_row._tr.addnext(endfor_row._tr)
+
                     logger.info(f"Line items loop injected: {num_cols} columns, col_map={col_field_map}")
 
             except (IndexError, TypeError) as e:
