@@ -50,6 +50,8 @@ Rules:
 - If a lump-sum total is given (e.g. "New bathroom 3000"), create ONE line item with quantity=1 and unit_price equal to that total.
 - If prices are not mentioned at all, infer reasonable defaults for the trade described.
 - Always produce at least one line item — never return an empty line_items array.
+- Fix any obvious spelling mistakes in the description fields (e.g. "bathrrom" → "bathroom").
+- Capitalise the first letter of each description (e.g. "new bathroom" → "New bathroom").
 
 Example:
 Input: "Amy Smith. New bathroom 3000"
@@ -72,6 +74,8 @@ Rules:
 - If a lump-sum total is mentioned (e.g. "New bathroom, three thousand pounds"), create ONE line item with quantity=1 and unit_price equal to that total.
 - If prices are not mentioned at all, infer reasonable defaults for the trade described.
 - Always produce at least one line item — never return an empty line_items array.
+- Fix any obvious spelling mistakes in the description fields.
+- Capitalise the first letter of each description.
 Return ONLY valid JSON.
 """
 
@@ -158,6 +162,15 @@ async def run_ai(func, *args):
 class RateLimitError(Exception):
     """Raised when Gemini API rate limit retries are exhausted."""
     pass
+
+
+def _normalize_quote(quote: dict) -> dict:
+    """Capitalise first letter of each line item description (client-side safety net)."""
+    for item in quote.get("line_items", []):
+        desc = item.get("description", "")
+        if desc:
+            item["description"] = desc[0].upper() + desc[1:]
+    return quote
 
 
 def _is_transient(error_str: str) -> bool:
@@ -397,7 +410,7 @@ class AIService:
         """Parses user text into structured quote data using Gemini."""
         try:
             response = _generate_with_retry(f"{QUOTE_GENERATION_PROMPT}\n\nUser Input: {text}")
-            return json.loads(response.text)
+            return _normalize_quote(json.loads(response.text))
         except RateLimitError:
             raise
         except Exception as e:
@@ -433,7 +446,7 @@ class AIService:
             except Exception:
                 pass
 
-            return json.loads(response.text)
+            return _normalize_quote(json.loads(response.text))
 
         except RateLimitError:
             raise
@@ -454,7 +467,7 @@ class AIService:
             except Exception:
                 pass
 
-            return json.loads(response.text)
+            return _normalize_quote(json.loads(response.text))
 
         except RateLimitError:
             raise
@@ -474,7 +487,10 @@ class AIService:
                 user_response=user_response
             )
             response = _generate_with_retry(prompt)
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            if "updated_quote" in result:
+                result["updated_quote"] = _normalize_quote(result["updated_quote"])
+            return result
 
         except RateLimitError:
             raise
