@@ -655,6 +655,13 @@ class DocumentFactory:
             ],
         }
 
+        def _amp(s):
+            return s.replace('&', '&amp;') if isinstance(s, str) else s
+
+        context["customer_name"] = _amp(context["customer_name"])
+        context["customer_address"] = _amp(context["customer_address"])
+        context["line_items"] = [{**i, "description": _amp(i["description"])} for i in context["line_items"]]
+
         tpl = DocxTemplate(io.BytesIO(template_bytes))
         tpl.render(context)
         tpl.save(filepath)

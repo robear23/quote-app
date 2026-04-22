@@ -207,7 +207,10 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
 
 def _detect_line_items_table(all_tables_in_doc) -> int | None:
     """Fallback: score tables by header keywords to find the line items table."""
-    desc_kw = {'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material'}
+    desc_kw = {
+        'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material',
+        'package', 'scope', 'task', 'deliverable', 'product', 'items', 'services', 'works', 'activity',
+    }
     qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
     price_kw = {'price', 'rate', 'cost', 'unit price', 'unit rate', 'charge', 'fee', 'each'}
     total_kw = {'total', 'amount', 'sum', 'net', 'gross', 'line total', 'ex. vat', 'inc. vat'}
@@ -234,11 +237,14 @@ def _detect_line_items_table(all_tables_in_doc) -> int | None:
 
 def _map_line_item_columns(header_cells) -> dict:
     """Map column indices to field names based on header text. Returns {col_idx: field_name}."""
-    desc_kw = {'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material'}
+    desc_kw = {
+        'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material',
+        'package', 'scope', 'task', 'deliverable', 'product', 'items', 'services', 'works', 'activity',
+    }
     qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
     # 'unit' alone (without 'price'/'cost') → unit-of-measure column
     unit_kw = {'unit', 'uom', 'measure'}
-    price_kw = {'unit price', 'unit rate', 'rate', 'per unit', 'unit cost', 'each', 'price'}
+    price_kw = {'unit price', 'unit rate', 'rate', 'per unit', 'unit cost', 'each', 'price', 'fee', 'charge'}
     total_kw = {'total', 'amount', 'sum', 'net', 'gross', 'line total', 'ex. vat', 'inc. vat'}
 
     col_map: dict[int, str] = {}
@@ -553,16 +559,16 @@ class AIService:
         # directly so we don't rely on AI spatial reasoning for simple fields.
         _BRACKET_PATTERNS = {
             "customer_name": re.compile(
-                r'^\[?\s*(client\s*name|customer\s*name|name)\s*\]?$', re.I
+                r'^\[\s*(client\s*name|customer\s*name|name)\s*\]$', re.I
             ),
             "customer_address": re.compile(
-                r'^\[?\s*(client\s*address|customer\s*address|street\s*address|address\s*line\s*1?|address)\s*\]?$', re.I
+                r'^\[\s*(client\s*address|customer\s*address|street\s*address|address\s*line\s*1?|address)\s*\]$', re.I
             ),
             "quote_ref": re.compile(
-                r'^\[?\s*(quote\s*(no|ref|number|#)|invoice\s*(no|ref|number|#)|ref\s*(no|#)?)\s*\]?$', re.I
+                r'^\[\s*(quote\s*(no\.?|ref|number|#)|invoice\s*(no\.?|ref|number|#)|ref\s*(no\.?|#)?)\s*\]$', re.I
             ),
             "quote_date": re.compile(
-                r'^\[?\s*(date|quote\s*date|invoice\s*date|dd[/\-\.]mm[/\-\.]yyyy)\s*\]?$', re.I
+                r'^\[\s*(date|quote\s*date|invoice\s*date|dd[/\-\.]mm[/\-\.]yyyy)\s*\]$', re.I
             ),
         }
         _JINJA_FOR_FIELD = {
