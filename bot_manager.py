@@ -308,29 +308,40 @@ async def generate_and_send_quote(
             result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
         else:
             template_path = brand_dna.get("template_docx_path")
-            template_bytes = await _download_quote_template(template_path) if template_path else None
-            if template_bytes:
-                result = await asyncio.to_thread(
-                    DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
+            if not template_path:
+                logger.warning(f"No template_docx_path for user {db_user['id']} — blocking generation")
+                if doc_id:
+                    try:
+                        await database.supabase.table("documents").delete().eq("id", doc_id).execute()
+                    except Exception:
+                        pass
+                await clear_pending_state(user.id)
+                await update_user_state(user.id, "ACTIVE")
+                await status_msg.edit_text(
+                    "❌ No quote template found for your account.\n\n"
+                    "Use /restart to re-upload your template before generating quotes."
                 )
-                if not result.get("used_template"):
-                    await status_msg.edit_text(
-                        "⚠️ Your saved template couldn't be rendered, so I used the default layout instead.\n\n"
-                        f"Error: {result.get('template_error', 'unknown')}\n\n"
-                        "Generating your quote now..."
-                    )
-            else:
-                if template_path:
-                    logger.warning(f"template_docx_path set but download failed for user {db_user['id']}")
-                    await status_msg.edit_text(
-                        "⚠️ Couldn't load your saved template (storage error), using default layout instead.\n\nGenerating your quote now..."
-                    )
-                else:
-                    await status_msg.edit_text(
-                        "ℹ️ No custom template found — using default layout.\n\n"
-                        "If you uploaded a template during setup, try /restart to re-run onboarding.\n\nGenerating your quote now..."
-                    )
-                result = await asyncio.to_thread(DocumentFactory.generate_docx, quote_data, brand_dna, output_filename)
+                return
+
+            template_bytes = await _download_quote_template(template_path)
+            if not template_bytes:
+                logger.warning(f"template_docx_path set but download failed for user {db_user['id']}")
+                if doc_id:
+                    try:
+                        await database.supabase.table("documents").delete().eq("id", doc_id).execute()
+                    except Exception:
+                        pass
+                await clear_pending_state(user.id)
+                await update_user_state(user.id, "ACTIVE")
+                await status_msg.edit_text(
+                    "❌ Couldn't load your quote template (storage error).\n\n"
+                    "Use /restart to re-upload your template."
+                )
+                return
+
+            result = await asyncio.to_thread(
+                DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
+            )
         doc_path = result["filepath"]
         if not os.path.exists(doc_path):
             raise RuntimeError("Generated file not found on disk")
@@ -341,7 +352,10 @@ async def generate_and_send_quote(
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
             except Exception:
                 pass
-        await status_msg.edit_text("Failed to generate the document. Please try again.")
+        await status_msg.edit_text(
+            "Failed to generate the document. Please try again.\n\n"
+            "If this keeps happening, use /restart to re-upload your template."
+        )
         return
 
     # Send document directly to Telegram; release reserved slot on failure
@@ -647,28 +661,36 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             except Exception as e:
                 logger.warning(f"Failed to upload blank template (non-fatal): {e}")
 
-            # Build Jinja2-mapped template from the blank DOCX
-            template_mapped = False
+            # Build Jinja2-mapped template from the blank DOCX — required to proceed
             try:
                 jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
-                if jinja_bytes:
-                    tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
-                    dna_data["template_docx_path"] = tpl_path
-                    template_mapped = True
-                    logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
-                else:
-                    logger.warning(f"build_quote_template returned None for user {db_user['id']}")
+            except RateLimitError:
+                await status_msg.edit_text(RATE_LIMIT_MSG)
+                return
             except Exception as e:
-                logger.warning(f"Template building failed (non-fatal): {e}")
+                logger.error(f"Template building failed: {e}")
+                jinja_bytes = None
 
-            if not template_mapped:
+            if not jinja_bytes:
                 await status_msg.edit_text(
-                    "⚠️ I saved your brand info, but couldn't map your template layout for auto-fill. "
-                    "Quotes will use a default layout instead of your uploaded template.\n\n"
-                    "You can try /restart to re-upload your template.\n\n"
-                    "Continuing setup..."
+                    "❌ I couldn't set up your template for auto-fill.\n\n"
+                    "Make sure your template has clear column headers (Description, Qty, Price, Total) "
+                    "and labeled fields for client name and date.\n\n"
+                    "Please upload a corrected .docx template to continue."
                 )
-                await asyncio.sleep(3)
+                return
+
+            try:
+                tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
+            except Exception as e:
+                logger.error(f"Failed to upload mapped template: {e}")
+                await status_msg.edit_text(
+                    "❌ Failed to save your template (storage error). Please try again."
+                )
+                return
+
+            dna_data["template_docx_path"] = tpl_path
+            logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
 
             # Extract and upload logo if present in the DOCX
             logo_b64 = dna_data.pop("logo_base64", None)
