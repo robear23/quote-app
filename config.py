@@ -37,6 +37,9 @@ class Settings:
     # Supabase Storage bucket for per-user docxtpl quote templates
     SUPABASE_TEMPLATES_BUCKET: str = os.getenv("SUPABASE_TEMPLATES_BUCKET", "quote-templates")
 
+    # Sentry error tracking — leave empty to disable
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "").strip()
+
     # Session signing secret — set a long random string in production
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "change-me-in-production").strip()
 

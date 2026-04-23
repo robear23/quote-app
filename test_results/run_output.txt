@@ -1,0 +1,372 @@
+10:23:39 INFO === Quote Generation Test Suite — 2026-04-23 10:23 (mode: new) ===
+10:23:39 INFO Templates: test_templates  |  Generated: test_generated  |  Results: test_results
+10:23:39 INFO 
+============================================================
+10:23:39 INFO [1/10] Running: 01_plumber (Waters & Sons Plumbing Services)
+10:23:39 INFO ============================================================
+10:23:39 INFO [01_plumber] Creating blank template...
+10:23:39 INFO [01_plumber] Blank template saved: test_templates\01_plumber_blank.docx
+10:23:39 INFO [01_plumber] Extracting brand DNA...
+10:23:39 INFO DOCX text extracted: 596 chars
+10:23:39 INFO DOCX primary color extracted from XML: 1B4F72
+10:23:39 INFO Calling Gemini for brand DNA extraction, content length: 1907 chars
+10:23:39 INFO AFC is enabled with max remote calls: 10.
+10:23:43 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:23:43 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Waters & Sons Plumbing Services",\n  "business_address": "14 Copper Lane, Birmingham, B3 2PQ",\n  "contact_details": "Tel: 0121 555 0190 | info@watersplumbing.co.uk",\n  "bank_info": "Bank: Lloyds Bank | Sort Code: 30-10-15 | Account No: 12345678",\n  "layout_preferences": null,\n  '
+10:23:43 INFO [01_plumber] Brand DNA extracted: business_name='Waters & Sons Plumbing Services', color='1B4F72'
+10:23:43 INFO [01_plumber] Building quote template (Gemini field mapping)...
+10:23:43 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:23:43 INFO Regex-matched field 'customer_address' in paragraph: '[Client Address]'
+10:23:43 INFO Regex-matched field 'quote_ref' in cell: '[Quote No.]'
+10:23:43 INFO Regex-matched field 'quote_date' in cell: '[Date]'
+10:23:43 INFO AFC is enabled with max remote calls: 10.
+10:23:49 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:23:49 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 6}, "customer_address": {"type": "paragraph", "paragraph_index": 7}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 2, "col_index": 1}}
+10:23:49 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:23:49 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:23:49 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:23:49 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:23:49 INFO [01_plumber] Processed template saved: test_templates\01_plumber_processed.docx
+10:23:49 INFO [01_plumber] Generating quote...
+10:23:49 INFO generate_from_template: rendering 3 line item(s) for 'Mr James Holloway'
+10:23:49 INFO Generated DOCX from template: generated_documents\01_plumber_generated.docx
+10:23:49 INFO [01_plumber] Quote generated: test_generated\01_plumber_generated.docx  subtotal=1885.00
+10:23:49 INFO 
+============================================================
+10:23:49 INFO [2/10] Running: 02_web_agency (Pixel Forge Studio)
+10:23:49 INFO ============================================================
+10:23:49 INFO [02_web_agency] Creating blank template...
+10:23:49 INFO [02_web_agency] Blank template saved: test_templates\02_web_agency_blank.docx
+10:23:49 INFO [02_web_agency] Extracting brand DNA...
+10:23:49 INFO DOCX text extracted: 502 chars
+10:23:49 INFO DOCX primary color extracted from XML: 2C3E50
+10:23:49 INFO Calling Gemini for brand DNA extraction, content length: 1813 chars
+10:23:49 INFO AFC is enabled with max remote calls: 10.
+10:23:55 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:23:55 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Pixel Forge Studio",\n  "business_address": "200 Design District, London, EC2A 4NE",\n  "contact_details": "Email: hello@pixelforge.io, Phone: +44 20 7946 0831",\n  "bank_info": "Bank: Monzo Business, Sort: 04-00-04, Account: 87654321",\n  "layout_preferences": "Business details at'
+10:23:55 INFO [02_web_agency] Brand DNA extracted: business_name='Pixel Forge Studio', color='2C3E50'
+10:23:55 INFO [02_web_agency] Building quote template (Gemini field mapping)...
+10:23:55 INFO Regex-matched field 'customer_name' in paragraph: '[Customer Name]'
+10:23:55 INFO Regex-matched field 'customer_address' in paragraph: '[Customer Address]'
+10:23:55 INFO Regex-matched field 'quote_ref' in cell: '[Invoice #]'
+10:23:55 INFO Regex-matched field 'quote_date' in cell: '[Invoice Date]'
+10:23:55 INFO AFC is enabled with max remote calls: 10.
+10:24:03 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:03 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 5}, "customer_address": {"type": "paragraph", "paragraph_index": 6}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": null, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}}
+10:24:03 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:24:03 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:03 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:03 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:24:03 INFO [02_web_agency] Processed template saved: test_templates\02_web_agency_processed.docx
+10:24:03 INFO [02_web_agency] Generating quote...
+10:24:03 INFO generate_from_template: rendering 3 line item(s) for 'Sarah Chen'
+10:24:03 INFO Generated DOCX from template: generated_documents\02_web_agency_generated.docx
+10:24:03 INFO [02_web_agency] Quote generated: test_generated\02_web_agency_generated.docx  subtotal=18100.00
+10:24:03 INFO 
+============================================================
+10:24:03 INFO [3/10] Running: 03_interior_design (Elara Interiors Ltd)
+10:24:03 INFO ============================================================
+10:24:03 INFO [03_interior_design] Creating blank template...
+10:24:03 INFO [03_interior_design] Blank template saved: test_templates\03_interior_design_blank.docx
+10:24:03 INFO [03_interior_design] Extracting brand DNA...
+10:24:03 INFO DOCX text extracted: 610 chars
+10:24:03 INFO DOCX primary color extracted from XML: 7D3C98
+10:24:03 INFO Calling Gemini for brand DNA extraction, content length: 1921 chars
+10:24:03 INFO AFC is enabled with max remote calls: 10.
+10:24:07 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:07 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Elara Interiors Ltd",\n  "business_address": "Suite 5, The Design Quarter, London, W1K 3JZ",\n  "contact_details": "studio@elarainteriors.co.uk | Tel: 020 3456 7890",\n  "bank_info": "Bank: HSBC | Sort Code: 40-05-30 | Account: 23456789",\n  "layout_preferences": "Clean, structured'
+10:24:07 INFO [03_interior_design] Brand DNA extracted: business_name='Elara Interiors Ltd', color='7D3C98'
+10:24:07 INFO [03_interior_design] Building quote template (Gemini field mapping)...
+10:24:07 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:24:07 INFO Regex-matched field 'customer_address' in paragraph: '[Client Address]'
+10:24:07 INFO Regex-matched field 'quote_ref' in cell: '[Quote No.]'
+10:24:07 INFO Regex-matched field 'quote_date' in cell: '[Quote Date]'
+10:24:07 INFO AFC is enabled with max remote calls: 10.
+10:24:14 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:14 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 5}, "customer_address": {"type": "paragraph", "paragraph_index": 6}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}}
+10:24:14 INFO Line items table 1: 4 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2, 3]
+10:24:14 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit', 3: 'unit_price', 4: 'total'}
+10:24:14 INFO Line items loop injected: 5 columns, col_map={0: 'description', 1: 'qty', 2: 'unit', 3: 'unit_price', 4: 'total'}
+10:24:14 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:24:14 INFO [03_interior_design] Processed template saved: test_templates\03_interior_design_processed.docx
+10:24:14 INFO [03_interior_design] Generating quote...
+10:24:14 INFO generate_from_template: rendering 4 line item(s) for 'Mrs Catherine Walsh'
+10:24:14 INFO Generated DOCX from template: generated_documents\03_interior_design_generated.docx
+10:24:14 INFO [03_interior_design] Quote generated: test_generated\03_interior_design_generated.docx  subtotal=5830.00
+10:24:14 INFO 
+============================================================
+10:24:14 INFO [4/10] Running: 04_construction (Blue Ridge Construction Pty Ltd)
+10:24:14 INFO ============================================================
+10:24:14 INFO [04_construction] Creating blank template...
+10:24:14 INFO [04_construction] Blank template saved: test_templates\04_construction_blank.docx
+10:24:14 INFO [04_construction] Extracting brand DNA...
+10:24:14 INFO DOCX text extracted: 608 chars
+10:24:14 INFO DOCX primary color extracted from XML: E67E22
+10:24:14 INFO Calling Gemini for brand DNA extraction, content length: 1919 chars
+10:24:14 INFO AFC is enabled with max remote calls: 10.
+10:24:21 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:21 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Blue Ridge Construction Pty Ltd",\n  "business_address": "Unit 3, 88 Industrial Drive, Fyshwick, ACT 2609",\n  "contact_details": "Phone: (02) 6123 4567 | admin@blueridgeconstruction.com.au",\n  "bank_info": "Bank: Commonwealth | BSB: 062-000 | Account: 34567890",\n  "layout_prefer'
+10:24:21 INFO [04_construction] Brand DNA extracted: business_name='Blue Ridge Construction Pty Ltd', color='E67E22'
+10:24:21 INFO [04_construction] Building quote template (Gemini field mapping)...
+10:24:21 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:24:21 INFO Regex-matched field 'quote_date' in cell: '[DD/MM/YYYY]'
+10:24:21 INFO AFC is enabled with max remote calls: 10.
+10:24:28 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:28 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 6}, "customer_address": {"type": "paragraph", "paragraph_index": 7}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 2, "col_index": 1}}
+10:24:28 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:24:28 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:28 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:28 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:24:28 INFO [04_construction] Processed template saved: test_templates\04_construction_processed.docx
+10:24:28 INFO [04_construction] Generating quote...
+10:24:28 INFO generate_from_template: rendering 3 line item(s) for 'David Nguyen'
+10:24:28 INFO Generated DOCX from template: generated_documents\04_construction_generated.docx
+10:24:28 INFO [04_construction] Quote generated: test_generated\04_construction_generated.docx  subtotal=25300.00
+10:24:28 INFO 
+============================================================
+10:24:28 INFO [5/10] Running: 05_accounting (Meridian Advisory Services)
+10:24:28 INFO ============================================================
+10:24:28 INFO [05_accounting] Creating blank template...
+10:24:29 INFO [05_accounting] Blank template saved: test_templates\05_accounting_blank.docx
+10:24:29 INFO [05_accounting] Extracting brand DNA...
+10:24:29 INFO DOCX text extracted: 577 chars
+10:24:29 INFO DOCX primary color extracted from XML: 154360
+10:24:29 INFO Calling Gemini for brand DNA extraction, content length: 1888 chars
+10:24:29 INFO AFC is enabled with max remote calls: 10.
+10:24:33 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:33 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Meridian Advisory Services",\n  "business_address": "Floor 7, City Tower, Manchester, M1 4BT",\n  "contact_details": "info@meridianadvisory.co.uk | 0161 234 5678",\n  "bank_info": "Bank: NatWest | Sort Code: 60-40-05 | Account: 45678901",\n  "layout_preferences": null,\n  "primary_c'
+10:24:33 INFO [05_accounting] Brand DNA extracted: business_name='Meridian Advisory Services', color='154360'
+10:24:33 INFO [05_accounting] Building quote template (Gemini field mapping)...
+10:24:33 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:24:33 INFO Regex-matched field 'customer_address' in paragraph: '[Client Address]'
+10:24:33 INFO Regex-matched field 'quote_ref' in cell: '[Invoice Number]'
+10:24:33 INFO Regex-matched field 'quote_date' in cell: '[Invoice Date]'
+10:24:33 INFO AFC is enabled with max remote calls: 10.
+10:24:39 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:39 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 6}, "customer_address": {"type": "paragraph", "paragraph_index": 7}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 2, "col_index": 1}}
+10:24:39 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:24:39 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:39 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:24:39 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:24:39 INFO [05_accounting] Processed template saved: test_templates\05_accounting_processed.docx
+10:24:39 INFO [05_accounting] Generating quote...
+10:24:39 INFO generate_from_template: rendering 2 line item(s) for 'Bourne Tech Limited'
+10:24:39 INFO Generated DOCX from template: generated_documents\05_accounting_generated.docx
+10:24:39 INFO [05_accounting] Quote generated: test_generated\05_accounting_generated.docx  subtotal=3000.00
+10:24:39 INFO 
+============================================================
+10:24:39 INFO [6/10] Running: 06_photography (Luminary Photography Co.)
+10:24:39 INFO ============================================================
+10:24:39 INFO [06_photography] Creating blank template...
+10:24:39 INFO [06_photography] Blank template saved: test_templates\06_photography_blank.docx
+10:24:39 INFO [06_photography] Extracting brand DNA...
+10:24:39 INFO DOCX text extracted: 493 chars
+10:24:39 INFO DOCX primary color extracted from XML: 2C3E50
+10:24:40 INFO Calling Gemini for brand DNA extraction, content length: 1804 chars
+10:24:40 INFO AFC is enabled with max remote calls: 10.
+10:24:42 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:42 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Luminary Photography Co.",\n  "business_address": "Studio 4, Lightworks Building, Edinburgh, EH1 1BB",\n  "contact_details": "hello@luminaryphoto.com | 07700 900 123",\n  "bank_info": "Bank: Starling Bank | Sort: 60-83-71 | Account: 56789012",\n  "layout_preferences": null,\n  "prim'
+10:24:42 INFO [06_photography] Brand DNA extracted: business_name='Luminary Photography Co.', color='2C3E50'
+10:24:42 INFO [06_photography] Building quote template (Gemini field mapping)...
+10:24:42 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:24:42 INFO Regex-matched field 'customer_address' in paragraph: '[Client Address]'
+10:24:42 INFO Regex-matched field 'quote_ref' in cell: '[Ref No.]'
+10:24:42 INFO Regex-matched field 'quote_date' in cell: '[Date]'
+10:24:42 INFO AFC is enabled with max remote calls: 10.
+10:24:49 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:49 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 5}, "customer_address": {"type": "paragraph", "paragraph_index": 6}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": null, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}}
+10:24:49 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:24:49 INFO Line items column field map (from headers): {0: 'description', 1: 'unit_price'}
+10:24:49 INFO Line items loop injected: 2 columns, col_map={0: 'description', 1: 'unit_price'}
+10:24:49 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:24:49 INFO [06_photography] Processed template saved: test_templates\06_photography_processed.docx
+10:24:49 INFO [06_photography] Generating quote...
+10:24:49 INFO generate_from_template: rendering 2 line item(s) for 'Emily & Marcos Reyes'
+10:24:49 INFO Generated DOCX from template: generated_documents\06_photography_generated.docx
+10:24:49 INFO [06_photography] Quote generated: test_generated\06_photography_generated.docx  subtotal=4000.00
+10:24:49 INFO 
+============================================================
+10:24:49 INFO [7/10] Running: 07_it_services (TechStream Solutions GmbH)
+10:24:49 INFO ============================================================
+10:24:49 INFO [07_it_services] Creating blank template...
+10:24:49 INFO [07_it_services] Blank template saved: test_templates\07_it_services_blank.docx
+10:24:49 INFO [07_it_services] Extracting brand DNA...
+10:24:49 INFO DOCX text extracted: 565 chars
+10:24:49 INFO DOCX primary color extracted from XML: 1E8449
+10:24:49 INFO Calling Gemini for brand DNA extraction, content length: 1876 chars
+10:24:49 INFO AFC is enabled with max remote calls: 10.
+10:24:54 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:24:54 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "TechStream Solutions GmbH",\n  "business_address": "Hauptstrasse 120, 10117 Berlin, Germany",\n  "contact_details": "info@techstream.de | +49 30 1234 5678",\n  "bank_info": "Bank: Deutsche Bank | IBAN: DE89 3704 0044 0532 0130 00 | BIC: COBADEFFXXX",\n  "layout_preferences": "Clean'
+10:24:54 INFO [07_it_services] Brand DNA extracted: business_name='TechStream Solutions GmbH', color='1E8449'
+10:24:54 INFO [07_it_services] Building quote template (Gemini field mapping)...
+10:24:54 INFO Regex-matched field 'customer_name' in paragraph: '[Customer Name]'
+10:24:54 INFO Regex-matched field 'customer_address' in paragraph: '[Customer Address]'
+10:24:54 INFO Regex-matched field 'quote_ref' in cell: '[Ref #]'
+10:24:54 INFO Regex-matched field 'quote_date' in cell: '[Date]'
+10:24:54 INFO AFC is enabled with max remote calls: 10.
+10:25:00 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:00 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 6}, "customer_address": {"type": "paragraph", "paragraph_index": 7}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}}
+10:25:00 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:25:00 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:00 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:00 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:25:00 INFO [07_it_services] Processed template saved: test_templates\07_it_services_processed.docx
+10:25:00 INFO [07_it_services] Generating quote...
+10:25:00 INFO generate_from_template: rendering 4 line item(s) for 'Brandt Manufacturing AG'
+10:25:00 INFO Generated DOCX from template: generated_documents\07_it_services_generated.docx
+10:25:00 INFO [07_it_services] Quote generated: test_generated\07_it_services_generated.docx  subtotal=10960.00
+10:25:00 INFO 
+============================================================
+10:25:00 INFO [8/10] Running: 08_landscaping (GreenPath Landscapes Ltd)
+10:25:00 INFO ============================================================
+10:25:00 INFO [08_landscaping] Creating blank template...
+10:25:00 INFO [08_landscaping] Blank template saved: test_templates\08_landscaping_blank.docx
+10:25:00 INFO [08_landscaping] Extracting brand DNA...
+10:25:00 INFO DOCX text extracted: 569 chars
+10:25:00 INFO DOCX primary color extracted from XML: 186A3B
+10:25:00 INFO Calling Gemini for brand DNA extraction, content length: 1880 chars
+10:25:00 INFO AFC is enabled with max remote calls: 10.
+10:25:04 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:04 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "GreenPath Landscapes Ltd",\n  "business_address": "34 Okarito Place, Christchurch, Canterbury 8082",\n  "contact_details": "info@greenpathlandscapes.co.nz | 03 379 4567",\n  "bank_info": "Bank: ASB Bank | Account: 12-3456-7890123-00",\n  "layout_preferences": null,\n  "primary_color'
+10:25:04 INFO [08_landscaping] Brand DNA extracted: business_name='GreenPath Landscapes Ltd', color='186A3B'
+10:25:04 INFO [08_landscaping] Building quote template (Gemini field mapping)...
+10:25:04 INFO Regex-matched field 'customer_name' in paragraph: '[Customer Name]'
+10:25:04 INFO Regex-matched field 'quote_ref' in cell: '[Quote No.]'
+10:25:04 INFO Regex-matched field 'quote_date' in cell: '[Date]'
+10:25:04 INFO AFC is enabled with max remote calls: 10.
+10:25:10 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:10 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 6}, "customer_address": {"type": "paragraph", "paragraph_index": 7}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 2, "col_index": 1}}
+10:25:10 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:25:10 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:10 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:10 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:25:10 INFO [08_landscaping] Processed template saved: test_templates\08_landscaping_processed.docx
+10:25:10 INFO [08_landscaping] Generating quote...
+10:25:10 INFO generate_from_template: rendering 3 line item(s) for 'Fiona & Stuart MacPherson'
+10:25:10 INFO Generated DOCX from template: generated_documents\08_landscaping_generated.docx
+10:25:10 INFO [08_landscaping] Quote generated: test_generated\08_landscaping_generated.docx  subtotal=1655.00
+10:25:10 INFO 
+============================================================
+10:25:10 INFO [9/10] Running: 09_event_planning (Occasions Unlimited Events)
+10:25:10 INFO ============================================================
+10:25:10 INFO [09_event_planning] Creating blank template...
+10:25:10 INFO [09_event_planning] Blank template saved: test_templates\09_event_planning_blank.docx
+10:25:10 INFO [09_event_planning] Extracting brand DNA...
+10:25:10 INFO DOCX text extracted: 605 chars
+10:25:10 INFO DOCX primary color extracted from XML: 117A65
+10:25:10 INFO Calling Gemini for brand DNA extraction, content length: 1916 chars
+10:25:10 INFO AFC is enabled with max remote calls: 10.
+10:25:18 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:18 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Occasions Unlimited Events",\n  "business_address": "Floor 12, Rockefeller Plaza, New York, NY 10020",\n  "contact_details": "events@occasionsunlimited.com | +1 (212) 555-0147",\n  "bank_info": "Bank: Chase | Routing: 021000021 | Account: 67890123",\n  "layout_preferences": null,\n '
+10:25:18 INFO [09_event_planning] Brand DNA extracted: business_name='Occasions Unlimited Events', color='117A65'
+10:25:18 INFO [09_event_planning] Building quote template (Gemini field mapping)...
+10:25:18 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:25:18 INFO Regex-matched field 'customer_address' in paragraph: '[Client Address]'
+10:25:18 INFO Regex-matched field 'quote_date' in cell: '[Quote Date]'
+10:25:18 INFO AFC is enabled with max remote calls: 10.
+10:25:24 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:24 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 5}, "customer_address": {"type": "paragraph", "paragraph_index": 6}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}}
+10:25:24 INFO Line items table 1: 4 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2, 3]
+10:25:24 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:24 INFO Line items loop injected: 4 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price', 3: 'total'}
+10:25:24 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:25:24 INFO [09_event_planning] Processed template saved: test_templates\09_event_planning_processed.docx
+10:25:24 INFO [09_event_planning] Generating quote...
+10:25:24 INFO generate_from_template: rendering 5 line item(s) for 'Apex Financial Group'
+10:25:24 INFO Generated DOCX from template: generated_documents\09_event_planning_generated.docx
+10:25:24 INFO [09_event_planning] Quote generated: test_generated\09_event_planning_generated.docx  subtotal=21400.00
+10:25:24 INFO 
+============================================================
+10:25:24 INFO [10/10] Running: 10_legal_services (Thornton & Associates Solicitors)
+10:25:24 INFO ============================================================
+10:25:24 INFO [10_legal_services] Creating blank template...
+10:25:24 INFO [10_legal_services] Blank template saved: test_templates\10_legal_services_blank.docx
+10:25:24 INFO [10_legal_services] Extracting brand DNA...
+10:25:24 INFO DOCX text extracted: 523 chars
+10:25:24 INFO DOCX primary color extracted from XML: 641E16
+10:25:24 INFO Calling Gemini for brand DNA extraction, content length: 1834 chars
+10:25:24 INFO AFC is enabled with max remote calls: 10.
+10:25:28 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:28 INFO Brand DNA raw response (first 300 chars): '{\n  "business_name": "Thornton & Associates Solicitors",\n  "business_address": "4 Gray\'s Inn Square, London, WC1R 5AH",\n  "contact_details": "enquiries@thorntonlaw.co.uk | 020 7242 8910",\n  "bank_info": "Bank: Barclays | Sort Code: 20-00-00 | Account: 78901234",\n  "layout_preferences": null,\n  "prim'
+10:25:28 INFO [10_legal_services] Brand DNA extracted: business_name='Thornton & Associates Solicitors', color='641E16'
+10:25:28 INFO [10_legal_services] Building quote template (Gemini field mapping)...
+10:25:28 INFO Regex-matched field 'customer_name' in paragraph: '[Client Name]'
+10:25:28 INFO Regex-matched field 'customer_address' in paragraph: '[Address]'
+10:25:28 INFO Regex-matched field 'quote_date' in cell: '[Date]'
+10:25:28 INFO AFC is enabled with max remote calls: 10.
+10:25:34 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:34 INFO Gemini field_map: {"customer_name": {"type": "paragraph", "paragraph_index": 5}, "customer_address": {"type": "paragraph", "paragraph_index": 6}, "quote_ref": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 1}, "quote_date": {"type": "table", "table_index": 0, "row_index": 0, "col_index": 3}, "line_items_table_index": 1, "line_item_header_rows": [0], "subtotal_value_location": {"type": "table", "table_index": 2, "row_index": 0, "col_index": 1}, "tax_amount_value_location": null, "grand_total_value_location": {"type": "table", "table_index": 2, "row_index": 1, "col_index": 1}}
+10:25:34 INFO Line items table 1: 3 rows, header_rows={0}, protected_rows=set(), data_rows=[1, 2]
+10:25:34 INFO Line items column field map (from headers): {0: 'description', 1: 'qty', 2: 'unit_price'}
+10:25:34 INFO Line items loop injected: 3 columns, col_map={0: 'description', 1: 'qty', 2: 'unit_price'}
+10:25:34 INFO Placeholder sweep cleared 1 remaining bracket field(s)
+10:25:34 INFO [10_legal_services] Processed template saved: test_templates\10_legal_services_processed.docx
+10:25:34 INFO [10_legal_services] Generating quote...
+10:25:34 INFO generate_from_template: rendering 2 line item(s) for 'Mr & Mrs Philip Drummond'
+10:25:34 INFO Generated DOCX from template: generated_documents\10_legal_services_generated.docx
+10:25:34 INFO [10_legal_services] Quote generated: test_generated\10_legal_services_generated.docx  subtotal=1850.00
+10:25:34 INFO 
+============================================================
+10:25:34 INFO Pipeline complete. Running analysis...
+10:25:34 INFO ============================================================
+
+10:25:34 INFO Analysing: 01_plumber...
+10:25:34 INFO AFC is enabled with max remote calls: 10.
+10:25:42 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:42 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:25:42 INFO Analysing: 02_web_agency...
+10:25:42 INFO AFC is enabled with max remote calls: 10.
+10:25:46 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:46 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:25:46 INFO Analysing: 03_interior_design...
+10:25:46 INFO AFC is enabled with max remote calls: 10.
+10:25:52 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:52 INFO   \u2192 Score: 46/50  |  Errors: 0
+10:25:52 INFO Analysing: 04_construction...
+10:25:53 INFO AFC is enabled with max remote calls: 10.
+10:25:58 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:25:58 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:25:58 INFO Analysing: 05_accounting...
+10:25:58 INFO AFC is enabled with max remote calls: 10.
+10:26:07 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:26:07 INFO   \u2192 Score: 45/50  |  Errors: 0
+10:26:07 INFO Analysing: 06_photography...
+10:26:07 INFO AFC is enabled with max remote calls: 10.
+10:26:13 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:26:13 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:26:13 INFO Analysing: 07_it_services...
+10:26:13 INFO AFC is enabled with max remote calls: 10.
+10:26:15 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 503 Service Unavailable"
+10:26:15 WARNING Gemini client readiness scoring failed for 07_it_services: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+10:26:15 INFO   \u2192 Score: 45/50  |  Errors: 0
+10:26:15 INFO Analysing: 08_landscaping...
+10:26:15 INFO AFC is enabled with max remote calls: 10.
+10:26:19 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:26:19 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:26:19 INFO Analysing: 09_event_planning...
+10:26:19 INFO AFC is enabled with max remote calls: 10.
+10:26:25 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:26:25 INFO   \u2192 Score: 50/50  |  Errors: 0
+10:26:25 INFO Analysing: 10_legal_services...
+10:26:25 INFO AFC is enabled with max remote calls: 10.
+10:26:33 INFO HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+10:26:33 INFO   \u2192 Score: 47/50  |  Errors: 0
+10:26:33 INFO Report written: test_results\quote_test_analysis.md
+
+============================================================
+TEST RESULTS SUMMARY
+============================================================
+Template                   Total  Status
+---------------------------------------------
+01_plumber                   50/50  PASS
+02_web_agency                50/50  PASS
+03_interior_design           46/50  PASS
+04_construction              50/50  PASS
+05_accounting                45/50  PASS
+06_photography               50/50  PASS
+07_it_services               45/50  PASS
+08_landscaping               50/50  PASS
+09_event_planning            50/50  PASS
+10_legal_services            47/50  PASS
+
+Report: D:\Antigravity\Quote App\test_results\quote_test_analysis.md

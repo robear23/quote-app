@@ -13,6 +13,16 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+try:
+    import sentry_sdk as _sentry
+except ImportError:
+    _sentry = None
+
+
+def _capture(e: Exception):
+    if _sentry and settings.SENTRY_DSN:
+        _sentry.capture_exception(e)
+
 client = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
 if not client:
     logger.warning("GEMINI_API_KEY not found in environment.")
@@ -188,6 +198,7 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
                 logger.warning(f"Gemini {MODEL} transient error (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {wait_time:.1f}s: {e}")
                 time.sleep(wait_time)
             else:
+                _capture(e)
                 raise
 
     logger.warning(f"{MODEL} exhausted after {MAX_RETRIES} attempts, trying fallback {FALLBACK_MODEL}")
@@ -200,6 +211,7 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
                 logger.warning(f"Gemini {FALLBACK_MODEL} transient error (attempt {attempt + 1}/2), retrying in {wait_time:.1f}s: {e}")
                 time.sleep(wait_time)
             else:
+                _capture(e)
                 raise
 
     raise RateLimitError("Gemini API is unavailable — please try again in a moment.")
@@ -409,6 +421,7 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"Failed to extract brand DNA: {e}", exc_info=True)
+            _capture(e)
             return None
 
     @staticmethod
@@ -421,6 +434,7 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"Failed to generate quote data: {e}")
+            _capture(e)
             return {}
 
     @staticmethod
@@ -458,6 +472,7 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"Failed to process voice note: {e}")
+            _capture(e)
             return {}
 
     @staticmethod
@@ -479,6 +494,7 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"Failed to extract quote from image: {e}")
+            _capture(e)
             return {}
 
     @staticmethod
@@ -502,6 +518,7 @@ class AIService:
             raise
         except Exception as e:
             logger.error(f"Failed to refine quote: {e}")
+            _capture(e)
             return {"confirmed": True, "updated_quote": current_quote}
 
     @staticmethod
@@ -634,6 +651,7 @@ class AIService:
             field_map = json.loads(response.text)
         except Exception as e:
             logger.error(f"Gemini template mapping failed: {e}")
+            _capture(e)
             return None
 
         def _inject_location(loc, placeholder: str):

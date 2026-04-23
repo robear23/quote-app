@@ -11,6 +11,16 @@ from config import settings
 import database
 from ai_service import AIService, RateLimitError, run_ai  # noqa: F401 (run_ai re-exported)
 
+try:
+    import sentry_sdk as _sentry
+except ImportError:
+    _sentry = None
+
+
+def _sentry_user(db_user: dict | None):
+    if _sentry and settings.SENTRY_DSN and db_user:
+        _sentry.set_user({"id": db_user.get("id"), "email": db_user.get("email")})
+
 
 async def run_ai_notify(func, *args, msg=None):
     """Like run_ai, but updates msg after 10s so the user knows we're still working."""
@@ -347,6 +357,8 @@ async def generate_and_send_quote(
             raise RuntimeError("Generated file not found on disk")
     except Exception as e:
         logger.error(f"Document generation failed: {e}")
+        if _sentry and settings.SENTRY_DSN:
+            _sentry.capture_exception(e)
         if doc_id:
             try:
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
@@ -612,6 +624,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Please register first at our website.")
         return
 
+    _sentry_user(db_user)
+
     state = db_user.get("bot_state")
 
     if state == "ONBOARDING":
@@ -791,6 +805,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("Please register first at our website.")
         return
 
+    _sentry_user(db_user)
     state = db_user.get("bot_state")
 
     # ------------------------------------------------------------------
@@ -1020,6 +1035,7 @@ async def handle_confirm_yes(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_reply_markup(reply_markup=None)
         return
 
+    _sentry_user(db_user)
     pending_quote = db_user.get("pending_quote")
     pending_brand_dna = db_user.get("pending_brand_dna")
 

@@ -15,8 +15,10 @@ import os
 import re
 import sys
 import json
+import random
 import shutil
 import logging
+import argparse
 import traceback
 from pathlib import Path
 from datetime import date, datetime
@@ -360,6 +362,71 @@ TEMPLATES = [
     },
 ]
 
+# Synthetic quote data pool — cycled over when running against real user templates.
+_SYNTH_QUOTE_POOL = [t["quote_data"] for t in TEMPLATES]
+_SYNTH_CURRENCY_POOL = [(t["currency"], t["tax_rate"]) for t in TEMPLATES]
+
+
+def load_existing_templates(max_count: int = 10) -> list[dict]:
+    """
+    Fetch real user blank templates from Supabase Storage.
+    Returns a list of minimal config dicts ready for run_pipeline().
+    """
+    from supabase import create_client as _sb_create
+
+    log.info("Connecting to Supabase to list user templates...")
+    try:
+        sb = _sb_create(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+        user_dirs = sb.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).list("templates")
+    except Exception as e:
+        log.error(f"Failed to list Supabase templates bucket: {e}")
+        return []
+
+    # Each entry is a folder named by user UUID
+    user_ids = [item["name"] for item in user_dirs if item.get("name") and "." not in item["name"]]
+    if not user_ids:
+        log.warning("No user template folders found in Supabase.")
+        return []
+
+    random.shuffle(user_ids)
+    log.info(f"Found {len(user_ids)} user template folder(s) — sampling up to {max_count}.")
+
+    templates = []
+    for user_id in user_ids:
+        if len(templates) >= max_count:
+            break
+        storage_path = f"templates/{user_id}/blank_template.docx"
+        try:
+            data = sb.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).download(storage_path)
+        except Exception:
+            log.warning(f"No blank_template.docx for user {user_id} — skipping.")
+            continue
+
+        n = len(templates) + 1
+        tid = f"existing_{n:02d}"
+        local_path = TEMPLATES_DIR / f"{tid}_blank.docx"
+        local_path.write_bytes(data)
+        log.info(f"Downloaded: {storage_path} → {local_path}")
+
+        # Borrow currency/tax/quote_data from the synthetic pool (cycling)
+        idx = (n - 1) % len(_SYNTH_QUOTE_POOL)
+        currency, tax_rate = _SYNTH_CURRENCY_POOL[idx]
+        quote_data = _SYNTH_QUOTE_POOL[idx]
+
+        templates.append({
+            "id": tid,
+            "business_name": None,   # unknown — skip in fidelity scoring
+            "business_address": None,
+            "columns": ["(unknown)"],
+            "currency": currency,
+            "tax_rate": tax_rate,
+            "quote_data": quote_data,
+            "blank_path_override": local_path,
+        })
+
+    log.info(f"Loaded {len(templates)} existing template(s) from Supabase.")
+    return templates
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOCX TEMPLATE CREATION HELPERS
@@ -545,18 +612,22 @@ def run_pipeline(t: dict) -> dict:
         "warnings": [],
     }
 
-    # Step 1: Create blank template
-    log.info(f"[{tid}] Creating blank template...")
-    blank_path = TEMPLATES_DIR / f"{tid}_blank.docx"
-    try:
-        doc = create_template_doc(t)
-        doc.save(str(blank_path))
+    # Step 1: Create blank template (skipped for existing/real-user templates)
+    blank_path = t.get("blank_path_override") or TEMPLATES_DIR / f"{tid}_blank.docx"
+    if t.get("blank_path_override"):
+        log.info(f"[{tid}] Using pre-downloaded blank template: {blank_path}")
         result["blank_path"] = blank_path
-        log.info(f"[{tid}] Blank template saved: {blank_path}")
-    except Exception as e:
-        result["errors"].append(f"Template creation failed: {e}")
-        log.error(f"[{tid}] Template creation error: {e}")
-        return result
+    else:
+        log.info(f"[{tid}] Creating blank template...")
+        try:
+            doc = create_template_doc(t)
+            doc.save(str(blank_path))
+            result["blank_path"] = blank_path
+            log.info(f"[{tid}] Blank template saved: {blank_path}")
+        except Exception as e:
+            result["errors"].append(f"Template creation failed: {e}")
+            log.error(f"[{tid}] Template creation error: {e}")
+            return result
 
     # Step 2: Extract brand DNA
     log.info(f"[{tid}] Extracting brand DNA...")
@@ -719,20 +790,23 @@ def score_calculations(
     return score, issues
 
 
-def score_template_fidelity(text: str, brand_dna: dict, t: dict) -> tuple[int, list[str]]:
+def score_template_fidelity(text: str, t: dict) -> tuple[int, list[str]]:
     """Score 0-10: verify template business identity is preserved in the output."""
     issues = []
-    checks = [
-        (t["business_name"], "business name"),
-        (t.get("business_address", "").split(",")[0], "business address (first part)"),
-    ]
-
     found = 0
-    for needle, label in checks:
-        if needle and needle.lower() in text.lower():
-            found += 1
-        else:
-            issues.append(f"Template identity field not found — {label}: '{needle}'")
+    total_checks = 1  # always check customer name
+
+    # Business identity checks — skipped for real-user templates where name is unknown
+    if t.get("business_name"):
+        total_checks += 2
+        for needle, label in [
+            (t["business_name"], "business name"),
+            (t.get("business_address", "").split(",")[0], "business address (first part)"),
+        ]:
+            if needle and needle.lower() in text.lower():
+                found += 1
+            else:
+                issues.append(f"Template identity field not found — {label}: '{needle}'")
 
     # Check customer name was injected
     cust = t["quote_data"]["customer_name"]
@@ -741,7 +815,7 @@ def score_template_fidelity(text: str, brand_dna: dict, t: dict) -> tuple[int, l
     else:
         issues.append(f"Customer name not injected: '{cust}'")
 
-    score = round((found / 3) * 10)
+    score = round((found / total_checks) * 10)
     return score, issues
 
 
@@ -792,7 +866,6 @@ def analyze_result(result: dict) -> dict:
     t = result["config"]
     sym = _sym(t["currency"])
     tax_rate = t["tax_rate"]
-    brand_dna = result.get("brand_dna") or {}
 
     analysis = {
         "id": result["id"],
@@ -814,7 +887,7 @@ def analyze_result(result: dict) -> dict:
     s1, i1 = score_placeholder_accuracy(gen_text)
     s2, i2 = score_line_items(gen_text, t["quote_data"], sym)
     s3, i3 = score_calculations(gen_text, t["quote_data"], tax_rate, sym)
-    s4, i4 = score_template_fidelity(gen_text, brand_dna, t)
+    s4, i4 = score_template_fidelity(gen_text, t)
     s5, reasoning5, i5 = score_client_readiness_gemini(blank_text, gen_text, t["id"])
 
     analysis["scores"] = {
@@ -903,8 +976,11 @@ def write_report(results: list[dict], analyses: list[dict], run_date: str):
         scores = analysis.get("scores", {})
         total = scores.get("total", 0)
 
+        biz = t.get("business_name") or "(real user template)"
+        cols = t.get("columns", ["(unknown)"])
+        col_str = "(detected by AI)" if cols == ["(unknown)"] else ", ".join(cols)
         lines.append(f"### {tid}")
-        lines.append(f"**Business:** {t['business_name']}  |  **Currency:** {t['currency']}  |  **Tax:** {t['tax_rate']}%  |  **Columns:** {', '.join(t['columns'])}\n")
+        lines.append(f"**Business:** {biz}  |  **Currency:** {t['currency']}  |  **Tax:** {t['tax_rate']}%  |  **Columns:** {col_str}\n")
 
         if analysis.get("errors"):
             lines.append(f"**Pipeline Errors:**")
@@ -974,16 +1050,37 @@ def write_report(results: list[dict], analyses: list[dict], run_date: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    parser = argparse.ArgumentParser(description="Quote generation test suite")
+    parser.add_argument(
+        "--mode",
+        choices=["new", "existing"],
+        default="new",
+        help=(
+            "new: create 10 synthetic DOCX templates from config (default); "
+            "existing: fetch up to 10 real user templates from Supabase Storage"
+        ),
+    )
+    args, _ = parser.parse_known_args()
+
     run_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    log.info(f"=== Quote Generation Test Suite — {run_date} ===")
+    log.info(f"=== Quote Generation Test Suite — {run_date} (mode: {args.mode}) ===")
     log.info(f"Templates: {TEMPLATES_DIR}  |  Generated: {GENERATED_DIR}  |  Results: {RESULTS_DIR}")
+
+    if args.mode == "existing":
+        templates_to_run = load_existing_templates(max_count=10)
+        if not templates_to_run:
+            log.error("No existing templates found — aborting. Try --mode new instead.")
+            sys.exit(1)
+    else:
+        templates_to_run = TEMPLATES
 
     results = []
     analyses = []
 
-    for i, t in enumerate(TEMPLATES, 1):
+    for i, t in enumerate(templates_to_run, 1):
         log.info(f"\n{'='*60}")
-        log.info(f"[{i}/{len(TEMPLATES)}] Running: {t['id']} ({t['business_name']})")
+        biz = t.get("business_name") or "(real user template)"
+        log.info(f"[{i}/{len(templates_to_run)}] Running: {t['id']} ({biz})")
         log.info(f"{'='*60}")
         result = run_pipeline(t)
         results.append(result)
