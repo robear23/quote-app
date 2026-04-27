@@ -603,23 +603,32 @@ async def create_checkout_session(request: Request):
         logger.error(f"DB error in checkout: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    # Reuse existing Stripe customer or create one
-    customer_id = user.get("stripe_customer_id")
-    if not customer_id:
-        try:
-            customer = stripe.Customer.create(email=user["email"], metadata={"user_id": user_id})
-            customer_id = customer.id
-            await database.supabase.table("users").update({"stripe_customer_id": customer_id}).eq("id", user_id).execute()
-        except stripe.StripeError as e:
-            logger.error(f"Stripe customer creation failed: {e}")
-            raise HTTPException(status_code=502, detail="Payment provider error")
+    async def _get_or_create_customer(cid: str | None) -> str:
+        if cid:
+            try:
+                await asyncio.to_thread(stripe.Customer.retrieve, cid)
+                return cid
+            except stripe.InvalidRequestError:
+                logger.warning(f"Stale Stripe customer {cid} not found in live mode — creating new one")
+                await database.supabase.table("users").update({"stripe_customer_id": None}).eq("id", user_id).execute()
+        customer = await asyncio.to_thread(stripe.Customer.create, email=user["email"], metadata={"user_id": user_id})
+        await database.supabase.table("users").update({"stripe_customer_id": customer.id}).eq("id", user_id).execute()
+        return customer.id
 
     try:
-        session = stripe.checkout.Session.create(
+        customer_id = await _get_or_create_customer(user.get("stripe_customer_id"))
+    except stripe.StripeError as e:
+        logger.error(f"Stripe customer creation failed: {e}")
+        raise HTTPException(status_code=502, detail="Payment provider error")
+
+    try:
+        session = await asyncio.to_thread(
+            stripe.checkout.Session.create,
             customer=customer_id,
             payment_method_types=["card"],
             line_items=[{"price": settings.STRIPE_PREMIUM_PRICE_ID, "quantity": 1}],
             mode="subscription",
+            allow_promotion_codes=True,
             success_url=f"{settings.APP_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{settings.APP_URL}/account",
             metadata={"user_id": user_id},
