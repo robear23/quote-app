@@ -448,7 +448,7 @@
         const planDescs = {
             premium: isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month',
             pro: isCancelling ? '25 quotes per month — access until end of billing period' : '25 quotes per month',
-            free: '5 quotes per month — upgrade for more',
+            free: `${d.monthly_limit} quotes per month — upgrade for more`,
         };
         document.getElementById('planName').textContent = planNames[tier] || 'Free';
         document.getElementById('planDesc').textContent = planDescs[tier] || planDescs.free;

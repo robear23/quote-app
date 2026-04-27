@@ -534,10 +534,14 @@ async def api_account(request: Request):
         logger.error(f"Failed to load user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier, get_billing_period_start
+    from subscription_service import get_user_tier, get_monthly_usage, monthly_limit_for_tier, get_billing_period_start, get_active_extra_quotes_limit
     tier = await get_user_tier(user_id)
     usage = await get_monthly_usage(user_id)
     limit = monthly_limit_for_tier(tier)
+    if tier == "free":
+        promo_limit = await get_active_extra_quotes_limit(user_id)
+        if promo_limit is not None:
+            limit = promo_limit
     period_start = await get_billing_period_start(user_id)
     logger.info(f"Account API: user_id={user_id} email={user.get('email')} telegram_id={user.get('telegram_id')} usage={usage}/{limit}")
 
