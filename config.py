@@ -27,6 +27,8 @@ class Settings:
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
     # Price ID for the £10/month Premium plan — create in Stripe dashboard
     STRIPE_PREMIUM_PRICE_ID: str = os.getenv("STRIPE_PREMIUM_PRICE_ID", "").strip()
+    # Price ID for the £5/month Pro plan — create in Stripe dashboard
+    STRIPE_PRO_PRICE_ID: str = os.getenv("STRIPE_PRO_PRICE_ID", "").strip()
 
     # Supabase Storage bucket for generated quote documents
     SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")

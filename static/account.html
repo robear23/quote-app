@@ -87,10 +87,12 @@
             font-size: 0.82rem; font-weight: 700; letter-spacing: 0.04em;
         }
         .plan-pill-free { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.25); color: var(--secondary); }
+        .plan-pill-pro { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.4); color: #6ee7b7; }
         .plan-pill-premium { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.4); color: #93c5fd; }
         .plan-pill-cancelling { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: #fcd34d; }
         .plan-pill-dot { width: 7px; height: 7px; border-radius: 50%; }
         .pill-free .plan-pill-dot { background: var(--muted); }
+        .pill-pro .plan-pill-dot { background: var(--success); }
         .pill-premium .plan-pill-dot { background: var(--accent); }
         .pill-cancelling .plan-pill-dot { background: #f59e0b; }
 
@@ -273,18 +275,35 @@
             </div>
         </div>
 
-        <!-- Upgrade card (free users only) -->
-        <div class="card upgrade-card" id="upgradeCard">
+        <!-- Upgrade to Pro card (free users only) -->
+        <div class="card upgrade-card" id="upgradeProCard" style="background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.08)); border-color: rgba(16,185,129,0.25);">
+            <div class="upgrade-grid">
+                <div>
+                    <h3>Upgrade to Pro</h3>
+                    <p>Get 25 quotes every month — great for tradespeople quoting a few jobs a week.</p>
+                </div>
+                <div class="upgrade-price">
+                    <div class="price">£5</div>
+                    <div class="period">per month</div>
+                    <button class="btn btn-primary btn-sm" id="upgradeProBtn" onclick="startCheckout('pro')" style="background: var(--success); box-shadow: 0 6px 20px rgba(16,185,129,0.3);">
+                        Upgrade to Pro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upgrade to Premium card (free and pro users) -->
+        <div class="card upgrade-card" id="upgradePremiumCard">
             <div class="upgrade-grid">
                 <div>
                     <h3>Upgrade to Premium</h3>
-                    <p>Get 10× more quotes every month — perfect for busy tradespeople who quote daily.</p>
+                    <p>Get 100 quotes every month — perfect for busy tradespeople who quote daily.</p>
                 </div>
                 <div class="upgrade-price">
                     <div class="price">£10</div>
                     <div class="period">per month</div>
-                    <button class="btn btn-primary btn-sm" id="upgradeBtn" onclick="startCheckout()">
-                        Upgrade now
+                    <button class="btn btn-primary btn-sm" id="upgradePremiumBtn" onclick="startCheckout('premium')">
+                        Upgrade to Premium
                     </button>
                 </div>
             </div>
@@ -376,24 +395,24 @@
             }
 
             // If we just came back from Stripe but the webhook hasn't fired yet,
-            // poll until the tier flips to premium (up to ~15s).
-            if (justUpgraded && result.data.subscription_tier !== 'premium') {
+            // poll until the tier flips away from free (up to ~15s).
+            if (justUpgraded && result.data.subscription_tier === 'free') {
                 const loadingEl = document.getElementById('stateLoading');
                 loadingEl.querySelector('p').textContent = 'Confirming your upgrade…';
                 const deadline = Date.now() + 15000;
-                while (Date.now() < deadline && result.data.subscription_tier !== 'premium') {
+                while (Date.now() < deadline && result.data.subscription_tier === 'free') {
                     await new Promise(r => setTimeout(r, 1500));
                     result = await fetchAccount();
                 }
             }
 
             // If polling timed out and still free, try a direct Stripe sync as fallback.
-            if (justUpgraded && result.data.subscription_tier !== 'premium') {
+            if (justUpgraded && result.data.subscription_tier === 'free') {
                 try {
                     document.getElementById('stateLoading').querySelector('p').textContent = 'Syncing with Stripe…';
                     const syncRes = await fetch('/api/sync-subscription', { method: 'POST', credentials: 'include' });
                     const syncData = await syncRes.json();
-                    if (syncData.tier === 'premium') {
+                    if (syncData.tier !== 'free') {
                         result = await fetchAccount();
                     }
                 } catch (e) {
@@ -420,12 +439,19 @@
             `<form method="POST" action="/auth/logout" style="margin:0"><button type="submit" class="nav-logout">Sign out</button></form>`;
 
         // Plan
-        const isPremium = d.subscription_tier === 'premium';
-        const isCancelling = isPremium && d.cancel_at_period_end;
-        document.getElementById('planName').textContent = isPremium ? 'Premium' : 'Free';
-        document.getElementById('planDesc').textContent = isPremium
-            ? (isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month')
-            : '10 quotes per month — upgrade for more';
+        const tier = d.subscription_tier;
+        const isPremium = tier === 'premium';
+        const isPro = tier === 'pro';
+        const isPaid = isPremium || isPro;
+        const isCancelling = isPaid && d.cancel_at_period_end;
+        const planNames = { premium: 'Premium', pro: 'Pro', free: 'Free' };
+        const planDescs = {
+            premium: isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month',
+            pro: isCancelling ? '25 quotes per month — access until end of billing period' : '25 quotes per month',
+            free: '5 quotes per month — upgrade for more',
+        };
+        document.getElementById('planName').textContent = planNames[tier] || 'Free';
+        document.getElementById('planDesc').textContent = planDescs[tier] || planDescs.free;
 
         const pill = document.getElementById('planPill');
         const pillText = document.getElementById('planPillText');
@@ -435,6 +461,9 @@
         } else if (isPremium) {
             pill.className = 'plan-pill plan-pill-premium pill-premium';
             pillText.textContent = 'Premium';
+        } else if (isPro) {
+            pill.className = 'plan-pill plan-pill-pro pill-pro';
+            pillText.textContent = 'Pro';
         }
 
         // Usage bar
@@ -445,9 +474,9 @@
         setTimeout(() => { bar.style.width = pct + '%'; }, 50);
         if (pct >= 80) bar.classList.add('near-limit');
 
-        // Usage reset date — billing anniversary for premium, 1st of month for free
+        // Usage reset date — billing anniversary for paid plans, 1st of month for free
         if (d.billing_period_start) {
-            if (isPremium && !isCancelling) {
+            if (isPaid && !isCancelling) {
                 const resetLabel = d.subscription_period_end
                     ? new Date(d.subscription_period_end).toLocaleDateString('en-GB', { day:'numeric', month:'long' })
                     : null;
@@ -463,14 +492,19 @@
         if (isCancelling && d.subscription_period_end) {
             const end = new Date(d.subscription_period_end);
             const endLabel = end.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+            const planLabel = isPremium ? 'Premium' : 'Pro';
             document.getElementById('cancelNotice').style.display = 'flex';
             document.getElementById('cancelNoticeText').innerHTML =
-                `<strong>Subscription cancelled.</strong> You still have full Premium access until <strong>${endLabel}</strong>. After that, your account will switch to the Free plan.`;
+                `<strong>Subscription cancelled.</strong> You still have full ${planLabel} access until <strong>${endLabel}</strong>. After that, your account will switch to the Free plan.`;
         }
 
         // Upgrade / billing cards
-        document.getElementById('upgradeCard').style.display = isPremium ? 'none' : 'block';
-        document.getElementById('billingCard').style.display = isPremium ? 'block' : 'none';
+        // Free → show both Pro and Premium upgrade options
+        // Pro → show only Premium upgrade option (+ billing)
+        // Premium → show only billing
+        document.getElementById('upgradeProCard').style.display = (tier === 'free') ? 'block' : 'none';
+        document.getElementById('upgradePremiumCard').style.display = (tier === 'free' || isPro) ? 'block' : 'none';
+        document.getElementById('billingCard').style.display = isPaid ? 'block' : 'none';
 
         // Telegram
         document.getElementById('telegramBtn').href = d.telegram_url;
@@ -486,35 +520,40 @@
         // Success toast (after upgrade redirect) — only if tier actually flipped
         const params = new URLSearchParams(window.location.search);
         if (params.get('upgraded') === '1') {
-            if (isPremium) {
-                showToast('🎉 Welcome to Premium! Enjoy 100 quotes/month.');
-            }
+            if (isPremium) showToast('🎉 Welcome to Premium! Enjoy 100 quotes/month.');
+            else if (isPro) showToast('🎉 Welcome to Pro! Enjoy 25 quotes/month.');
             history.replaceState({}, '', '/account');
         }
 
-        // Auto-start checkout when arriving via premium intent flow
-        if (params.get('upgrade') === '1' && !isPremium) {
+        // Auto-start checkout when arriving via intent flow from landing page
+        const upgradeIntent = params.get('upgrade');
+        if (upgradeIntent === 'premium' && !isPremium) {
             history.replaceState({}, '', '/account');
-            startCheckout();
+            startCheckout('premium');
+        } else if (upgradeIntent === 'pro' && tier === 'free') {
+            history.replaceState({}, '', '/account');
+            startCheckout('pro');
         }
     }
 
-    async function startCheckout() {
-        const btn = document.getElementById('upgradeBtn');
-        btn.textContent = 'Loading…';
-        btn.disabled = true;
+    async function startCheckout(plan = 'premium') {
+        const btnId = plan === 'pro' ? 'upgradeProBtn' : 'upgradePremiumBtn';
+        const btn = document.getElementById(btnId);
+        const originalText = btn ? btn.textContent : '';
+        if (btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
         try {
             const res = await fetch('/create-checkout-session', {
                 method: 'POST',
                 credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan }),
             });
             if (!res.ok) throw new Error('Failed to create checkout session');
             const data = await res.json();
             window.location.href = data.checkout_url;
         } catch (e) {
             showToast('Something went wrong — please try again.', true);
-            btn.textContent = 'Upgrade now';
-            btn.disabled = false;
+            if (btn) { btn.textContent = originalText; btn.disabled = false; }
         }
     }
 

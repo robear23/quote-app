@@ -483,7 +483,10 @@ async def auth_google_callback(
         await asyncio.to_thread(_send_google_welcome_email, email, telegram_link)
 
     intent = request.cookies.get("oauth_intent", "")
-    redirect_path = "/account?upgrade=1" if intent == "premium" else "/account"
+    if intent in ("premium", "pro"):
+        redirect_path = f"/account?upgrade={intent}"
+    else:
+        redirect_path = "/account"
     response = RedirectResponse(redirect_path)
     _set_session_cookie(response, user["id"])
     response.delete_cookie("oauth_state")
@@ -595,13 +598,28 @@ async def redeem_promo(request: Request):
 
 @app.post("/create-checkout-session")
 async def create_checkout_session(request: Request):
-    """Creates a Stripe Checkout session for the Premium subscription."""
+    """Creates a Stripe Checkout session for the Pro or Premium subscription."""
     user_id = get_session_user_id(request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if not settings.STRIPE_SECRET_KEY or not settings.STRIPE_PREMIUM_PRICE_ID:
-        raise HTTPException(status_code=503, detail="Stripe not configured")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    plan = body.get("plan", "premium")
+    if plan not in ("premium", "pro"):
+        plan = "premium"
+
+    if plan == "pro":
+        price_id = settings.STRIPE_PRO_PRICE_ID
+        if not settings.STRIPE_SECRET_KEY or not price_id:
+            raise HTTPException(status_code=503, detail="Stripe not configured")
+    else:
+        price_id = settings.STRIPE_PREMIUM_PRICE_ID
+        if not settings.STRIPE_SECRET_KEY or not price_id:
+            raise HTTPException(status_code=503, detail="Stripe not configured")
 
     try:
         user_res = await database.supabase.table("users").select("email, stripe_customer_id").eq("id", user_id).execute()
@@ -637,7 +655,7 @@ async def create_checkout_session(request: Request):
             stripe.checkout.Session.create,
             customer=customer_id,
             payment_method_types=["card"],
-            line_items=[{"price": settings.STRIPE_PREMIUM_PRICE_ID, "quantity": 1}],
+            line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
             allow_promotion_codes=True,
             success_url=f"{settings.APP_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
@@ -820,23 +838,32 @@ async def _handle_checkout_completed(session):
         else:
             user_id = user["id"]
 
-        logger.info(f"Syncing premium for user_id={user_id}")
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
         period_end_ts = _get(sub, "current_period_end")
         period_start_ts = _get(sub, "current_period_start")
         period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
         period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc) if period_start_ts else None
+
+        # Determine plan tier from the subscribed price ID
+        items_data = _get(_get(sub, "items") or {}, "data") or []
+        sub_price_id = _get(_get(items_data[0], "price") if items_data else {}, "id") if items_data else None
+        if sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID:
+            plan_tier = "pro"
+        else:
+            plan_tier = "premium"
+
+        logger.info(f"Syncing {plan_tier} for user_id={user_id}")
         await upsert_subscription(
             user_id=user_id,
             stripe_customer_id=customer_id,
             stripe_subscription_id=subscription_id,
-            plan_tier="premium",
+            plan_tier=plan_tier,
             status=_get(sub, "status"),
             current_period_end=period_end,
             current_period_start=period_start,
             cancel_at_period_end=bool(_get(sub, "cancel_at_period_end")),
         )
-        logger.info(f"User {user_id} upgraded to premium")
+        logger.info(f"User {user_id} upgraded to {plan_tier}")
     except Exception as e:
         logger.error(f"_handle_checkout_completed failed: {e}", exc_info=True)
 
@@ -852,7 +879,12 @@ async def _handle_subscription_updated(sub):
             return
 
         status = _get(sub, "status") or "canceled"
-        tier = "premium" if status in ("active", "trialing") else "free"
+        if status in ("active", "trialing"):
+            items_data = _get(_get(sub, "items") or {}, "data") or []
+            sub_price_id = _get(_get(items_data[0], "price") if items_data else {}, "id") if items_data else None
+            tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
+        else:
+            tier = "free"
         period_end = None
         period_start = None
         period_end_ts = _get(sub, "current_period_end")

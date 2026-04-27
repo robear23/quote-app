@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import database
 
 FREE_MONTHLY_LIMIT = 5
+PRO_MONTHLY_LIMIT = 25
 PREMIUM_MONTHLY_LIMIT = 100
 
 
@@ -24,18 +25,18 @@ async def get_user_tier(user_id: str) -> str:
         .eq("user_id", user_id) \
         .execute()
     sub = res.data[0] if res.data else None
-    if sub and sub.get("plan_tier") == "premium" and sub.get("status") in ("active", "trialing"):
+    if sub and sub.get("plan_tier") in ("premium", "pro") and sub.get("status") in ("active", "trialing"):
         end_str = sub.get("current_period_end")
         if not end_str or datetime.fromisoformat(end_str.replace("Z", "+00:00")) > now:
-            return "premium"
+            return sub["plan_tier"]
 
     # Fallback: check users.subscription_tier (kept in sync by upsert_subscription)
     user_res = await database.supabase.table("users") \
         .select("subscription_tier") \
         .eq("id", user_id) \
         .execute()
-    if user_res.data and user_res.data[0].get("subscription_tier") == "premium":
-        return "premium"
+    if user_res.data and user_res.data[0].get("subscription_tier") in ("premium", "pro"):
+        return user_res.data[0]["subscription_tier"]
 
     # Check active premium_months promo
     promo_res = await database.supabase.table("user_promo_redemptions") \
@@ -193,7 +194,11 @@ async def get_monthly_usage(user_id: str) -> int:
 
 
 def monthly_limit_for_tier(tier: str) -> int:
-    return PREMIUM_MONTHLY_LIMIT if tier == "premium" else FREE_MONTHLY_LIMIT
+    if tier == "premium":
+        return PREMIUM_MONTHLY_LIMIT
+    if tier == "pro":
+        return PRO_MONTHLY_LIMIT
+    return FREE_MONTHLY_LIMIT
 
 
 async def upsert_subscription(
