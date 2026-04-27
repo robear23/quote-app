@@ -246,6 +246,13 @@ ON CONFLICT (code) DO NOTHING;
 -- Store the original blank template (before Jinja2 mapping)
 ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS blank_template_path TEXT;
 
+-- ============================================================
+-- MIGRATION: Track scheduled cancellations from Stripe
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT false;
+
 -- Document the new intermediate onboarding states
 COMMENT ON COLUMN users.bot_state IS
 'States: HANDSHAKE | ONBOARDING | ONBOARDING_CURRENCY | ONBOARDING_TAX | AWAITING_FORMAT | ACTIVE | AWAITING_CONFIRMATION';

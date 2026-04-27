@@ -88,9 +88,21 @@
         }
         .plan-pill-free { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.25); color: var(--secondary); }
         .plan-pill-premium { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.4); color: #93c5fd; }
+        .plan-pill-cancelling { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: #fcd34d; }
         .plan-pill-dot { width: 7px; height: 7px; border-radius: 50%; }
         .pill-free .plan-pill-dot { background: var(--muted); }
         .pill-premium .plan-pill-dot { background: var(--accent); }
+        .pill-cancelling .plan-pill-dot { background: #f59e0b; }
+
+        /* Cancellation notice banner */
+        .cancel-notice {
+            display: flex; align-items: flex-start; gap: 12px;
+            margin-top: 20px; padding: 14px 16px; border-radius: 12px;
+            background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+        }
+        .cancel-notice-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+        .cancel-notice-text { font-size: 0.85rem; color: #fcd34d; line-height: 1.5; }
+        .cancel-notice-text strong { font-weight: 700; }
 
         /* Usage bar */
         .usage-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -177,8 +189,6 @@
         }
         .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-        /* Period end */
-        .period-note { font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
 
         /* Footer */
         footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; margin-top: 40px; }
@@ -254,7 +264,12 @@
                     <div class="usage-bar-fill" id="usageBar" style="width:0%"></div>
                 </div>
                 <p class="usage-note" id="usageNote">Resets on the 1st of each month.</p>
-                <p class="period-note" id="periodNote" style="display:none"></p>
+            </div>
+
+            <!-- Cancellation notice (shown when cancel_at_period_end is true) -->
+            <div class="cancel-notice" id="cancelNotice" style="display:none">
+                <span class="cancel-notice-icon">⚠</span>
+                <span class="cancel-notice-text" id="cancelNoticeText"></span>
             </div>
         </div>
 
@@ -406,14 +421,18 @@
 
         // Plan
         const isPremium = d.subscription_tier === 'premium';
+        const isCancelling = isPremium && d.cancel_at_period_end;
         document.getElementById('planName').textContent = isPremium ? 'Premium' : 'Free';
         document.getElementById('planDesc').textContent = isPremium
-            ? '100 quotes per month'
+            ? (isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month')
             : '10 quotes per month — upgrade for more';
 
         const pill = document.getElementById('planPill');
         const pillText = document.getElementById('planPillText');
-        if (isPremium) {
+        if (isCancelling) {
+            pill.className = 'plan-pill plan-pill-cancelling pill-cancelling';
+            pillText.textContent = 'Cancelling';
+        } else if (isPremium) {
             pill.className = 'plan-pill plan-pill-premium pill-premium';
             pillText.textContent = 'Premium';
         }
@@ -428,9 +447,7 @@
 
         // Usage reset date — billing anniversary for premium, 1st of month for free
         if (d.billing_period_start) {
-            const start = new Date(d.billing_period_start);
-            if (isPremium) {
-                // Next reset = same day next month (i.e. subscription_period_end)
+            if (isPremium && !isCancelling) {
                 const resetLabel = d.subscription_period_end
                     ? new Date(d.subscription_period_end).toLocaleDateString('en-GB', { day:'numeric', month:'long' })
                     : null;
@@ -442,12 +459,13 @@
             }
         }
 
-        // Period end (renewal notice for premium)
-        if (isPremium && d.subscription_period_end) {
+        // Cancellation notice or renewal notice
+        if (isCancelling && d.subscription_period_end) {
             const end = new Date(d.subscription_period_end);
-            document.getElementById('periodNote').style.display = 'block';
-            document.getElementById('periodNote').textContent =
-                `Premium renews on ${end.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}.`;
+            const endLabel = end.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+            document.getElementById('cancelNotice').style.display = 'flex';
+            document.getElementById('cancelNoticeText').innerHTML =
+                `<strong>Subscription cancelled.</strong> You still have full Premium access until <strong>${endLabel}</strong>. After that, your account will switch to the Free plan.`;
         }
 
         // Upgrade / billing cards

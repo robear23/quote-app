@@ -204,6 +204,7 @@ async def upsert_subscription(
     status: str,
     current_period_end: datetime | None,
     current_period_start: datetime | None = None,
+    cancel_at_period_end: bool = False,
 ):
     """Create or update the subscriptions row for a user."""
     record = {
@@ -214,6 +215,7 @@ async def upsert_subscription(
         "status": status,
         "current_period_end": current_period_end.isoformat() if current_period_end else None,
         "current_period_start": current_period_start.isoformat() if current_period_start else None,
+        "cancel_at_period_end": cancel_at_period_end,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     await database.supabase.table("subscriptions").upsert(record, on_conflict="user_id").execute()

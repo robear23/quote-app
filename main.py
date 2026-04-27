@@ -541,13 +541,16 @@ async def api_account(request: Request):
     bot_username = await get_bot_username()
     telegram_url = f"https://t.me/{bot_username}?start={user_id}"
 
-    # Subscription period end (if premium)
+    # Subscription period end and cancellation state (if premium)
     period_end = None
+    cancel_at_period_end = False
     try:
-        sub_res = await database.supabase.table("subscriptions").select("current_period_end, status") \
+        sub_res = await database.supabase.table("subscriptions") \
+            .select("current_period_end, status, cancel_at_period_end") \
             .eq("user_id", user_id).execute()
         if sub_res.data:
             period_end = sub_res.data[0].get("current_period_end")
+            cancel_at_period_end = bool(sub_res.data[0].get("cancel_at_period_end", False))
     except Exception:
         pass
 
@@ -562,6 +565,7 @@ async def api_account(request: Request):
         "telegram_url": telegram_url,
         "bot_username": bot_username,
         "subscription_period_end": period_end,
+        "cancel_at_period_end": cancel_at_period_end,
         "billing_period_start": period_start.isoformat(),
         "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
     }
@@ -705,6 +709,7 @@ async def sync_subscription(request: Request):
             status=status,
             current_period_end=period_end,
             current_period_start=period_start,
+            cancel_at_period_end=bool(_get(sub, "cancel_at_period_end")),
         )
         logger.info(f"Manual subscription sync: user={user_id} tier={tier} status={status}")
         return {"tier": tier, "status": status}
@@ -829,6 +834,7 @@ async def _handle_checkout_completed(session):
             status=_get(sub, "status"),
             current_period_end=period_end,
             current_period_start=period_start,
+            cancel_at_period_end=bool(_get(sub, "cancel_at_period_end")),
         )
         logger.info(f"User {user_id} upgraded to premium")
     except Exception as e:
@@ -856,6 +862,7 @@ async def _handle_subscription_updated(sub):
         if period_start_ts:
             period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc)
 
+        cancel_at_period_end = bool(_get(sub, "cancel_at_period_end"))
         await upsert_subscription(
             user_id=user["id"],
             stripe_customer_id=customer_id,
@@ -864,8 +871,9 @@ async def _handle_subscription_updated(sub):
             status=status,
             current_period_end=period_end,
             current_period_start=period_start,
+            cancel_at_period_end=cancel_at_period_end,
         )
-        logger.info(f"User {user['id']} subscription updated: {status} → tier={tier}")
+        logger.info(f"User {user['id']} subscription updated: {status} → tier={tier} cancel_at_period_end={cancel_at_period_end}")
     except Exception as e:
         logger.error(f"_handle_subscription_updated failed: {e}", exc_info=True)
 
