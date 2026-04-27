@@ -372,6 +372,20 @@
                 }
             }
 
+            // If polling timed out and still free, try a direct Stripe sync as fallback.
+            if (justUpgraded && result.data.subscription_tier !== 'premium') {
+                try {
+                    document.getElementById('stateLoading').querySelector('p').textContent = 'Syncing with Stripe…';
+                    const syncRes = await fetch('/api/sync-subscription', { method: 'POST', credentials: 'include' });
+                    const syncData = await syncRes.json();
+                    if (syncData.tier === 'premium') {
+                        result = await fetchAccount();
+                    }
+                } catch (e) {
+                    // sync failed — continue and show whatever state we have
+                }
+            }
+
             accountData = result.data;
             renderAccount(accountData);
 
@@ -451,10 +465,12 @@
         // Account email
         document.getElementById('accountEmail').textContent = d.email;
 
-        // Success toast (after upgrade redirect)
+        // Success toast (after upgrade redirect) — only if tier actually flipped
         const params = new URLSearchParams(window.location.search);
         if (params.get('upgraded') === '1') {
-            showToast('🎉 Welcome to Premium! Enjoy 100 quotes/month.');
+            if (isPremium) {
+                showToast('🎉 Welcome to Premium! Enjoy 100 quotes/month.');
+            }
             history.replaceState({}, '', '/account');
         }
 

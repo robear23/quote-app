@@ -18,7 +18,7 @@ async def get_user_tier(user_id: str) -> str:
     """
     now = datetime.now(timezone.utc)
 
-    # Check Stripe subscription
+    # Check Stripe subscription table
     res = await database.supabase.table("subscriptions") \
         .select("plan_tier, status, current_period_end") \
         .eq("user_id", user_id) \
@@ -28,6 +28,14 @@ async def get_user_tier(user_id: str) -> str:
         end_str = sub.get("current_period_end")
         if not end_str or datetime.fromisoformat(end_str.replace("Z", "+00:00")) > now:
             return "premium"
+
+    # Fallback: check users.subscription_tier (kept in sync by upsert_subscription)
+    user_res = await database.supabase.table("users") \
+        .select("subscription_tier") \
+        .eq("id", user_id) \
+        .execute()
+    if user_res.data and user_res.data[0].get("subscription_tier") == "premium":
+        return "premium"
 
     # Check active premium_months promo
     promo_res = await database.supabase.table("user_promo_redemptions") \

@@ -654,6 +654,60 @@ async def billing_success(session_id: str = None):
     return RedirectResponse("/account?upgraded=1")
 
 
+@app.post("/api/sync-subscription")
+async def sync_subscription(request: Request):
+    """Re-sync subscription status directly from Stripe. Fallback when webhook/proactive sync fails."""
+    user_id = get_session_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if not settings.STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    try:
+        user_res = await database.supabase.table("users").select("stripe_customer_id").eq("id", user_id).execute()
+        if not user_res.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        stripe_customer_id = user_res.data[0].get("stripe_customer_id")
+        if not stripe_customer_id:
+            return {"tier": "free", "message": "No Stripe customer on record"}
+
+        subs = await asyncio.to_thread(
+            stripe.Subscription.list, customer=stripe_customer_id, limit=1
+        )
+
+        if not subs.data:
+            return {"tier": "free", "message": "No Stripe subscription found"}
+
+        sub = subs.data[0]
+        from subscription_service import upsert_subscription
+
+        status = _get(sub, "status") or "canceled"
+        tier = "premium" if status in ("active", "trialing") else "free"
+        period_end_ts = _get(sub, "current_period_end")
+        period_start_ts = _get(sub, "current_period_start")
+        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
+        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc) if period_start_ts else None
+
+        await upsert_subscription(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=_get(sub, "id"),
+            plan_tier=tier,
+            status=status,
+            current_period_end=period_end,
+            current_period_start=period_start,
+        )
+        logger.info(f"Manual subscription sync: user={user_id} tier={tier} status={status}")
+        return {"tier": tier, "status": status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"sync_subscription failed for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Sync failed")
+
+
 @app.get("/billing-portal")
 async def billing_portal(request: Request):
     """Redirects the user to the Stripe Customer Portal to manage their subscription."""
@@ -736,6 +790,8 @@ async def _handle_checkout_completed(session):
     try:
         customer_id = _get(session, "customer")
         subscription_id = _get(session, "subscription")
+        logger.info(f"_handle_checkout_completed: customer={customer_id} subscription={subscription_id}")
+
         if not customer_id or not subscription_id:
             logger.warning(f"checkout.session.completed missing customer/subscription: customer={customer_id} sub={subscription_id}")
             return
@@ -745,15 +801,19 @@ async def _handle_checkout_completed(session):
             # Fallback: try metadata
             metadata = _get(session, "metadata")
             user_id = metadata.get("user_id") if isinstance(metadata, dict) else _get(metadata, "user_id")
+            logger.info(f"User not found by stripe_customer_id={customer_id}, metadata user_id={user_id}")
             if not user_id:
                 logger.warning(f"Checkout completed but no user found for customer {customer_id}")
                 return
         else:
             user_id = user["id"]
 
+        logger.info(f"Syncing premium for user_id={user_id}")
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
-        period_end = datetime.fromtimestamp(_get(sub, "current_period_end"), tz=timezone.utc)
-        period_start = datetime.fromtimestamp(_get(sub, "current_period_start"), tz=timezone.utc)
+        period_end_ts = _get(sub, "current_period_end")
+        period_start_ts = _get(sub, "current_period_start")
+        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
+        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc) if period_start_ts else None
         await upsert_subscription(
             user_id=user_id,
             stripe_customer_id=customer_id,
