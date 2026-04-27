@@ -47,21 +47,28 @@ async def lifespan(_app: FastAPI):
     from bot_manager import build_application
     bot_app = build_application()
     if bot_app:
-        await bot_app.initialize()
-        if settings.WEBHOOK_URL:
-            webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}/telegram"
-            kwargs = {"url": webhook_url, "drop_pending_updates": True}
-            if settings.WEBHOOK_SECRET:
-                kwargs["secret_token"] = settings.WEBHOOK_SECRET
-            await bot_app.bot.set_webhook(**kwargs)
-            logger.info(f"Webhook set to {webhook_url}")
-        else:
-            logger.warning("WEBHOOK_URL not set — bot will not receive updates")
-        await bot_app.start()
+        try:
+            await bot_app.initialize()
+            if settings.WEBHOOK_URL:
+                webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}/telegram"
+                kwargs = {"url": webhook_url, "drop_pending_updates": True}
+                if settings.WEBHOOK_SECRET:
+                    kwargs["secret_token"] = settings.WEBHOOK_SECRET
+                await bot_app.bot.set_webhook(**kwargs)
+                logger.info(f"Webhook set to {webhook_url}")
+            else:
+                logger.warning("WEBHOOK_URL not set — bot will not receive updates")
+            await bot_app.start()
+        except Exception as e:
+            logger.error(f"Telegram bot failed to start (web server still running): {e}")
+            bot_app = None
     yield
     if bot_app:
-        await bot_app.stop()
-        await bot_app.shutdown()
+        try:
+            await bot_app.stop()
+            await bot_app.shutdown()
+        except Exception as e:
+            logger.error(f"Error shutting down Telegram bot: {e}")
 
 
 app = FastAPI(title="Telegram Quote Me API", lifespan=lifespan)
