@@ -256,3 +256,14 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN 
 -- Document the new intermediate onboarding states
 COMMENT ON COLUMN users.bot_state IS
 'States: HANDSHAKE | ONBOARDING | ONBOARDING_CURRENCY | ONBOARDING_TAX | AWAITING_FORMAT | ACTIVE | AWAITING_CONFIRMATION';
+
+-- ============================================================
+-- MIGRATION: XLSX template support — auto-match output format to uploaded template
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS template_xlsx_path TEXT;
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS xlsx_field_mapping JSONB;
+
+COMMENT ON COLUMN users.bot_state IS
+'States: HANDSHAKE | ONBOARDING | ONBOARDING_CURRENCY | ONBOARDING_TAX | AWAITING_FORMAT (legacy) | ACTIVE | AWAITING_CONFIRMATION';

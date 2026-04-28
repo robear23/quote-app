@@ -151,6 +151,52 @@ Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index
   OR {{"type": "paragraph", "paragraph_index": N}} (use 0-based index into the non-empty paragraphs list)
 """
 
+XLSX_DNA_PROMPT = """
+You are a highly capable AI assistant helping a tradesperson set up their automated quoting system.
+Analyze the provided blank Excel quote template (cell values listed below) and extract the business's "Brand DNA" into a strict JSON format.
+The template contains the business's branding and structure but no client or job details.
+
+Extract the following information:
+1. "business_name": The name of the business issuing the quotes.
+2. "business_address": The physical address of the business.
+3. "contact_details": Phone numbers, emails, or websites.
+4. "bank_info": Bank details for payment (Account Number, Sort Code, IBAN, etc.).
+5. "layout_preferences": Notes on visual layout (e.g., "Header row at top", "Blue color scheme").
+6. "primary_color_hex": If you can infer a brand color from the template description, return it as a 6-digit hex WITHOUT the # prefix. Otherwise set to null.
+7. "secondary_color_hex": Secondary accent color as a 6-digit hex WITHOUT the # prefix, or null if not determinable.
+
+Return ONLY a valid JSON object with these keys. If a field cannot be determined, set its value to null.
+"""
+
+XLSX_MAP_PROMPT = """
+You are analyzing an Excel quote/invoice template to identify where variable data should be written.
+Below is a dump of the template's cell values (format: SheetName!CellRef: 'value').
+
+Template cell values:
+{cell_dump}
+
+Business info already known (these are STATIC — do NOT mark as variable fields):
+{business_info}
+
+Identify the exact cell addresses for the following VARIABLE fields that change per quote.
+Return null for any field you cannot locate.
+
+For line items, identify:
+- The 1-based row number where the first data row begins (after headers)
+- The column letters for description, qty, unit_price, and total columns
+
+Respond with ONLY a valid JSON object with exactly these keys:
+- "client_name": cell address (e.g. "B5") or null
+- "client_address": cell address or null
+- "quote_ref": cell address for quote/invoice reference number or null
+- "quote_date": cell address for the date or null
+- "line_items_start_row": integer (1-based row number of first data row) or null
+- "line_items_cols": object with keys "description", "qty", "unit_price", "total" — each value is a column letter (e.g. "A") or null
+- "subtotal_cell": cell address for subtotal value or null
+- "tax_cell": cell address for tax/VAT amount or null
+- "total_cell": cell address for grand total or null
+"""
+
 MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.5-flash-lite"
 MAX_RETRIES = 5
@@ -809,3 +855,117 @@ class AIService:
         doc.save(output)
         output.seek(0)
         return output.getvalue()
+
+    @staticmethod
+    def extract_brand_dna_from_xlsx(xlsx_path: str) -> dict | None:
+        """
+        Reads an XLSX template, builds a text dump of all cell values, and asks
+        Gemini to extract Brand DNA. Returns the same dict shape as
+        extract_brand_dna_from_blank (minus logo_base64, which XLSX cannot provide).
+        """
+        try:
+            import openpyxl as _openpyxl
+
+            try:
+                wb = _openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+            except Exception as e:
+                logger.error(f"Failed to open XLSX for brand DNA extraction: {e}")
+                return None
+
+            lines = []
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                for row in ws.iter_rows():
+                    for cell in row:
+                        val = cell.value
+                        if val is not None and str(val).strip():
+                            lines.append(f"{sheet_name}!{cell.coordinate}: '{val}'")
+            wb.close()
+
+            cell_dump = "\n".join(lines)
+            logger.info(f"XLSX cell dump: {len(lines)} non-empty cells, {len(cell_dump)} chars")
+
+            if len(lines) < 3:
+                logger.warning("XLSX text extraction yielded very little content")
+
+            prompt = XLSX_DNA_PROMPT + f"\n\n--- Template cell values ---\n{cell_dump}"
+            response = _generate_with_retry(prompt)
+
+            try:
+                raw = response.text or ""
+            except Exception as e:
+                logger.error(f"response.text raised: {e}", exc_info=True)
+                return None
+
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+                raw = re.sub(r"\n?```$", "", raw)
+
+            dna = json.loads(raw.strip())
+            logger.info(f"XLSX brand DNA extracted: business_name={dna.get('business_name')!r}")
+            return dna
+
+        except RateLimitError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to extract brand DNA from XLSX: {e}", exc_info=True)
+            _capture(e)
+            return None
+
+    @staticmethod
+    def build_xlsx_field_mapping(xlsx_path: str, brand_dna: dict) -> dict | None:
+        """
+        Reads an XLSX template and asks Gemini to identify the cell addresses for
+        all variable quote fields. Returns a mapping dict or None on failure.
+        """
+        try:
+            import openpyxl as _openpyxl
+
+            try:
+                wb = _openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+            except Exception as e:
+                logger.error(f"Failed to open XLSX for field mapping: {e}")
+                return None
+
+            lines = []
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                for row in ws.iter_rows():
+                    for cell in row:
+                        val = cell.value
+                        if val is not None and str(val).strip():
+                            lines.append(f"{sheet_name}!{cell.coordinate}: '{val}'")
+            wb.close()
+
+            cell_dump = "\n".join(lines)
+
+            business_info = {k: brand_dna.get(k) for k in (
+                "business_name", "business_address", "contact_details", "bank_info"
+            ) if brand_dna.get(k)}
+
+            prompt = XLSX_MAP_PROMPT.format(
+                cell_dump=cell_dump,
+                business_info=json.dumps(business_info, indent=2),
+            )
+            response = _generate_with_retry(prompt)
+
+            try:
+                raw = response.text or ""
+            except Exception as e:
+                logger.error(f"response.text raised during XLSX mapping: {e}", exc_info=True)
+                return None
+
+            if raw.startswith("```"):
+                raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+                raw = re.sub(r"\n?```$", "", raw)
+
+            mapping = json.loads(raw.strip())
+            logger.info(f"XLSX field mapping built: {mapping}")
+            return mapping
+
+        except RateLimitError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to build XLSX field mapping: {e}", exc_info=True)
+            _capture(e)
+            return None

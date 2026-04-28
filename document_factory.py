@@ -667,3 +667,73 @@ class DocumentFactory:
         tpl.save(filepath)
         logger.info(f"Generated DOCX from template: {filepath}")
         return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}
+
+    @staticmethod
+    def generate_from_xlsx_template(template_bytes: bytes, quote_data: dict, brand_dna: dict, output_filename: str) -> dict:
+        """
+        Fills a user-uploaded XLSX template with quote data using the cell mapping
+        stored in brand_dna["xlsx_field_mapping"]. Writes calculated values (not
+        formulas) for simplicity and cross-platform compatibility.
+        """
+        import openpyxl
+
+        filepath = os.path.join(OUTPUT_DIR, output_filename)
+        tax_rate = _extract_tax_rate(brand_dna)
+        today_str = date.today().strftime("%d %B %Y")
+        quote_ref = f"QTE-{date.today().strftime('%Y%m')}-{random.randint(100, 999)}"
+
+        line_items = quote_data.get("line_items", [])
+        subtotal = sum(
+            float(item.get("quantity", 1)) * float(item.get("unit_price", 0))
+            for item in line_items
+        )
+        tax_amount = subtotal * (tax_rate / 100)
+        grand_total = subtotal + tax_amount
+
+        mapping = brand_dna.get("xlsx_field_mapping") or {}
+
+        wb = openpyxl.load_workbook(io.BytesIO(template_bytes))
+        ws = wb.active
+
+        def _write(cell_addr, value):
+            if cell_addr:
+                try:
+                    ws[cell_addr] = value
+                except Exception as e:
+                    logger.warning(f"Could not write to cell {cell_addr}: {e}")
+
+        _write(mapping.get("client_name"), quote_data.get("customer_name", ""))
+        _write(mapping.get("client_address"), quote_data.get("customer_address") or "")
+        _write(mapping.get("quote_ref"), quote_ref)
+        _write(mapping.get("quote_date"), today_str)
+
+        # Line items
+        start_row = mapping.get("line_items_start_row")
+        cols = mapping.get("line_items_cols") or {}
+        desc_col = cols.get("description")
+        qty_col = cols.get("qty")
+        price_col = cols.get("unit_price")
+        total_col = cols.get("total")
+
+        if start_row and (desc_col or qty_col or price_col or total_col):
+            for i, item in enumerate(line_items):
+                row = start_row + i
+                qty = float(item.get("quantity", 1))
+                unit_price = float(item.get("unit_price", 0))
+                line_total = qty * unit_price
+                if desc_col:
+                    ws[f"{desc_col}{row}"] = item.get("description", "")
+                if qty_col:
+                    ws[f"{qty_col}{row}"] = qty
+                if price_col:
+                    ws[f"{price_col}{row}"] = unit_price
+                if total_col:
+                    ws[f"{total_col}{row}"] = line_total
+
+        _write(mapping.get("subtotal_cell"), subtotal)
+        _write(mapping.get("tax_cell"), tax_amount if tax_rate > 0 else 0)
+        _write(mapping.get("total_cell"), grand_total)
+
+        wb.save(filepath)
+        logger.info(f"Generated XLSX from template: {filepath}")
+        return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}

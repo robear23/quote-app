@@ -6,6 +6,7 @@ google-genai>=1.0.0
 python-docx>=1.1.0
 docxtpl>=0.16.0
 XlsxWriter>=3.1.0
+openpyxl>=3.1.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0

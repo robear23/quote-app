@@ -111,6 +111,20 @@ async def _upload_blank_template(user_id: str, template_bytes: bytes) -> str:
     return storage_path
 
 
+async def _upload_xlsx_template(user_id: str, template_bytes: bytes) -> str:
+    """Upload a per-user XLSX template to Supabase Storage. Returns the storage path."""
+    storage_path = f"templates/{user_id}/quote_template.xlsx"
+    try:
+        await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
+    except Exception:
+        pass
+    await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
+        storage_path, template_bytes,
+        file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    )
+    return storage_path
+
+
 def _currency_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -315,7 +329,19 @@ async def generate_and_send_quote(
     doc_path = None
     try:
         if preferred_format == "xlsx":
-            result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
+            template_xlsx_path = brand_dna.get("template_xlsx_path")
+            if template_xlsx_path:
+                template_bytes = await _download_quote_template(template_xlsx_path)
+                if template_bytes:
+                    result = await asyncio.to_thread(
+                        DocumentFactory.generate_from_xlsx_template, template_bytes, quote_data, brand_dna, output_filename
+                    )
+                else:
+                    logger.warning(f"XLSX template download failed for user {db_user['id']} — falling back to scratch")
+                    result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
+            else:
+                # Legacy users who chose xlsx before template-based flow
+                result = await asyncio.to_thread(DocumentFactory.generate_xlsx, quote_data, brand_dna, output_filename)
         else:
             template_path = brand_dna.get("template_docx_path")
             if not template_path:
@@ -436,8 +462,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update_user_state(user.id, "ONBOARDING")
             await update.message.reply_text(
                 "Welcome! Let's set up your quote template.\n\n"
-                "Please upload your blank quote template as a Word (.docx) file. "
-                "This should have your branding — logo, colours, company details — but no client details filled in."
+                "📄 *Quick tip before you upload:*\n\n"
+                "Your template should be a blank quote with your *business info already filled in*. "
+                "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
+                "Send your *.docx or .xlsx* file when you're ready.",
+                parse_mode="Markdown"
             )
         elif state == "ONBOARDING":
             await update.message.reply_text(
@@ -476,8 +505,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 }).eq("id", payload).execute()
                 await update.message.reply_text(
                     f"Hi {user.first_name}! Account linked.\n\n"
-                    "Please upload your blank .docx quote template to get started. "
-                    "This should have your branding but no client details filled in."
+                    "📄 *Quick tip before you upload:*\n\n"
+                    "Your template should be a blank quote with your *business info already filled in*. "
+                    "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
+                    "Send your *.docx or .xlsx* file when you're ready.",
+                    parse_mode="Markdown"
                 )
             else:
                 await update.message.reply_text("Invalid registration link. Please register on the website first.")
@@ -519,7 +551,10 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text(
         "Your template has been reset! Let's start fresh.\n\n"
-        "Please upload your blank .docx quote template to continue.",
+        "📄 *Quick tip before you upload:*\n\n"
+        "Your template should be a blank quote with your *business info already filled in*. "
+        "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
+        "Send your *.docx* file when you're ready.",
         parse_mode="Markdown"
     )
 
@@ -629,91 +664,140 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     state = db_user.get("bot_state")
 
     if state == "ONBOARDING":
-        # Only accept DOCX — reject anything else with a clear message
+        # Accept DOCX or XLSX — reject everything else
         if not update.message.document:
             await update.message.reply_text(
-                "Please upload your blank quote template as a Word (.docx) file."
+                "Please upload your blank quote template as a Word (.docx) or Excel (.xlsx) file."
             )
             return
 
         filename = update.message.document.file_name or ""
-        if not filename.lower().endswith(".docx"):
+        is_docx = filename.lower().endswith(".docx")
+        is_xlsx = filename.lower().endswith(".xlsx")
+        if not is_docx and not is_xlsx:
             await update.message.reply_text(
-                "Please upload a Word document (.docx). "
-                "PDF and image templates are not supported — your template must be a .docx file."
+                "Please upload a Word (.docx) or Excel (.xlsx) template. "
+                "PDF and image templates are not supported."
             )
             return
 
         status_msg = await update.message.reply_text("Got it! Processing your template, just a moment...")
 
+        tmp_ext = "docx" if is_docx else "xlsx"
         file_obj = await context.bot.get_file(update.message.document.file_id)
-        tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.docx")
+        tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.{tmp_ext}")
         await file_obj.download_to_drive(custom_path=tmp_path)
 
         try:
             with open(tmp_path, "rb") as f:
                 template_bytes = f.read()
 
-            # Extract brand DNA from the blank template
-            try:
-                dna_data = await run_ai_notify(AIService.extract_brand_dna_from_blank, tmp_path, msg=status_msg)
-            except RateLimitError:
-                await status_msg.edit_text(RATE_LIMIT_MSG)
-                return
-
-            if not dna_data:
-                await status_msg.edit_text(
-                    "Sorry, I couldn't read that template. "
-                    "Please make sure it's a valid .docx file and try again."
-                )
-                return
-
-            # Store original blank template permanently
-            try:
-                blank_path = await _upload_blank_template(db_user["id"], template_bytes)
-                dna_data["blank_template_path"] = blank_path
-            except Exception as e:
-                logger.warning(f"Failed to upload blank template (non-fatal): {e}")
-
-            # Build Jinja2-mapped template from the blank DOCX — required to proceed
-            try:
-                jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
-            except RateLimitError:
-                await status_msg.edit_text(RATE_LIMIT_MSG)
-                return
-            except Exception as e:
-                logger.error(f"Template building failed: {e}")
-                jinja_bytes = None
-
-            if not jinja_bytes:
-                await status_msg.edit_text(
-                    "❌ I couldn't set up your template for auto-fill.\n\n"
-                    "Make sure your template has clear column headers (Description, Qty, Price, Total) "
-                    "and labeled fields for client name and date.\n\n"
-                    "Please upload a corrected .docx template to continue."
-                )
-                return
-
-            try:
-                tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
-            except Exception as e:
-                logger.error(f"Failed to upload mapped template: {e}")
-                await status_msg.edit_text(
-                    "❌ Failed to save your template (storage error). Please try again."
-                )
-                return
-
-            dna_data["template_docx_path"] = tpl_path
-            logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
-
-            # Extract and upload logo if present in the DOCX
-            logo_b64 = dna_data.pop("logo_base64", None)
-            if logo_b64:
+            if is_docx:
+                # ── DOCX branch ──────────────────────────────────────────────
                 try:
-                    logo_path = await _upload_logo(db_user["id"], logo_b64)
-                    dna_data["logo_path"] = logo_path
+                    dna_data = await run_ai_notify(AIService.extract_brand_dna_from_blank, tmp_path, msg=status_msg)
+                except RateLimitError:
+                    await status_msg.edit_text(RATE_LIMIT_MSG)
+                    return
+
+                if not dna_data:
+                    await status_msg.edit_text(
+                        "Sorry, I couldn't read that template. "
+                        "Please make sure it's a valid .docx file and try again."
+                    )
+                    return
+
+                try:
+                    blank_path = await _upload_blank_template(db_user["id"], template_bytes)
+                    dna_data["blank_template_path"] = blank_path
                 except Exception as e:
-                    logger.warning(f"Failed to upload logo (non-fatal): {e}")
+                    logger.warning(f"Failed to upload blank template (non-fatal): {e}")
+
+                try:
+                    jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
+                except RateLimitError:
+                    await status_msg.edit_text(RATE_LIMIT_MSG)
+                    return
+                except Exception as e:
+                    logger.error(f"Template building failed: {e}")
+                    jinja_bytes = None
+
+                if not jinja_bytes:
+                    await status_msg.edit_text(
+                        "❌ I couldn't set up your template for auto-fill.\n\n"
+                        "Make sure your template has clear column headers (Description, Qty, Price, Total) "
+                        "and labeled fields for client name and date.\n\n"
+                        "Please upload a corrected .docx template to continue."
+                    )
+                    return
+
+                try:
+                    tpl_path = await _upload_quote_template(db_user["id"], jinja_bytes)
+                except Exception as e:
+                    logger.error(f"Failed to upload mapped template: {e}")
+                    await status_msg.edit_text(
+                        "❌ Failed to save your template (storage error). Please try again."
+                    )
+                    return
+
+                dna_data["template_docx_path"] = tpl_path
+                dna_data["preferred_format"] = "docx"
+                logger.info(f"Jinja2 template stored at {tpl_path} for user {db_user['id']}")
+
+                logo_b64 = dna_data.pop("logo_base64", None)
+                if logo_b64:
+                    try:
+                        logo_path = await _upload_logo(db_user["id"], logo_b64)
+                        dna_data["logo_path"] = logo_path
+                    except Exception as e:
+                        logger.warning(f"Failed to upload logo (non-fatal): {e}")
+
+            else:
+                # ── XLSX branch ──────────────────────────────────────────────
+                try:
+                    dna_data = await run_ai_notify(AIService.extract_brand_dna_from_xlsx, tmp_path, msg=status_msg)
+                except RateLimitError:
+                    await status_msg.edit_text(RATE_LIMIT_MSG)
+                    return
+
+                if not dna_data:
+                    await status_msg.edit_text(
+                        "Sorry, I couldn't read that template. "
+                        "Please make sure it's a valid .xlsx file and try again."
+                    )
+                    return
+
+                try:
+                    mapping = await run_ai(AIService.build_xlsx_field_mapping, tmp_path, dna_data)
+                except RateLimitError:
+                    await status_msg.edit_text(RATE_LIMIT_MSG)
+                    return
+                except Exception as e:
+                    logger.error(f"XLSX field mapping failed: {e}")
+                    mapping = None
+
+                if not mapping:
+                    await status_msg.edit_text(
+                        "❌ I couldn't map your Excel template for auto-fill.\n\n"
+                        "Make sure your template has clear column headers (Description, Qty, Price, Total) "
+                        "and labeled cells for client name and date.\n\n"
+                        "Please upload a corrected .xlsx template to continue."
+                    )
+                    return
+
+                try:
+                    tpl_path = await _upload_xlsx_template(db_user["id"], template_bytes)
+                except Exception as e:
+                    logger.error(f"Failed to upload XLSX template: {e}")
+                    await status_msg.edit_text(
+                        "❌ Failed to save your template (storage error). Please try again."
+                    )
+                    return
+
+                dna_data["template_xlsx_path"] = tpl_path
+                dna_data["xlsx_field_mapping"] = mapping
+                dna_data["preferred_format"] = "xlsx"
+                logger.info(f"XLSX template stored at {tpl_path} for user {db_user['id']}")
 
             # Persist brand DNA (currency/tax come from Q&A next)
             dna_data["user_id"] = db_user["id"]
@@ -869,12 +953,10 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
                 "vat_tax_status": vat_status,
                 "calculation_methods": calc_methods,
             }).eq("user_id", db_user["id"]).execute()
-            await update_user_state(user.id, "AWAITING_FORMAT")
+            await update_user_state(user.id, "ACTIVE")
             await update.message.reply_text(
                 f"Tax rate set to *{tax_rate:.0f}%*.\n\n"
-                "Almost done! What format would you like your quotes in?\n\n"
-                "Reply *1* for Word (.docx)\n"
-                "Reply *2* for Excel (.xlsx)",
+                "✅ You're all set! Send me a voice note, photo, or type the job details to generate your first quote.",
                 parse_mode="Markdown"
             )
         except Exception as e:
