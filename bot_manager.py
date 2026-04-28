@@ -831,9 +831,14 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if update.message.photo:
             msg = await update.message.reply_text("Analysing your photo to extract quote details...")
 
-            file_obj = await context.bot.get_file(update.message.photo[-1].file_id)
-            filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.jpg")
-            await file_obj.download_to_drive(custom_path=filepath)
+            try:
+                file_obj = await context.bot.get_file(update.message.photo[-1].file_id)
+                filepath = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.jpg")
+                await file_obj.download_to_drive(custom_path=filepath)
+            except Exception as e:
+                logger.error(f"Failed to download photo from Telegram: {e}")
+                await msg.edit_text("Sorry, I couldn't download your photo. Please try again.")
+                return
 
             brand_dna = await get_brand_dna(db_user["id"])
             try:
