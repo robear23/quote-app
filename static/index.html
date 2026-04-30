@@ -1170,6 +1170,78 @@
             white-space: nowrap;
         }
 
+        /* Launch bonus badge & card */
+        .launch-card {
+            border-color: rgba(245, 158, 11, 0.45);
+            box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25),
+                        0 24px 48px rgba(245, 158, 11, 0.08);
+        }
+
+        .launch-badge {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            color: white;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 4px 18px;
+            border-radius: 999px;
+            white-space: nowrap;
+            overflow: hidden;
+            animation: launch-pulse 2.8s ease-in-out infinite;
+        }
+
+        .launch-badge::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                rgba(255,255,255,0.45) 50%,
+                transparent 100%);
+            transform: translateX(-120%);
+            animation: launch-shimmer 2.2s ease-in-out infinite;
+            border-radius: 999px;
+        }
+
+        @keyframes launch-shimmer {
+            0%   { transform: translateX(-120%); }
+            60%  { transform: translateX(220%); }
+            100% { transform: translateX(220%); }
+        }
+
+        @keyframes launch-pulse {
+            0%, 100% { box-shadow: 0 0 0 0   rgba(245, 158, 11, 0.5); }
+            50%       { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+        }
+
+        .bonus-feature {
+            background: rgba(245, 158, 11, 0.09);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 8px;
+            margin: 8px -8px 4px;
+            padding: 6px 10px;
+            color: #f59e0b !important;
+            font-weight: 600;
+            font-size: 0.88rem;
+            list-style: none;
+        }
+
+        .bonus-icon {
+            display: inline-block;
+            animation: bonus-float 2s ease-in-out infinite;
+            margin-right: 6px;
+        }
+
+        @keyframes bonus-float {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-3px); }
+        }
+
         .pricing-name {
             font-size: 1rem;
             font-weight: 700;
@@ -1629,12 +1701,14 @@
 
                 <div class="pricing-grid">
                     <!-- Free -->
-                    <div class="pricing-card fade-up">
+                    <div class="pricing-card launch-card fade-up">
+                        <div class="launch-badge">🚀 Launch Bonus</div>
                         <div class="pricing-name">Free</div>
                         <div class="pricing-price"><sup>£</sup>0</div>
                         <div class="pricing-period">forever</div>
                         <ul class="pricing-features">
                             <li><span class="check">✓</span> 5 quotes per month</li>
+                            <li class="bonus-feature"><span class="bonus-icon">✨</span> +5 bonus quotes, first month</li>
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>

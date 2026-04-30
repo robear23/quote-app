@@ -234,8 +234,9 @@ ALTER TABLE user_promo_redemptions ENABLE ROW LEVEL SECURITY;
 -- Seed the initial promo codes
 INSERT INTO promo_codes (code, benefit_type, benefit_value, max_uses)
 VALUES
-    ('first50',     'extra_quotes',   10, 50),
-    ('materate123', 'premium_months',  3, NULL)
+    ('first50',      'extra_quotes',   10,   50),
+    ('materate123',  'premium_months',  3, NULL),
+    ('LAUNCH_BONUS', 'extra_quotes',   10, NULL)
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================

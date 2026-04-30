@@ -67,6 +67,18 @@ async def get_active_extra_quotes_limit(user_id: str) -> int | None:
     return None
 
 
+async def auto_apply_signup_bonus(user_id: str) -> None:
+    """Silently grants 10 quotes/month for the first 30 days to every new signup."""
+    now = datetime.now(timezone.utc)
+    await database.supabase.table("user_promo_redemptions").insert({
+        "user_id": user_id,
+        "code": "LAUNCH_BONUS",
+        "expires_at": (now + timedelta(days=30)).isoformat(),
+        "benefit_type": "extra_quotes",
+        "benefit_value": 10,
+    }).execute()
+
+
 async def redeem_promo_code(user_id: str, code: str) -> dict:
     """
     Validates and redeems a promo code for a user.

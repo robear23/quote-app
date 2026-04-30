@@ -319,7 +319,13 @@ async def _upsert_user_by_email(email: str) -> dict:
         return res.data[0]
     try:
         new = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
-        return new.data[0]
+        user = new.data[0]
+        try:
+            from subscription_service import auto_apply_signup_bonus
+            await auto_apply_signup_bonus(user["id"])
+        except Exception as bonus_err:
+            logger.warning(f"Failed to apply signup bonus: {bonus_err}")
+        return user
     except Exception as e:
         err = str(e).lower()
         if "duplicate" in err or "unique" in err or "23505" in err:
@@ -404,6 +410,11 @@ async def initiate_handshake(email: str):
             try:
                 new_user = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
                 user_id = new_user.data[0]["id"]
+                try:
+                    from subscription_service import auto_apply_signup_bonus
+                    await auto_apply_signup_bonus(user_id)
+                except Exception as bonus_err:
+                    logger.warning(f"Failed to apply signup bonus: {bonus_err}")
             except Exception as insert_err:
                 err_str = str(insert_err).lower()
                 if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
