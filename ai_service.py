@@ -124,7 +124,7 @@ Return a JSON object with exactly these two keys:
 """
 
 TEMPLATE_MAP_PROMPT = """
-You are analyzing a DOCX quote/invoice document to identify which cells contain VARIABLE data that changes per quote.
+You are analyzing a DOCX quote/invoice document to identify where VARIABLE data should be placed.
 
 Document structure (JSON):
 {structure}
@@ -134,13 +134,27 @@ Business info already extracted (static — do NOT mark these as variable):
 
 Identify the locations of these VARIABLE fields. Return null for any field you cannot locate.
 
+CRITICAL: Many real templates do NOT use [bracket] placeholders. You must identify locations even when no placeholder text exists, by reading context clues:
+- Empty cells in the same row as, or directly below, a label cell (e.g. "Customer Name:" | <empty cell> → customer_name goes in the empty cell)
+- Blank paragraphs immediately following a label paragraph (e.g. "Bill To:" then an empty line → customer_name goes on the empty line)
+- Cells containing only dashes, dots, underscores, or generic text like "Enter name here"
+- Date-format cells like "DD/MM/YYYY" or "01/01/2024" → quote_date
+- Any cell with dummy/placeholder text next to a recognisable label
+
+Common label → field mappings to recognise (regardless of exact wording):
+- "Bill To", "Billed To", "Customer", "Client", "Issued To", "Name", "To:" → customer_name (the cell/paragraph adjacent to or below these labels)
+- "Address", "Customer Address", "Client Address", "Delivery Address" → customer_address
+- "Quote No", "Quote Ref", "Invoice No", "Invoice Number", "Reference", "Ref", "No." → quote_ref
+- "Date", "Invoice Date", "Quote Date", "Issue Date", "DD/MM/YYYY" → quote_date
+- Totals rows: "Sub Total", "Subtotal", "Net" → subtotal; "VAT", "Tax", "GST" → tax; "Total", "Total Due", "Amount Due", "Grand Total" → grand_total
+
 Note: tables are indexed in document order (0-based), including nested tables (e.g. inner tables used for side-by-side layouts). Outer layout/container cells will appear empty — focus on inner cells with specific field text.
 
 Respond with ONLY a valid JSON object with these keys:
-- "customer_name": location where the customer/client name appears
-- "customer_address": location of customer address (null if absent)
-- "quote_ref": location of quote/invoice reference number (null if absent)
-- "quote_date": location of the date (null if absent)
+- "customer_name": location where the customer/client name appears or should be placed
+- "customer_address": location of customer address (null if genuinely absent from layout)
+- "quote_ref": location of quote/invoice reference number (null if genuinely absent)
+- "quote_date": location of the date (null if genuinely absent)
 - "line_items_table_index": integer index (0-based) of the table containing line items rows (description, qty, price, total columns)
 - "line_item_header_rows": list of row indices (0-based) that are header rows in the line items table
 - "subtotal_value_location": location of the subtotal numeric value cell (null if absent)
@@ -178,12 +192,23 @@ Template cell values:
 Business info already known (these are STATIC — do NOT mark as variable fields):
 {business_info}
 
-Identify the exact cell addresses for the following VARIABLE fields that change per quote.
-Return null for any field you cannot locate.
+CRITICAL: Many real templates do NOT have explicit placeholder text in data cells. Instead:
+- A label cell (e.g. "Customer Name:") will appear in the dump, but the adjacent data cell (typically immediately to the right or directly below) will be empty and therefore NOT appear in the dump.
+- You must infer the target cell from the label's position. For example, if "Customer Name:" is in B3, the target cell is probably C3 (to the right) or B4 (below). Use context and typical invoice layouts to choose.
+- Similarly for date, quote ref, address — find the label, then identify the empty adjacent cell.
 
-For line items, identify:
-- The 1-based row number where the first data row begins (after headers)
-- The column letters for description, qty, unit_price, and total columns
+Common label → field mappings to recognise:
+- "Bill To", "Customer", "Client", "Name", "Issued To" → client_name
+- "Address", "Customer Address" → client_address
+- "Quote No", "Invoice No", "Reference", "Ref" → quote_ref
+- "Date", "Invoice Date", "Quote Date" → quote_date
+- "Subtotal", "Sub Total", "Net" → subtotal_cell
+- "VAT", "Tax", "GST" → tax_cell
+- "Total", "Total Due", "Grand Total", "Amount Due" → total_cell
+
+For line items: find the table that contains a header row with description/item, qty/hours, price/rate, and total/amount columns. Line items start in the row immediately after the header row.
+
+Return null only if a field is genuinely not present in the template layout.
 
 Respond with ONLY a valid JSON object with exactly these keys:
 - "client_name": cell address (e.g. "B5") or null
@@ -202,7 +227,10 @@ FALLBACK_MODEL = "gemini-2.5-flash-lite"
 MAX_RETRIES = 5
 BASE_RETRY_DELAY = 3  # seconds
 
-JSON_CONFIG = types.GenerateContentConfig(response_mime_type="application/json")
+JSON_CONFIG = types.GenerateContentConfig(
+    response_mime_type="application/json",
+    thinking_config=types.ThinkingConfig(thinking_budget=0),
+)
 
 # Limits concurrent Gemini calls to prevent thread pool exhaustion under load.
 # Tune this based on your Gemini API quota (free tier: lower; paid tier: higher).
@@ -969,3 +997,41 @@ class AIService:
             logger.error(f"Failed to build XLSX field mapping: {e}", exc_info=True)
             _capture(e)
             return None
+
+
+def assess_docx_template_fields(template_bytes: bytes) -> dict:
+    """
+    Scans a processed docxtpl DOCX for Jinja2 placeholders and returns which
+    variable fields were successfully injected. Used to build the upload preview report.
+    """
+    try:
+        import zipfile
+        import io as _io
+        with zipfile.ZipFile(_io.BytesIO(template_bytes)) as zf:
+            xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+    except Exception:
+        return {}
+    return {
+        "customer_name": "customer_name" in xml,
+        "customer_address": "customer_address" in xml,
+        "quote_ref": "quote_ref" in xml,
+        "quote_date": "quote_date" in xml,
+        "line_items": "line_items" in xml,
+        "grand_total": "grand_total" in xml,
+    }
+
+
+def assess_xlsx_mapping_fields(mapping: dict) -> dict:
+    """
+    Checks which fields are non-null in an XLSX field mapping dict. Used to
+    build the upload preview report alongside the XLSX template preview.
+    """
+    cols = mapping.get("line_items_cols") or {}
+    return {
+        "customer_name": bool(mapping.get("client_name")),
+        "customer_address": bool(mapping.get("client_address")),
+        "quote_ref": bool(mapping.get("quote_ref")),
+        "quote_date": bool(mapping.get("quote_date")),
+        "line_items": bool(mapping.get("line_items_start_row") and any(cols.values())),
+        "grand_total": bool(mapping.get("total_cell")),
+    }

@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 from config import settings
 import database
-from ai_service import AIService, RateLimitError, run_ai  # noqa: F401 (run_ai re-exported)
+from ai_service import AIService, RateLimitError, run_ai, assess_docx_template_fields, assess_xlsx_mapping_fields  # noqa: F401 (run_ai re-exported)
 
 try:
     import sentry_sdk as _sentry
@@ -36,7 +36,7 @@ async def run_ai_notify(func, *args, msg=None):
         return await task
 
 RATE_LIMIT_MSG = "The AI service is temporarily busy. Please wait a moment and try again."
-from document_factory import DocumentFactory, _extract_tax_rate
+from document_factory import DocumentFactory, _extract_tax_rate, SAMPLE_QUOTE_DATA
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -139,6 +139,30 @@ def _currency_keyboard() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("Other — type your currency code", callback_data="onboarding_currency_OTHER")],
     ])
+
+
+def _template_preview_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("Looks good ✓", callback_data="template_preview_ok"),
+        InlineKeyboardButton("Re-upload template", callback_data="template_preview_reupload"),
+    ]])
+
+
+def _format_field_report(fields: dict) -> str:
+    """Returns a short field-detection summary for the template preview message."""
+    labels = {
+        "customer_name": "Client name",
+        "customer_address": "Client address",
+        "quote_ref": "Quote reference",
+        "quote_date": "Date",
+        "line_items": "Line items table",
+        "grand_total": "Total",
+    }
+    lines = []
+    for key, label in labels.items():
+        found = fields.get(key, False)
+        lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected — will be blank)*"))
+    return "\n".join(lines)
 
 
 async def _save_currency_and_ask_tax(
@@ -752,6 +776,47 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     except Exception as e:
                         logger.warning(f"Failed to upload logo (non-fatal): {e}")
 
+                # Field report + preview (non-blocking — failure just skips preview)
+                fields = assess_docx_template_fields(jinja_bytes)
+                preview_sent = False
+                try:
+                    preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.docx"
+                    preview_result = await asyncio.to_thread(
+                        DocumentFactory.generate_from_template, jinja_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
+                    )
+                    preview_path = preview_result["filepath"]
+                    await status_msg.edit_text(
+                        "✅ *Template saved!* Here's how your quotes will look:\n\n"
+                        + _format_field_report(fields),
+                        parse_mode="Markdown"
+                    )
+                    with open(preview_path, "rb") as f:
+                        await update.message.reply_document(document=f, filename="Preview.docx")
+                    os.remove(preview_path)
+                    preview_sent = True
+                except Exception as e:
+                    logger.warning(f"DOCX preview generation failed (non-fatal): {e}")
+
+                if preview_sent:
+                    await update.message.reply_text(
+                        "Does the layout look right?\n\n"
+                        "Press *Looks good ✓* to continue setup, or *Re-upload template* to fix any issues.",
+                        parse_mode="Markdown",
+                        reply_markup=_template_preview_keyboard()
+                    )
+                else:
+                    # Preview failed — skip straight to currency
+                    dna_data["user_id"] = db_user["id"]
+                    await database.supabase.table("user_configs").upsert(dna_data).execute()
+                    await update_user_state(user.id, "ONBOARDING_CURRENCY")
+                    await status_msg.edit_text(
+                        "Template saved!\n\n"
+                        "What currency do you use for your quotes?\n\n"
+                        "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
+                        reply_markup=_currency_keyboard()
+                    )
+                    return  # skip the shared upsert/state update below
+
             else:
                 # ── XLSX branch ──────────────────────────────────────────────
                 try:
@@ -799,17 +864,50 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 dna_data["preferred_format"] = "xlsx"
                 logger.info(f"XLSX template stored at {tpl_path} for user {db_user['id']}")
 
-            # Persist brand DNA (currency/tax come from Q&A next)
+                # Field report + preview (non-blocking)
+                fields = assess_xlsx_mapping_fields(mapping)
+                preview_sent = False
+                try:
+                    preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.xlsx"
+                    preview_result = await asyncio.to_thread(
+                        DocumentFactory.generate_from_xlsx_template, template_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
+                    )
+                    preview_path = preview_result["filepath"]
+                    await status_msg.edit_text(
+                        "✅ *Template saved!* Here's how your quotes will look:\n\n"
+                        + _format_field_report(fields),
+                        parse_mode="Markdown"
+                    )
+                    with open(preview_path, "rb") as f:
+                        await update.message.reply_document(document=f, filename="Preview.xlsx")
+                    os.remove(preview_path)
+                    preview_sent = True
+                except Exception as e:
+                    logger.warning(f"XLSX preview generation failed (non-fatal): {e}")
+
+                if preview_sent:
+                    await update.message.reply_text(
+                        "Does the layout look right?\n\n"
+                        "Press *Looks good ✓* to continue setup, or *Re-upload template* to fix any issues.",
+                        parse_mode="Markdown",
+                        reply_markup=_template_preview_keyboard()
+                    )
+                else:
+                    dna_data["user_id"] = db_user["id"]
+                    await database.supabase.table("user_configs").upsert(dna_data).execute()
+                    await update_user_state(user.id, "ONBOARDING_CURRENCY")
+                    await status_msg.edit_text(
+                        "Template saved!\n\n"
+                        "What currency do you use for your quotes?\n\n"
+                        "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
+                        reply_markup=_currency_keyboard()
+                    )
+                    return  # skip the shared upsert/state update below
+
+            # Persist brand DNA (currency/tax come from Q&A after preview confirmation)
             dna_data["user_id"] = db_user["id"]
             await database.supabase.table("user_configs").upsert(dna_data).execute()
-
-            await update_user_state(user.id, "ONBOARDING_CURRENCY")
-            await status_msg.edit_text(
-                "Template saved!\n\n"
-                "What currency do you use for your quotes?\n\n"
-                "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
-                reply_markup=_currency_keyboard()
-            )
+            # State stays ONBOARDING — handle_template_preview_ok advances it to ONBOARDING_CURRENCY
 
         except Exception as e:
             logger.error(f"Error during template onboarding: {e}", exc_info=True)
@@ -1175,6 +1273,46 @@ async def handle_onboarding_currency_callback(update: Update, context: ContextTy
     await _save_currency_and_ask_tax(update, context, db_user, currency_code)
 
 
+async def handle_template_preview_ok(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User confirmed the template preview looks good — proceed to currency selection."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    db_user = await get_user(query.from_user.id)
+    if not db_user or db_user.get("bot_state") != "ONBOARDING":
+        return
+    await update_user_state(query.from_user.id, "ONBOARDING_CURRENCY")
+    await query.message.reply_text(
+        "What currency do you use for your quotes?\n\n"
+        "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
+        reply_markup=_currency_keyboard()
+    )
+
+
+async def handle_template_preview_reupload(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User wants to fix their template — stay in ONBOARDING and prompt re-upload."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    db_user = await get_user(query.from_user.id)
+    if not db_user or db_user.get("bot_state") != "ONBOARDING":
+        return
+    await query.message.reply_text(
+        "No problem — please upload a revised template.\n\n"
+        "💡 *Tips for best results:*\n"
+        "• Add labels like `Bill To:`, `Date:`, `Quote Ref:` next to the relevant fields\n"
+        "• Make sure your line items table has column headers (Description, Qty, Price, Total)\n"
+        "• You can also use `[Client Name]`, `[Date]`, `[Quote Ref]` as explicit placeholders",
+        parse_mode="Markdown"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Bot runner
 # ---------------------------------------------------------------------------
@@ -1200,6 +1338,8 @@ def build_application():
     application.add_handler(CommandHandler("redeem", redeem))
     application.add_handler(CallbackQueryHandler(handle_confirm_yes, pattern="^confirm_yes$"))
     application.add_handler(CallbackQueryHandler(handle_onboarding_currency_callback, pattern="^onboarding_currency_"))
+    application.add_handler(CallbackQueryHandler(handle_template_preview_ok, pattern="^template_preview_ok$"))
+    application.add_handler(CallbackQueryHandler(handle_template_preview_reupload, pattern="^template_preview_reupload$"))
 
     # Photos and file documents
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document))

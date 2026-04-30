@@ -63,6 +63,16 @@ def _hex_to_rgb(hex_color: str) -> tuple:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
+SAMPLE_QUOTE_DATA = {
+    "customer_name": "Acme Corporation",
+    "customer_address": "12 Example Street, London, EC1A 1BB",
+    "currency": "GBP",
+    "line_items": [
+        {"description": "Website Design & Development", "quantity": 1, "unit_price": 2500.00},
+        {"description": "SEO Setup & Optimisation", "quantity": 3, "unit_price": 150.00},
+    ],
+}
+
 _CURRENCY_SYMBOLS = {
     "GBP": "£", "USD": "$", "EUR": "€", "AUD": "A$", "CAD": "C$",
     "NZD": "NZ$", "CHF": "Fr", "JPY": "¥", "CNY": "¥", "INR": "₹",
