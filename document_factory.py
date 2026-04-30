@@ -643,9 +643,19 @@ class DocumentFactory:
         line_items_data = quote_data.get("line_items", [])
         logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
         valid_until_str = (date.today() + timedelta(days=30)).strftime("%d %B %Y")
+
+        raw_address = quote_data.get("customer_address") or ""
+        if '\n' in raw_address:
+            _addr_parts = [l.strip() for l in raw_address.split('\n') if l.strip()]
+        else:
+            _addr_parts = [l.strip() for l in raw_address.split(',') if l.strip()]
+
         context = {
             "customer_name": quote_data.get("customer_name", ""),
-            "customer_address": quote_data.get("customer_address") or "",
+            "customer_address": raw_address,
+            "address_line_1": _addr_parts[0] if len(_addr_parts) > 0 else "",
+            "address_line_2": _addr_parts[1] if len(_addr_parts) > 1 else "",
+            "address_line_3": ", ".join(_addr_parts[2:]) if len(_addr_parts) > 2 else "",
             "quote_ref": quote_ref,
             "quote_date": today_str,
             "valid_until": valid_until_str,
@@ -670,6 +680,9 @@ class DocumentFactory:
 
         context["customer_name"] = _amp(context["customer_name"])
         context["customer_address"] = _amp(context["customer_address"])
+        context["address_line_1"] = _amp(context["address_line_1"])
+        context["address_line_2"] = _amp(context["address_line_2"])
+        context["address_line_3"] = _amp(context["address_line_3"])
         context["line_items"] = [{**i, "description": _amp(i["description"])} for i in context["line_items"]]
 
         tpl = DocxTemplate(io.BytesIO(template_bytes))

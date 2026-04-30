@@ -146,6 +146,7 @@ Common label → field mappings to recognise (regardless of exact wording):
 - "Address", "Customer Address", "Client Address", "Delivery Address" → customer_address
 - "Quote No", "Quote Ref", "Invoice No", "Invoice Number", "Reference", "Ref", "No." → quote_ref
 - "Date", "Invoice Date", "Quote Date", "Issue Date", "DD/MM/YYYY" → quote_date
+- "Expiry Date", "Expiry", "Valid Until", "Valid To", "Expires", "Quote Expires" → valid_until
 - Totals rows: "Sub Total", "Subtotal", "Net" → subtotal; "VAT", "Tax", "GST" → tax; "Total", "Total Due", "Amount Due", "Grand Total" → grand_total
 
 Note: tables are indexed in document order (0-based), including nested tables (e.g. inner tables used for side-by-side layouts). Outer layout/container cells will appear empty — focus on inner cells with specific field text.
@@ -155,6 +156,7 @@ Respond with ONLY a valid JSON object with these keys:
 - "customer_address": location of customer address (null if genuinely absent from layout)
 - "quote_ref": location of quote/invoice reference number (null if genuinely absent)
 - "quote_date": location of the date (null if genuinely absent)
+- "valid_until": location of expiry/valid-until date (null if genuinely absent)
 - "line_items_table_index": integer index (0-based) of the table containing line items rows (description, qty, price, total columns)
 - "line_item_header_rows": list of row indices (0-based) that are header rows in the line items table
 - "subtotal_value_location": location of the subtotal numeric value cell (null if absent)
@@ -652,28 +654,46 @@ class AIService:
             "customer_name": re.compile(
                 r'^\[\s*(client\s*name|customer\s*name|name)\s*\]$', re.I
             ),
+            # Multi-line address patterns must come before the catch-all customer_address
+            # so the more specific ones win when both would match (e.g. [Address Line 1]).
+            "address_line_1": re.compile(
+                r'^\[\s*(client\s*address\s*line\s*1|customer\s*address\s*line\s*1|address\s*line\s*1|street\s*address\s*1)\s*\]$', re.I
+            ),
+            "address_line_2": re.compile(
+                r'^\[\s*(client\s*address\s*line\s*2|customer\s*address\s*line\s*2|address\s*line\s*2|street\s*address\s*2)\s*\]$', re.I
+            ),
+            "address_line_3": re.compile(
+                r'^\[\s*(town[\s,/]+county[\s,/]+postcode|town[\s,/]+postcode|city[\s,/]+state[\s,/]+zip|city[\s,/]+zip|postcode|zip\s*code?|postal\s*code?|town|city|county|state)\s*\]$', re.I
+            ),
             "customer_address": re.compile(
                 r'^\[\s*(client\s*address|customer\s*address|street\s*address|address\s*line\s*1?|address)\s*\]$', re.I
             ),
             "quote_ref": re.compile(
-                r'^\[\s*(quote\s*(no\.?|ref|number|#)|invoice\s*(no\.?|ref|number|#)|ref\s*(no\.?|#)?)\s*\]$', re.I
+                r'^\[\s*(quote\s*(no\.?|ref(?:erence)?|number|#)|invoice\s*(no\.?|ref(?:erence)?|number|#)|ref(?:erence)?\s*(no\.?|#)?)\s*\]$', re.I
             ),
             "quote_date": re.compile(
                 r'^\[\s*(date|quote\s*date|invoice\s*date|dd[/\-\.]mm[/\-\.]yyyy)\s*\]$', re.I
             ),
+            "valid_until": re.compile(
+                r'^\[\s*(expiry\s*date|expiry|valid\s*(until|to|till|thru)|quote\s*expires?|expires?\s*date?)\s*\]$', re.I
+            ),
         }
         _JINJA_FOR_FIELD = {
             "customer_name": "{{ customer_name }}",
+            "address_line_1": "{{ address_line_1 }}",
+            "address_line_2": "{{ address_line_2 }}",
+            "address_line_3": "{{ address_line_3 }}",
             "customer_address": "{{ customer_address }}",
             "quote_ref": "{{ quote_ref }}",
             "quote_date": "{{ quote_date }}",
+            "valid_until": "{{ valid_until }}",
         }
         regex_matched = set()
 
         def _try_regex_inject_para(para):
             txt = para.text.strip()
             for field, pat in _BRACKET_PATTERNS.items():
-                if field not in regex_matched and pat.match(txt):
+                if pat.match(txt):
                     _set_para_text(para, _JINJA_FOR_FIELD[field])
                     regex_matched.add(field)
                     logger.info(f"Regex-matched field '{field}' in paragraph: {txt!r}")
@@ -683,7 +703,7 @@ class AIService:
             for para in cell.paragraphs:
                 txt = para.text.strip()
                 for field, pat in _BRACKET_PATTERNS.items():
-                    if field not in regex_matched and pat.match(txt):
+                    if pat.match(txt):
                         _set_para_text(para, _JINJA_FOR_FIELD[field])
                         regex_matched.add(field)
                         logger.info(f"Regex-matched field '{field}' in cell: {txt!r}")
@@ -751,6 +771,8 @@ class AIService:
             _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
         if "quote_date" not in regex_matched:
             _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
+        if "valid_until" not in regex_matched:
+            _inject_location(field_map.get("valid_until"), "{{ valid_until }}")
         _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
         _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
         _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
@@ -855,13 +877,14 @@ class AIService:
         # [DD/MM/YYYY] on a second occurrence → valid_until placeholder.
         _PH_RE = re.compile(r'^\s*\[.+\]\s*$')
         _DATE_PH_RE = re.compile(r'^\s*\[DD[/\-.]MM[/\-.]YYYY\]\s*$', re.I)
+        _EXPIRY_PH_RE = re.compile(r'^\s*\[\s*(expiry\s*date|expiry|valid\s*(until|to|till|thru)|quote\s*expires?|expires?\s*date?)\s*\]\s*$', re.I)
         cleared = [0]
 
         def _sweep_para(para):
             txt = para.text.strip()
             if not txt:
                 return
-            if _DATE_PH_RE.match(txt):
+            if _DATE_PH_RE.match(txt) or _EXPIRY_PH_RE.match(txt):
                 _set_para_text(para, "{{ valid_until }}")
                 cleared[0] += 1
             elif _PH_RE.match(txt):
@@ -1013,9 +1036,10 @@ def assess_docx_template_fields(template_bytes: bytes) -> dict:
         return {}
     return {
         "customer_name": "customer_name" in xml,
-        "customer_address": "customer_address" in xml,
+        "customer_address": any(f in xml for f in ("customer_address", "address_line_1")),
         "quote_ref": "quote_ref" in xml,
         "quote_date": "quote_date" in xml,
+        "valid_until": "valid_until" in xml,
         "line_items": "line_items" in xml,
         "grand_total": "grand_total" in xml,
     }

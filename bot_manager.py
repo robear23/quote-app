@@ -155,6 +155,7 @@ def _format_field_report(fields: dict) -> str:
         "customer_address": "Client address",
         "quote_ref": "Quote reference",
         "quote_date": "Date",
+        "valid_until": "Expiry date",
         "line_items": "Line items table",
         "grand_total": "Total",
     }
