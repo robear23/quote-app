@@ -165,6 +165,11 @@ Respond with ONLY a valid JSON object with these keys:
 
 Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
   OR {{"type": "paragraph", "paragraph_index": N}} (use 0-based index into the non-empty paragraphs list)
+
+Visual pre-analysis of the rendered template image identified these fields with their label text:
+{visual_hints}
+Use these label texts to help locate the corresponding fields in the document structure above.
+If visual_hints says null for a field, it is likely absent — only map it if you are very confident.
 """
 
 XLSX_DNA_PROMPT = """
@@ -222,6 +227,34 @@ Respond with ONLY a valid JSON object with exactly these keys:
 - "subtotal_cell": cell address for subtotal value or null
 - "tax_cell": cell address for tax/VAT amount or null
 - "total_cell": cell address for grand total or null
+
+Visual pre-analysis of the rendered template image identified these fields with their label text:
+{visual_hints}
+Use these label texts to search the cell dump above for matching label cells, then infer the adjacent data cell.
+If visual_hints says null for a field, it is likely absent — only map it if you are very confident.
+"""
+
+VISUAL_FIELD_DETECT_PROMPT = """
+You are analyzing a rendered image of a blank quote or invoice template.
+Your job is to identify which variable fields that need to be filled with client/job data are present.
+
+For each field below, if you can see it in the template, return the exact label text that appears near it
+(e.g. "Bill To:", "Date:", "Invoice No."). Even if the field area is just blank space next to a label,
+or a blank line/underline after a label, still report it — you don't need explicit placeholder text.
+Return null only if the field is genuinely absent from the layout.
+
+Return ONLY valid JSON with these keys:
+{
+  "customer_name": "exact label text" or null,
+  "customer_address": "exact label text" or null,
+  "quote_ref": "exact label text" or null,
+  "quote_date": "exact label text" or null,
+  "valid_until": "exact label text" or null,
+  "line_items_table": true or false,
+  "subtotal": "exact label text" or null,
+  "tax": "exact label text" or null,
+  "grand_total": "exact label text" or null
+}
 """
 
 MODEL = "gemini-2.5-flash"
@@ -598,11 +631,12 @@ class AIService:
             return {"confirmed": True, "updated_quote": current_quote}
 
     @staticmethod
-    def build_quote_template(docx_path: str, brand_dna: dict) -> bytes | None:
+    def build_quote_template(docx_path: str, brand_dna: dict, visual_hints: dict | None = None) -> bytes | None:
         """
         Takes a sample quote DOCX, asks Gemini to map variable fields, injects
         docxtpl Jinja2 placeholders via python-docx, and returns the modified
         DOCX as bytes. Returns None if the document cannot be processed.
+        visual_hints: output of analyze_template_visually() — used to guide field detection.
         """
         try:
             import docx as _docx
@@ -738,6 +772,7 @@ class AIService:
         prompt = TEMPLATE_MAP_PROMPT.format(
             structure=json.dumps(structure, indent=2),
             business_info=json.dumps(business_info, indent=2),
+            visual_hints=_format_visual_hints(visual_hints or {}),
         )
 
         try:
@@ -964,10 +999,11 @@ class AIService:
             return None
 
     @staticmethod
-    def build_xlsx_field_mapping(xlsx_path: str, brand_dna: dict) -> dict | None:
+    def build_xlsx_field_mapping(xlsx_path: str, brand_dna: dict, visual_hints: dict | None = None) -> dict | None:
         """
         Reads an XLSX template and asks Gemini to identify the cell addresses for
         all variable quote fields. Returns a mapping dict or None on failure.
+        visual_hints: output of analyze_template_visually() — used to guide field detection.
         """
         try:
             import openpyxl as _openpyxl
@@ -997,6 +1033,7 @@ class AIService:
             prompt = XLSX_MAP_PROMPT.format(
                 cell_dump=cell_dump,
                 business_info=json.dumps(business_info, indent=2),
+                visual_hints=_format_visual_hints(visual_hints or {}),
             )
             response = _generate_with_retry(prompt)
 
@@ -1020,6 +1057,48 @@ class AIService:
             logger.error(f"Failed to build XLSX field mapping: {e}", exc_info=True)
             _capture(e)
             return None
+
+
+def analyze_template_visually(png_bytes: bytes) -> dict:
+    """
+    Sends a rendered PNG of the template to Gemini Vision to identify which
+    variable fields are present and what label text surrounds them.
+    Returns a dict of field -> label string (or True/False for line_items_table),
+    or an empty dict on failure.
+    """
+    if not client:
+        return {}
+    try:
+        img_part = types.Part.from_bytes(data=png_bytes, mime_type="image/png")
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=[img_part, VISUAL_FIELD_DETECT_PROMPT],
+            config=JSON_CONFIG,
+        )
+        raw = (response.text or "").strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw).rstrip("` \n")
+        result = json.loads(raw)
+        logger.info(f"Visual field detection result: {result}")
+        return result
+    except Exception as e:
+        logger.warning(f"Visual field detection failed (non-fatal): {e}")
+        return {}
+
+
+def _format_visual_hints(visual: dict) -> str:
+    """Formats visual detection results into a readable string for embedding in AI prompts."""
+    if not visual:
+        return "(not available — no image conversion)"
+    lines = []
+    for key, val in visual.items():
+        if val is None:
+            lines.append(f"  {key}: NOT FOUND in template")
+        elif isinstance(val, bool):
+            lines.append(f"  {key}: {'present' if val else 'NOT FOUND'}")
+        else:
+            lines.append(f"  {key}: present — label text is '{val}'")
+    return "\n".join(lines)
 
 
 def assess_docx_template_fields(template_bytes: bytes) -> dict:

@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 from config import settings
 import database
-from ai_service import AIService, RateLimitError, run_ai, assess_docx_template_fields, assess_xlsx_mapping_fields  # noqa: F401 (run_ai re-exported)
+from ai_service import AIService, RateLimitError, run_ai, assess_docx_template_fields, assess_xlsx_mapping_fields, analyze_template_visually  # noqa: F401 (run_ai re-exported)
 
 try:
     import sentry_sdk as _sentry
@@ -163,6 +163,25 @@ def _format_field_report(fields: dict) -> str:
     for key, label in labels.items():
         found = fields.get(key, False)
         lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected — will be blank)*"))
+    return "\n".join(lines)
+
+
+def _format_field_report_from_visual(visual: dict) -> str:
+    """Builds the field detection summary from vision AI results."""
+    checks = [
+        ("customer_name",    "Client name"),
+        ("customer_address", "Client address"),
+        ("quote_ref",        "Quote reference"),
+        ("quote_date",       "Date"),
+        ("valid_until",      "Expiry date"),
+        ("line_items_table", "Line items table"),
+        ("grand_total",      "Total"),
+    ]
+    lines = []
+    for key, label in checks:
+        val = visual.get(key)
+        found = bool(val)
+        lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected)*"))
     return "\n".join(lines)
 
 
@@ -732,6 +751,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
                     return
 
+                # Convert to PNG for inline preview + visual field analysis
+                await status_msg.edit_text("Analysing your template layout...")
+                png_bytes = await asyncio.to_thread(
+                    DocumentFactory.convert_to_preview_png, template_bytes, "docx"
+                )
+                visual_hints: dict = {}
+                if png_bytes:
+                    try:
+                        visual_hints = await run_ai(analyze_template_visually, png_bytes)
+                    except Exception as e:
+                        logger.warning(f"Visual field detection failed (non-fatal): {e}")
+
                 try:
                     blank_path = await _upload_blank_template(db_user["id"], template_bytes)
                     dna_data["blank_template_path"] = blank_path
@@ -739,7 +770,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     logger.warning(f"Failed to upload blank template (non-fatal): {e}")
 
                 try:
-                    jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data)
+                    jinja_bytes = await run_ai(AIService.build_quote_template, tmp_path, dna_data, visual_hints)
                 except RateLimitError:
                     await status_msg.edit_text(RATE_LIMIT_MSG)
                     return
@@ -777,36 +808,59 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     except Exception as e:
                         logger.warning(f"Failed to upload logo (non-fatal): {e}")
 
-                # Field report + preview (non-blocking — failure just skips preview)
-                fields = assess_docx_template_fields(jinja_bytes)
+                # Build field report — prefer vision results, fall back to XML scan
+                if visual_hints:
+                    field_report = _format_field_report_from_visual(visual_hints)
+                else:
+                    field_report = _format_field_report(assess_docx_template_fields(jinja_bytes))
+
+                # Send preview — PNG inline photo if available, else fallback to docx file
                 preview_sent = False
-                try:
-                    preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.docx"
-                    preview_result = await asyncio.to_thread(
-                        DocumentFactory.generate_from_template, jinja_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
-                    )
-                    preview_path = preview_result["filepath"]
-                    await status_msg.edit_text(
-                        "✅ *Template saved!* Here's how your quotes will look:\n\n"
-                        + _format_field_report(fields),
-                        parse_mode="Markdown"
-                    )
-                    with open(preview_path, "rb") as f:
-                        await update.message.reply_document(document=f, filename="Preview.docx")
-                    os.remove(preview_path)
-                    preview_sent = True
-                except Exception as e:
-                    logger.warning(f"DOCX preview generation failed (non-fatal): {e}")
+                if png_bytes:
+                    try:
+                        await status_msg.edit_text(
+                            "✅ *Template saved!*\n\n"
+                            "Here's a preview image of your template — I've detected the fields below that will be filled in automatically when you generate quotes "
+                            "(your actual quotes will be sent as editable Word files):\n\n"
+                            + field_report,
+                            parse_mode="Markdown"
+                        )
+                        await update.message.reply_photo(
+                            photo=png_bytes,
+                            caption="Your quote template"
+                        )
+                        preview_sent = True
+                    except Exception as e:
+                        logger.warning(f"PNG preview send failed (non-fatal): {e}")
+
+                if not preview_sent:
+                    # Fallback: generate filled docx preview
+                    try:
+                        preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.docx"
+                        preview_result = await asyncio.to_thread(
+                            DocumentFactory.generate_from_template, jinja_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
+                        )
+                        preview_path = preview_result["filepath"]
+                        await status_msg.edit_text(
+                            "✅ *Template saved!* Here's a sample quote using your template:\n\n" + field_report,
+                            parse_mode="Markdown"
+                        )
+                        with open(preview_path, "rb") as f:
+                            await update.message.reply_document(document=f, filename="Preview.docx")
+                        os.remove(preview_path)
+                        preview_sent = True
+                    except Exception as e:
+                        logger.warning(f"DOCX preview generation failed (non-fatal): {e}")
 
                 if preview_sent:
                     await update.message.reply_text(
-                        "Does the layout look right?\n\n"
-                        "Press *Looks good ✓* to continue setup, or *Re-upload template* to fix any issues.",
+                        "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                        "_Note: actual quotes you generate will be sent as editable .docx files._",
                         parse_mode="Markdown",
                         reply_markup=_template_preview_keyboard()
                     )
                 else:
-                    # Preview failed — skip straight to currency
+                    # All preview attempts failed — skip straight to currency
                     dna_data["user_id"] = db_user["id"]
                     await database.supabase.table("user_configs").upsert(dna_data).execute()
                     await update_user_state(user.id, "ONBOARDING_CURRENCY")
@@ -833,8 +887,20 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
                     return
 
+                # Convert to PNG for inline preview + visual field analysis
+                await status_msg.edit_text("Analysing your template layout...")
+                png_bytes = await asyncio.to_thread(
+                    DocumentFactory.convert_to_preview_png, template_bytes, "xlsx"
+                )
+                visual_hints: dict = {}
+                if png_bytes:
+                    try:
+                        visual_hints = await run_ai(analyze_template_visually, png_bytes)
+                    except Exception as e:
+                        logger.warning(f"Visual field detection failed (non-fatal): {e}")
+
                 try:
-                    mapping = await run_ai(AIService.build_xlsx_field_mapping, tmp_path, dna_data)
+                    mapping = await run_ai(AIService.build_xlsx_field_mapping, tmp_path, dna_data, visual_hints)
                 except RateLimitError:
                     await status_msg.edit_text(RATE_LIMIT_MSG)
                     return
@@ -865,31 +931,54 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 dna_data["preferred_format"] = "xlsx"
                 logger.info(f"XLSX template stored at {tpl_path} for user {db_user['id']}")
 
-                # Field report + preview (non-blocking)
-                fields = assess_xlsx_mapping_fields(mapping)
+                # Build field report — prefer vision results, fall back to mapping scan
+                if visual_hints:
+                    field_report = _format_field_report_from_visual(visual_hints)
+                else:
+                    field_report = _format_field_report(assess_xlsx_mapping_fields(mapping))
+
+                # Send preview — PNG inline photo if available, else fallback to xlsx file
                 preview_sent = False
-                try:
-                    preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.xlsx"
-                    preview_result = await asyncio.to_thread(
-                        DocumentFactory.generate_from_xlsx_template, template_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
-                    )
-                    preview_path = preview_result["filepath"]
-                    await status_msg.edit_text(
-                        "✅ *Template saved!* Here's how your quotes will look:\n\n"
-                        + _format_field_report(fields),
-                        parse_mode="Markdown"
-                    )
-                    with open(preview_path, "rb") as f:
-                        await update.message.reply_document(document=f, filename="Preview.xlsx")
-                    os.remove(preview_path)
-                    preview_sent = True
-                except Exception as e:
-                    logger.warning(f"XLSX preview generation failed (non-fatal): {e}")
+                if png_bytes:
+                    try:
+                        await status_msg.edit_text(
+                            "✅ *Template saved!*\n\n"
+                            "Here's a preview image of your template — I've detected the fields below that will be filled in automatically when you generate quotes "
+                            "(your actual quotes will be sent as editable Excel files):\n\n"
+                            + field_report,
+                            parse_mode="Markdown"
+                        )
+                        await update.message.reply_photo(
+                            photo=png_bytes,
+                            caption="Your quote template"
+                        )
+                        preview_sent = True
+                    except Exception as e:
+                        logger.warning(f"PNG preview send failed (non-fatal): {e}")
+
+                if not preview_sent:
+                    # Fallback: generate filled xlsx preview
+                    try:
+                        preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.xlsx"
+                        preview_result = await asyncio.to_thread(
+                            DocumentFactory.generate_from_xlsx_template, template_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
+                        )
+                        preview_path = preview_result["filepath"]
+                        await status_msg.edit_text(
+                            "✅ *Template saved!* Here's a sample quote using your template:\n\n" + field_report,
+                            parse_mode="Markdown"
+                        )
+                        with open(preview_path, "rb") as f:
+                            await update.message.reply_document(document=f, filename="Preview.xlsx")
+                        os.remove(preview_path)
+                        preview_sent = True
+                    except Exception as e:
+                        logger.warning(f"XLSX preview generation failed (non-fatal): {e}")
 
                 if preview_sent:
                     await update.message.reply_text(
-                        "Does the layout look right?\n\n"
-                        "Press *Looks good ✓* to continue setup, or *Re-upload template* to fix any issues.",
+                        "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                        "_Note: actual quotes you generate will be sent as editable .xlsx files._",
                         parse_mode="Markdown",
                         reply_markup=_template_preview_keyboard()
                     )

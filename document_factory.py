@@ -4,6 +4,9 @@ import os
 import re
 import logging
 import random
+import shutil
+import subprocess
+import uuid
 from datetime import date, timedelta
 from docx import Document
 from docxtpl import DocxTemplate
@@ -619,6 +622,59 @@ class DocumentFactory:
         workbook.close()
         logger.info(f"Generated XLSX: {filepath}")
         return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}
+
+    @staticmethod
+    def convert_to_preview_png(file_bytes: bytes, file_ext: str) -> bytes | None:
+        """
+        Converts the first page of a DOCX or XLSX file to a PNG image for inline preview.
+        Requires LibreOffice (soffice) and poppler (pdftoppm) to be installed.
+        Returns None if conversion is unavailable or fails.
+        """
+        if not shutil.which("soffice"):
+            return None
+
+        tmp_id = uuid.uuid4().hex
+        tmp_in = os.path.join(OUTPUT_DIR, f"conv_{tmp_id}.{file_ext}")
+        tmp_pdf = os.path.join(OUTPUT_DIR, f"conv_{tmp_id}.pdf")
+        try:
+            with open(tmp_in, "wb") as f:
+                f.write(file_bytes)
+
+            result = subprocess.run(
+                ["soffice", "--headless", "--convert-to", "pdf", "--outdir", OUTPUT_DIR, tmp_in],
+                capture_output=True,
+                timeout=45,
+            )
+            if result.returncode != 0 or not os.path.exists(tmp_pdf):
+                logger.warning(f"LibreOffice conversion failed: {result.stderr.decode(errors='ignore')[:200]}")
+                return None
+
+            try:
+                from pdf2image import convert_from_bytes
+                images = convert_from_bytes(
+                    open(tmp_pdf, "rb").read(), first_page=1, last_page=1, dpi=150
+                )
+            except Exception as e:
+                logger.warning(f"pdf2image conversion failed: {e}")
+                return None
+
+            if not images:
+                return None
+
+            buf = io.BytesIO()
+            images[0].save(buf, format="PNG")
+            return buf.getvalue()
+
+        except Exception as e:
+            logger.warning(f"convert_to_preview_png failed: {e}")
+            return None
+        finally:
+            for p in [tmp_in, tmp_pdf]:
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
 
     @staticmethod
     def generate_from_template(template_bytes: bytes, quote_data: dict, brand_dna: dict, output_filename: str) -> dict:
