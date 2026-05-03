@@ -550,7 +550,7 @@ class AIService:
     def generate_quote_data(text: str, business_name: str = "Business Name") -> dict:
         """Parses user text into structured quote data using Gemini."""
         try:
-            prompt = QUOTE_GENERATION_PROMPT.format(business_name=business_name)
+            prompt = QUOTE_GENERATION_PROMPT.replace("{business_name}", business_name)
             response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
             return _normalize_quote(json.loads(response.text))
         except RateLimitError:
@@ -582,7 +582,7 @@ class AIService:
             if getattr(uploaded_file.state, "name", str(uploaded_file.state)) == "FAILED":
                 raise Exception(f"Gemini file processing failed for {file_path}")
 
-            prompt = VOICE_QUOTE_PROMPT.format(business_name=business_name)
+            prompt = VOICE_QUOTE_PROMPT.replace("{business_name}", business_name)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
@@ -605,7 +605,7 @@ class AIService:
         try:
             uploaded_file = client.files.upload(file=file_path)
 
-            prompt = IMAGE_QUOTE_PROMPT.format(business_name=business_name)
+            prompt = IMAGE_QUOTE_PROMPT.replace("{business_name}", business_name)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
