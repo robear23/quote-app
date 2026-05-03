@@ -125,6 +125,31 @@ async def _upload_xlsx_template(user_id: str, template_bytes: bytes) -> str:
     return storage_path
 
 
+async def _upload_generated_quote(user_id: str, file_path: str, filename: str) -> str:
+    """Uploads a generated quote to Supabase Storage. Returns the storage path 'bucket/path'."""
+    bucket = "generated-quotes"
+    storage_path = f"{user_id}/{filename}"
+    
+    try:
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+        
+        content_type = "application/octet-stream"
+        if filename.endswith(".pdf"): content_type = "application/pdf"
+        elif filename.endswith(".docx"): content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif filename.endswith(".xlsx"): content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        await database.supabase.storage.from_(bucket).upload(
+            storage_path, file_bytes,
+            file_options={"content-type": content_type}
+        )
+        return f"{bucket}/{storage_path}"
+    except Exception as e:
+        logger.warning(f"Failed to upload generated quote {filename} to Supabase: {e}")
+        return ""
+
+
+
 def _currency_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -441,11 +466,37 @@ async def generate_and_send_quote(
         return
 
     # Send document directly to Telegram; release reserved slot on failure
+    # Send document directly to Telegram; release reserved slot on failure
     try:
+        # ── PDF CONVERSION ───────────────────────────────────────────────
+        pdf_path = None
+        pdf_filename = os.path.splitext(output_filename)[0] + ".pdf"
+        
+        if not output_filename.endswith(".pdf"):
+            pdf_path = await asyncio.to_thread(DocumentFactory.convert_to_pdf, doc_path)
+        
+        # Send the primary document
         with open(doc_path, 'rb') as f:
             await context.bot.send_document(chat_id=user.id, document=f, filename=output_filename)
+        
+        # Send the PDF version too if requested/available
+        if pdf_path and os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as f:
+                await context.bot.send_document(
+                    chat_id=user.id, 
+                    document=f, 
+                    filename=pdf_filename,
+                    caption="Here is the PDF version for easy sharing."
+                )
+
+        # ── UPLOAD FOR SHARING ───────────────────────────────────────────
+        file_to_upload = pdf_path if (pdf_path and os.path.exists(pdf_path)) else doc_path
+        upload_filename = pdf_filename if (pdf_path and os.path.exists(pdf_path)) else output_filename
+        
+        storage_url = await _upload_generated_quote(db_user["id"], file_to_upload, upload_filename)
+        
     except Exception as e:
-        logger.error(f"Failed to send document to Telegram: {e}")
+        logger.error(f"Failed to send/upload document: {e}")
         if doc_id:
             try:
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
@@ -455,15 +506,24 @@ async def generate_and_send_quote(
         return
     finally:
         try:
-            os.remove(doc_path)
+            if os.path.exists(doc_path): os.remove(doc_path)
+            if pdf_path and os.path.exists(pdf_path): os.remove(pdf_path)
         except Exception:
             pass
+
+    share_url = f"{_settings.APP_URL}/share/{doc_id}" if doc_id else None
+    reply_markup = None
+    if share_url:
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Share Quote (Email/Messages)", url=share_url)
+        ]])
 
     await status_msg.edit_text(
         "Here is your generated quote!\n\n"
         "Use commands:\n"
         "/restart to re-upload your quote template\n"
-        "/feedback along with a message to give us feedback and tell us what features you want added."
+        "/feedback along with a message to give us feedback and tell us what features you want added.",
+        reply_markup=reply_markup
     )
 
     # Persist the document record: update the reserved placeholder if we have one,
