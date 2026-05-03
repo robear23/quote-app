@@ -173,11 +173,12 @@ def _template_preview_keyboard() -> InlineKeyboardMarkup:
     ]])
 
 
-def _format_field_report(fields: dict) -> str:
+def _format_field_report(fields: dict, custom_fields: dict | None = None) -> str:
     """Returns a short field-detection summary for the template preview message."""
     labels = {
         "customer_name": "Client name",
         "customer_address": "Client address",
+        "customer_email": "Client email",
         "quote_ref": "Quote reference",
         "quote_date": "Date",
         "valid_until": "Expiry date",
@@ -188,14 +189,19 @@ def _format_field_report(fields: dict) -> str:
     for key, label in labels.items():
         found = fields.get(key, False)
         lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected — will be blank)*"))
+    if custom_fields:
+        lines.append("\nCustom fields detected in your template:")
+        for display in custom_fields.values():
+            lines.append(f"✓ {display} *(you'll be asked for this when generating quotes)*")
     return "\n".join(lines)
 
 
-def _format_field_report_from_visual(visual: dict) -> str:
+def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = None) -> str:
     """Builds the field detection summary from vision AI results."""
     checks = [
         ("customer_name",    "Client name"),
         ("customer_address", "Client address"),
+        ("customer_email",   "Client email"),
         ("quote_ref",        "Quote reference"),
         ("quote_date",       "Date"),
         ("valid_until",      "Expiry date"),
@@ -207,6 +213,10 @@ def _format_field_report_from_visual(visual: dict) -> str:
         val = visual.get(key)
         found = bool(val)
         lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected)*"))
+    if custom_fields:
+        lines.append("\nCustom fields detected in your template:")
+        for display in custom_fields.values():
+            lines.append(f"✓ {display} *(you'll be asked for this when generating quotes)*")
     return "\n".join(lines)
 
 
@@ -301,6 +311,34 @@ def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
 
 def _yes_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("YES ✓", callback_data="confirm_yes")]])
+
+
+def _skip_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("Skip", callback_data="skip_custom_field"),
+        InlineKeyboardButton("Skip all", callback_data="skip_all_custom_fields"),
+    ]])
+
+
+async def _ask_next_custom_field(send_fn, pending_quote: dict, pending_brand_dna: dict, user_id: int):
+    """Ask the user for the next pending custom field, or finalize if all done."""
+    remaining = pending_quote.get("_pending_custom_fields", [])
+    if not remaining:
+        pending_quote.pop("_pending_custom_fields", None)
+        await set_pending_state(user_id, pending_quote, pending_brand_dna)
+        await update_user_state(user_id, "AWAITING_CONFIRMATION")
+        summary = format_quote_summary(pending_quote, pending_brand_dna)
+        await send_fn(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
+    else:
+        field = remaining[0]
+        await set_pending_state(user_id, pending_quote, pending_brand_dna)
+        await update_user_state(user_id, "AWAITING_CUSTOM_FIELD")
+        await send_fn(
+            f"Your template has a *{field['display']}* field. What should it say?\n"
+            f"_(Press Skip to leave it blank, or Skip all to skip remaining custom fields.)_",
+            parse_mode="Markdown",
+            reply_markup=_skip_keyboard(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +636,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Reply *2* for Excel (.xlsx)",
                 parse_mode="Markdown"
             )
-        elif state in ("ACTIVE", "AWAITING_CONFIRMATION"):
+        elif state in ("ACTIVE", "AWAITING_CONFIRMATION", "AWAITING_CUSTOM_FIELD"):
             await update.message.reply_text(
                 "Your account is active! Send me a voice note, photo, or type the job details to generate a quote."
             )
@@ -875,10 +913,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         logger.warning(f"Failed to upload logo (non-fatal): {e}")
 
                 # Build field report — prefer vision results, fall back to XML scan
+                _custom_fields = dna_data.get("custom_template_fields") or None
                 if visual_hints:
-                    field_report = _format_field_report_from_visual(visual_hints)
+                    field_report = _format_field_report_from_visual(visual_hints, _custom_fields)
                 else:
-                    field_report = _format_field_report(assess_docx_template_fields(jinja_bytes))
+                    field_report = _format_field_report(assess_docx_template_fields(jinja_bytes), _custom_fields)
 
                 # Send preview — PNG inline photo if available, else fallback to docx file
                 preview_sent = False
@@ -1095,8 +1134,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
             brand_dna = await get_brand_dna(db_user["id"])
+            business_name = brand_dna.get("business_name") or "Business Name"
+            custom_fields = brand_dna.get("custom_template_fields") or None
             try:
-                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, msg=msg)
+                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, business_name, custom_fields, msg=msg)
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
@@ -1114,11 +1155,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
             quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
-            await set_pending_state(user.id, quote_data, brand_dna)
-            await update_user_state(user.id, "AWAITING_CONFIRMATION")
-
-            summary = format_quote_summary(quote_data, brand_dna)
-            await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
+            missing = [
+                {"slug": slug, "display": display}
+                for slug, display in (custom_fields or {}).items()
+                if not quote_data.get(slug)
+            ]
+            if missing:
+                quote_data["_pending_custom_fields"] = missing
+                await _ask_next_custom_field(msg.edit_text, quote_data, brand_dna, user.id)
+            else:
+                await set_pending_state(user.id, quote_data, brand_dna)
+                await update_user_state(user.id, "AWAITING_CONFIRMATION")
+                summary = format_quote_summary(quote_data, brand_dna)
+                await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
         else:
             await update.message.reply_text(
                 "Send a *photo* of your handwritten notes to extract a quote, "
@@ -1256,6 +1305,38 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # ------------------------------------------------------------------
+    # AWAITING_CUSTOM_FIELD: collecting template-specific field values
+    # ------------------------------------------------------------------
+    if state == "AWAITING_CUSTOM_FIELD":
+        if update.message.voice:
+            await update.message.reply_text(
+                "Please type your answer, or press *Skip* to leave this field blank.",
+                parse_mode="Markdown"
+            )
+            return
+
+        pending_quote = db_user.get("pending_quote")
+        pending_brand_dna = db_user.get("pending_brand_dna")
+
+        if not pending_quote:
+            await update_user_state(user.id, "ACTIVE")
+            await update.message.reply_text(
+                "Sorry, I lost track of the pending quote (likely a restart). Please send the job details again."
+            )
+            return
+
+        remaining = pending_quote.get("_pending_custom_fields", [])
+        if remaining:
+            field = remaining.pop(0)
+            text = (update.message.text or "").strip()
+            if text:
+                pending_quote[field["slug"]] = text
+            pending_quote["_pending_custom_fields"] = remaining
+
+        await _ask_next_custom_field(update.message.reply_text, pending_quote, pending_brand_dna, user.id)
+        return
+
+    # ------------------------------------------------------------------
     # AWAITING_CONFIRMATION: user is reviewing a pending quote
     # ------------------------------------------------------------------
     if state == "AWAITING_CONFIRMATION":
@@ -1309,6 +1390,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     msg = None
     brand_dna = await get_brand_dna(db_user["id"])
     business_name = brand_dna.get("business_name") or "Business Name"
+    custom_fields = brand_dna.get("custom_template_fields") or None
 
     if update.message.voice:
         msg = await update.message.reply_text("Transcribing your voice note...")
@@ -1318,7 +1400,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, msg=msg)
+            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, custom_fields, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1337,7 +1419,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, msg=msg)
+            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, custom_fields, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1353,13 +1435,23 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         return
 
-    # Show summary and move to confirmation state
     quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
-    await set_pending_state(user.id, quote_data, brand_dna)
-    await update_user_state(user.id, "AWAITING_CONFIRMATION")
 
-    summary = format_quote_summary(quote_data, brand_dna)
-    await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
+    # Check if the template has custom fields the AI couldn't fill from the user's input
+    custom_fields = brand_dna.get("custom_template_fields") or {}
+    missing = [
+        {"slug": slug, "display": display}
+        for slug, display in custom_fields.items()
+        if not quote_data.get(slug)
+    ]
+    if missing:
+        quote_data["_pending_custom_fields"] = missing
+        await _ask_next_custom_field(msg.edit_text, quote_data, brand_dna, user.id)
+    else:
+        await set_pending_state(user.id, quote_data, brand_dna)
+        await update_user_state(user.id, "AWAITING_CONFIRMATION")
+        summary = format_quote_summary(quote_data, brand_dna)
+        await msg.edit_text(summary, parse_mode="Markdown", reply_markup=_yes_keyboard())
 
 
 # ---------------------------------------------------------------------------
@@ -1398,6 +1490,48 @@ async def handle_confirm_yes(update: Update, context: ContextTypes.DEFAULT_TYPE)
         pending_brand_dna,
         status_msg=msg,
     )
+
+
+async def handle_skip_custom_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Skip the current custom field and ask the next one (or finalize)."""
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    db_user = await get_user(user.id)
+    if not db_user:
+        return
+
+    await query.edit_message_reply_markup(reply_markup=None)
+
+    pending_quote = db_user.get("pending_quote") or {}
+    pending_brand_dna = db_user.get("pending_brand_dna") or {}
+
+    remaining = pending_quote.get("_pending_custom_fields", [])
+    if remaining:
+        remaining.pop(0)
+        pending_quote["_pending_custom_fields"] = remaining
+
+    await _ask_next_custom_field(query.message.reply_text, pending_quote, pending_brand_dna, user.id)
+
+
+async def handle_skip_all_custom_fields(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Skip all remaining custom fields and go straight to confirmation."""
+    query = update.callback_query
+    await query.answer()
+
+    user = query.from_user
+    db_user = await get_user(user.id)
+    if not db_user:
+        return
+
+    await query.edit_message_reply_markup(reply_markup=None)
+
+    pending_quote = db_user.get("pending_quote") or {}
+    pending_brand_dna = db_user.get("pending_brand_dna") or {}
+
+    pending_quote.pop("_pending_custom_fields", None)
+    await _ask_next_custom_field(query.message.reply_text, pending_quote, pending_brand_dna, user.id)
 
 
 async def handle_onboarding_currency_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1494,6 +1628,8 @@ def build_application():
     application.add_handler(CommandHandler("commands", commands))
     application.add_handler(CommandHandler("redeem", redeem))
     application.add_handler(CallbackQueryHandler(handle_confirm_yes, pattern="^confirm_yes$"))
+    application.add_handler(CallbackQueryHandler(handle_skip_custom_field, pattern="^skip_custom_field$"))
+    application.add_handler(CallbackQueryHandler(handle_skip_all_custom_fields, pattern="^skip_all_custom_fields$"))
     application.add_handler(CallbackQueryHandler(handle_onboarding_currency_callback, pattern="^onboarding_currency_"))
     application.add_handler(CallbackQueryHandler(handle_template_preview_ok, pattern="^template_preview_ok$"))
     application.add_handler(CallbackQueryHandler(handle_template_preview_reupload, pattern="^template_preview_reupload$"))

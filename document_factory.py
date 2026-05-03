@@ -769,6 +769,11 @@ class DocumentFactory:
             ],
         }
 
+        # Inject any custom template fields (e.g. custom_project_name)
+        for k, v in quote_data.items():
+            if k.startswith("custom_") and k not in context:
+                context[k] = str(v) if v is not None else ""
+
         def _amp(s):
             return s.replace('&', '&amp;') if isinstance(s, str) else s
 

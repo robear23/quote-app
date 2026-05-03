@@ -117,6 +117,14 @@ If prices are not visible, infer reasonable defaults based on the trade context.
 Return ONLY valid JSON.
 """
 
+def _custom_fields_prompt_suffix(custom_fields: dict) -> str:
+    """Builds prompt instructions for template-specific custom fields."""
+    lines = ["\n\nAlso extract these template-specific fields if mentioned in the input (null if not found):"]
+    for slug, display in custom_fields.items():
+        lines.append(f'- "{slug}": {display}')
+    return "\n".join(lines)
+
+
 REFINEMENT_PROMPT = """
 You are helping a tradesperson refine a quote. They were shown a summary and have replied.
 
@@ -183,6 +191,78 @@ Visual pre-analysis of the rendered template image identified these fields with 
 {visual_hints}
 Use these label texts to help locate the corresponding fields in the document structure above.
 If visual_hints says null for a field, it is likely absent — only map it if you are very confident.
+"""
+
+TEMPLATE_FIELD_DISCOVERY_PROMPT = """
+You are analyzing a DOCX quote/invoice template to identify ALL locations where variable customer or quote data should be placed.
+
+Document structure (JSON):
+{structure}
+
+Business info (STATIC — do NOT mark these as variable fields):
+{business_info}
+
+Identify EVERY location that represents a variable data field. Look for ALL of these indicator types:
+1. Square bracket placeholders: [Client Name], [Date], [Quote Reference], [client@email.com]
+2. Inline label+bracket combos: "DATE  [Date]", "REF  [Quote Ref]" — the bracket is embedded within a label line
+3. Labelled colon+blank: "Customer: ___________", or a cell that immediately follows a recognisable label cell
+4. Empty table cells that logically follow a label cell (e.g. row has "Name:" in one cell and a blank adjacent cell → customer_name goes in the blank cell)
+5. Underscore or dot placeholder lines (e.g. "______", "............")
+6. Sample/dummy text in obvious field positions (e.g. "John Smith" directly adjacent to a "Customer:" label)
+7. Parenthetical instructions: "(enter project name here)"
+
+Do NOT mark as variable:
+- Business name, address, contact details, bank info listed in business_info above
+- Table header cells (Description, Qty, Price, Total etc.)
+- Static labels like "QUOTATION", "PREPARED FOR", "Bill To:", "Date:" themselves
+- Line items data rows (description/qty/price rows) — these are handled separately
+
+Standard field slugs (use these exact names):
+- customer_name: the customer or client name
+- address_line_1, address_line_2, address_line_3: individual address lines when the template uses split lines
+- customer_address: single-block address (use instead of address_line_* when the template has one address slot)
+- quote_ref: quote or invoice reference/number
+- quote_date: date of the quote/invoice
+- valid_until: expiry or valid-until date
+- customer_email: customer email address
+- customer_phone: customer phone number
+
+For any variable field that does NOT match a standard type, define a custom field:
+- slug must start with "custom_" followed by a snake_case name (e.g. "custom_project_name")
+- display is the human-readable label inferred from surrounding context (e.g. "Project Name")
+
+For inline label+bracket combos (e.g. a paragraph containing "DATE  [Date]"), the replacement_text must include the label prefix:
+  "replacement_text": "DATE  {{ quote_date }}"
+
+For all other cases, replacement_text is just the Jinja tag:
+  "replacement_text": "{{ customer_name }}"
+
+Location format:
+  paragraph: {"type": "paragraph", "paragraph_index": N}   (N is 0-based index into the paragraphs list above)
+  table cell: {"type": "table", "table_index": N, "row_index": N, "col_index": N}
+
+Return ONLY valid JSON:
+{
+  "standard_fields": [
+    {
+      "field": "customer_name",
+      "location": {"type": "table", "table_index": 0, "row_index": 2, "col_index": 1},
+      "indicator": "bracket",
+      "current_text": "[Client Name]",
+      "replacement_text": "{{ customer_name }}"
+    }
+  ],
+  "custom_fields": [
+    {
+      "slug": "custom_project_name",
+      "display": "Project Name",
+      "location": {"type": "table", "table_index": 1, "row_index": 3, "col_index": 2},
+      "indicator": "implicit",
+      "current_text": "___________",
+      "replacement_text": "{{ custom_project_name }}"
+    }
+  ]
+}
 """
 
 XLSX_DNA_PROMPT = """
@@ -260,6 +340,7 @@ Return ONLY valid JSON with these keys:
 {
   "customer_name": "exact label text" or null,
   "customer_address": "exact label text" or null,
+  "customer_email": "exact label text" or null,
   "quote_ref": "exact label text" or null,
   "quote_date": "exact label text" or null,
   "valid_until": "exact label text" or null,
@@ -547,10 +628,12 @@ class AIService:
             return None
 
     @staticmethod
-    def generate_quote_data(text: str, business_name: str = "Business Name") -> dict:
+    def generate_quote_data(text: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
         """Parses user text into structured quote data using Gemini."""
         try:
             prompt = QUOTE_GENERATION_PROMPT.replace("{business_name}", business_name)
+            if custom_fields:
+                prompt += _custom_fields_prompt_suffix(custom_fields)
             response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
             return _normalize_quote(json.loads(response.text))
         except RateLimitError:
@@ -561,7 +644,7 @@ class AIService:
             return {}
 
     @staticmethod
-    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name") -> dict:
+    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
         """Transcribes a voice note (OGG) and extracts structured quote data."""
         try:
             uploaded_file = client.files.upload(
@@ -583,6 +666,8 @@ class AIService:
                 raise Exception(f"Gemini file processing failed for {file_path}")
 
             prompt = VOICE_QUOTE_PROMPT.replace("{business_name}", business_name)
+            if custom_fields:
+                prompt += _custom_fields_prompt_suffix(custom_fields)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
@@ -600,12 +685,14 @@ class AIService:
             return {}
 
     @staticmethod
-    def extract_quote_from_image(file_path: str, business_name: str = "Business Name") -> dict:
+    def extract_quote_from_image(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
         """Extracts structured quote data from an image (photo of notes, job site, etc.)."""
         try:
             uploaded_file = client.files.upload(file=file_path)
 
             prompt = IMAGE_QUOTE_PROMPT.replace("{business_name}", business_name)
+            if custom_fields:
+                prompt += _custom_fields_prompt_suffix(custom_fields)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
@@ -697,114 +784,8 @@ class AIService:
         # for side-by-side layouts (e.g. "Quote Details" / "Client Details").
         all_tables_in_doc = _collect_all_tables(doc.tables)
 
-        # ── Pass 1: regex scan for [Placeholder] style fields ────────────────
-        # Many templates use [Client Name], [Street Address] etc. Match these
-        # directly so we don't rely on AI spatial reasoning for simple fields.
-        _BRACKET_PATTERNS = {
-            "customer_name": re.compile(
-                r'^\[\s*(client\s*name|customer\s*name|name)\s*\]$', re.I
-            ),
-            # Multi-line address patterns must come before the catch-all customer_address
-            # so the more specific ones win when both would match (e.g. [Address Line 1]).
-            "address_line_1": re.compile(
-                r'^\[\s*(client\s*address\s*line\s*1|customer\s*address\s*line\s*1|address\s*line\s*1|street\s*address\s*1)\s*\]$', re.I
-            ),
-            "address_line_2": re.compile(
-                r'^\[\s*(client\s*address\s*line\s*2|customer\s*address\s*line\s*2|address\s*line\s*2|street\s*address\s*2)\s*\]$', re.I
-            ),
-            "address_line_3": re.compile(
-                r'^\[\s*(town[\s,/]+county[\s,/]+postcode|town[\s,/]+postcode|city[\s,/]+state[\s,/]+zip|city[\s,/]+zip|postcode|zip\s*code?|postal\s*code?|town|city|county|state)\s*\]$', re.I
-            ),
-            "customer_address": re.compile(
-                r'^\[\s*(client\s*address|customer\s*address|street\s*address|address\s*line\s*1?|address)\s*\]$', re.I
-            ),
-            "quote_ref": re.compile(
-                r'^\[\s*(quote\s*(no\.?|ref(?:erence)?|number|#)|invoice\s*(no\.?|ref(?:erence)?|number|#)|ref(?:erence)?\s*(no\.?|#)?)\s*\]$', re.I
-            ),
-            "quote_date": re.compile(
-                r'^\[\s*(date|quote\s*date|invoice\s*date|dd[/\-\.]mm[/\-\.]yyyy)\s*\]$', re.I
-            ),
-            "valid_until": re.compile(
-                r'^\[\s*(expiry\s*date|expiry|valid\s*(until|to|till|thru)|quote\s*expires?|expires?\s*date?)\s*\]$', re.I
-            ),
-            # Email: matches [client@email.com] style placeholders (contain @) and named variants
-            "customer_email": re.compile(
-                r'^\[\s*(?:[^\]\s@]+@[^\]\s@]+|email\s*address?|client\s*email|customer\s*email|e-?mail)\s*\]$', re.I
-            ),
-            "customer_phone": re.compile(
-                r'^\[\s*(phone|telephone|tel|mobile|contact\s*no?\.?|phone\s*no?\.?)\s*\]$', re.I
-            ),
-        }
-        _JINJA_FOR_FIELD = {
-            "customer_name": "{{ customer_name }}",
-            "address_line_1": "{{ address_line_1 }}",
-            "address_line_2": "{{ address_line_2 }}",
-            "address_line_3": "{{ address_line_3 }}",
-            "customer_address": "{{ customer_address }}",
-            "quote_ref": "{{ quote_ref }}",
-            "quote_date": "{{ quote_date }}",
-            "valid_until": "{{ valid_until }}",
-            "customer_email": "{{ customer_email }}",
-            "customer_phone": "{{ customer_phone }}",
-        }
-        regex_matched = set()
-
-        def _try_regex_inject_para(para):
-            txt = para.text.strip()
-            for field, pat in _BRACKET_PATTERNS.items():
-                if pat.match(txt):
-                    _set_para_text(para, _JINJA_FOR_FIELD[field])
-                    regex_matched.add(field)
-                    logger.info(f"Regex-matched field '{field}' in paragraph: {txt!r}")
-                    return
-
-        def _try_regex_inject_cell(cell):
-            for para in cell.paragraphs:
-                txt = para.text.strip()
-                for field, pat in _BRACKET_PATTERNS.items():
-                    if pat.match(txt):
-                        _set_para_text(para, _JINJA_FOR_FIELD[field])
-                        regex_matched.add(field)
-                        logger.info(f"Regex-matched field '{field}' in cell: {txt!r}")
-                        return
-
-        for p in doc.paragraphs:
-            _try_regex_inject_para(p)
-        for table in all_tables_in_doc:
-            for row in table.rows:
-                for cell in row.cells:
-                    _try_regex_inject_cell(cell)
-
-        # ── Pass 1.5: inline bracket handler ────────────────────────────────
-        # Handles "LABEL  [Placeholder]" combos where the bracket is not the
-        # entire paragraph (e.g. "DATE  [Date]", "REF  [Quote Reference]").
-        # Replaces just the bracket portion: "DATE  [Date]" → "DATE  {{ quote_date }}"
-        _INLINE_BRACKET_RE = re.compile(r'^(.+?)\s+(\[[^\]]+\])\s*$')
-
-        def _try_inline_bracket_para(para):
-            txt = para.text.strip()
-            m = _INLINE_BRACKET_RE.match(txt)
-            if not m:
-                return
-            prefix, bracket = m.group(1), m.group(2)
-            for field, pat in _BRACKET_PATTERNS.items():
-                if field in regex_matched:
-                    continue
-                if pat.match(bracket):
-                    _set_para_text(para, f"{prefix}  {_JINJA_FOR_FIELD[field]}")
-                    regex_matched.add(field)
-                    logger.info(f"Inline bracket matched '{field}': {txt!r}")
-                    return
-
-        for p in doc.paragraphs:
-            _try_inline_bracket_para(p)
-        for table in all_tables_in_doc:
-            for row in table.rows:
-                for cell in row.cells:
-                    for para in cell.paragraphs:
-                        _try_inline_bracket_para(para)
-
-        # ── Pass 2: Build compact structure and call Gemini for remaining fields
+        # ── Build document structure for AI analysis ─────────────────────────
+        # Built before field discovery so both passes share the same document snapshot.
         non_empty_paras = [p for p in doc.paragraphs if p.text.strip()]
         structure = {
             "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:60])],
@@ -823,6 +804,77 @@ class AIService:
             "business_name", "business_address", "contact_details", "bank_info", "vat_tax_status"
         ) if brand_dna.get(k)}
 
+        _JINJA_FOR_FIELD = {
+            "customer_name": "{{ customer_name }}",
+            "address_line_1": "{{ address_line_1 }}",
+            "address_line_2": "{{ address_line_2 }}",
+            "address_line_3": "{{ address_line_3 }}",
+            "customer_address": "{{ customer_address }}",
+            "quote_ref": "{{ quote_ref }}",
+            "quote_date": "{{ quote_date }}",
+            "valid_until": "{{ valid_until }}",
+            "customer_email": "{{ customer_email }}",
+            "customer_phone": "{{ customer_phone }}",
+        }
+        regex_matched = set()
+        custom_fields_map: dict = {}
+
+        def _apply_field(location, replacement_text):
+            if not location or not replacement_text:
+                return
+            try:
+                if location.get("type") == "paragraph":
+                    idx = location.get("paragraph_index")
+                    if idx is not None and idx < len(non_empty_paras):
+                        _set_para_text(non_empty_paras[idx], replacement_text)
+                elif location.get("type") == "table":
+                    _ti = location.get("table_index")
+                    _ri = location.get("row_index")
+                    _ci = location.get("col_index")
+                    if _ti is not None and _ri is not None and _ci is not None:
+                        _cell = all_tables_in_doc[_ti].rows[_ri].cells[_ci]
+                        _set_cell_text(_cell, replacement_text)
+            except (IndexError, KeyError, TypeError) as err:
+                logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
+
+        # ── Pass 1: AI-powered field discovery ──────────────────────────────────
+        # Identifies ALL variable fields regardless of bracket notation.
+        # Handles explicit [Brackets], inline "LABEL [Bracket]" patterns,
+        # empty/labelled cells, underline placeholders, and implicit placeholders.
+        _discovery_prompt = TEMPLATE_FIELD_DISCOVERY_PROMPT.format(
+            structure=json.dumps(structure, indent=2),
+            business_info=json.dumps(business_info, indent=2),
+        )
+        try:
+            _discovery_response = _generate_with_retry(_discovery_prompt)
+            _discovery = json.loads(_discovery_response.text)
+
+            for sf in _discovery.get("standard_fields", []):
+                field = sf.get("field")
+                if field and field in _JINJA_FOR_FIELD:
+                    replacement = sf.get("replacement_text") or _JINJA_FOR_FIELD[field]
+                    _apply_field(sf.get("location"), replacement)
+                    regex_matched.add(field)
+                    logger.info(f"AI discovered field '{field}' [{sf.get('indicator')}]: {sf.get('current_text', '')!r}")
+
+            for cf in _discovery.get("custom_fields", []):
+                slug = (cf.get("slug") or "").strip()
+                display = cf.get("display") or slug
+                if slug:
+                    replacement = cf.get("replacement_text") or f"{{{{ {slug} }}}}"
+                    _apply_field(cf.get("location"), replacement)
+                    custom_fields_map[slug] = display
+                    logger.info(f"AI discovered custom field '{slug}' [{cf.get('indicator')}]: {cf.get('current_text', '')!r}")
+
+            if custom_fields_map:
+                brand_dna["custom_template_fields"] = custom_fields_map
+                logger.info(f"Custom template fields detected: {custom_fields_map}")
+
+        except Exception as e:
+            logger.error(f"AI field discovery failed: {e}")
+            _capture(e)
+
+        # ── Pass 2: Call Gemini to map line items, totals, and any remaining standard fields ──
         prompt = TEMPLATE_MAP_PROMPT.format(
             structure=json.dumps(structure, indent=2),
             business_info=json.dumps(business_info, indent=2),
@@ -1174,6 +1226,7 @@ def assess_docx_template_fields(template_bytes: bytes) -> dict:
     return {
         "customer_name": "customer_name" in xml,
         "customer_address": any(f in xml for f in ("customer_address", "address_line_1")),
+        "customer_email": "customer_email" in xml,
         "quote_ref": "quote_ref" in xml,
         "quote_date": "quote_date" in xml,
         "valid_until": "valid_until" in xml,
