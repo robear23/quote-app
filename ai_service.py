@@ -820,7 +820,7 @@ class AIService:
         custom_fields_map: dict = {}
 
         def _apply_field(location, replacement_text):
-            if not location or not replacement_text:
+            if not location or not replacement_text or not isinstance(location, dict):
                 return
             try:
                 if location.get("type") == "paragraph":
@@ -834,7 +834,7 @@ class AIService:
                     if _ti is not None and _ri is not None and _ci is not None:
                         _cell = all_tables_in_doc[_ti].rows[_ri].cells[_ci]
                         _set_cell_text(_cell, replacement_text)
-            except (IndexError, KeyError, TypeError) as err:
+            except Exception as err:
                 logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
 
         # ── Pass 1: AI-powered field discovery ──────────────────────────────────
@@ -848,6 +848,8 @@ class AIService:
         try:
             _discovery_response = _generate_with_retry(_discovery_prompt)
             _discovery = json.loads(_discovery_response.text)
+            if not isinstance(_discovery, dict):
+                raise ValueError(f"AI field discovery returned non-dict: {type(_discovery).__name__}")
 
             for sf in _discovery.get("standard_fields", []):
                 field = sf.get("field")
@@ -884,6 +886,9 @@ class AIService:
         try:
             response = _generate_with_retry(prompt)
             field_map = json.loads(response.text)
+            if not isinstance(field_map, dict):
+                logger.error(f"Gemini template mapping returned non-dict: {type(field_map).__name__}")
+                field_map = {}
         except Exception as e:
             logger.error(f"Gemini template mapping failed: {e}")
             _capture(e)
@@ -900,31 +905,37 @@ class AIService:
                 elif loc.get("type") == "table":
                     cell = all_tables_in_doc[loc["table_index"]].rows[loc["row_index"]].cells[loc["col_index"]]
                     _set_cell_text(cell, placeholder)
-            except (IndexError, KeyError, TypeError) as e:
+            except Exception as e:
                 logger.warning(f"Failed to inject placeholder '{placeholder}': {e}")
 
         # ── Inject simple field placeholders (skip fields matched by regex) ──
-        if "customer_name" not in regex_matched:
-            _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
-        # Skip customer_address if split address fields were already matched — avoids
-        # overwriting static label paragraphs (e.g. "PREPARED FOR") when the template
-        # uses [Client Address Line 1] / [Client Address Line 2] style placeholders.
-        address_covered = bool({"customer_address", "address_line_1"} & regex_matched)
-        if not address_covered:
-            _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
-        if "quote_ref" not in regex_matched:
-            _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
-        if "quote_date" not in regex_matched:
-            _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
-        if "valid_until" not in regex_matched:
-            _inject_location(field_map.get("valid_until"), "{{ valid_until }}")
-        _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
-        _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
-        _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
+        try:
+            if "customer_name" not in regex_matched:
+                _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
+            # Skip customer_address if split address fields were already matched — avoids
+            # overwriting static label paragraphs (e.g. "PREPARED FOR") when the template
+            # uses [Client Address Line 1] / [Client Address Line 2] style placeholders.
+            address_covered = bool({"customer_address", "address_line_1"} & regex_matched)
+            if not address_covered:
+                _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
+            if "quote_ref" not in regex_matched:
+                _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")
+            if "quote_date" not in regex_matched:
+                _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
+            if "valid_until" not in regex_matched:
+                _inject_location(field_map.get("valid_until"), "{{ valid_until }}")
+            _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
+            _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
+            _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
+        except Exception as e:
+            logger.warning(f"Field placeholder injection partially failed (non-fatal): {e}")
 
         # ── Inject line items table loop ─────────────────────────────────────
         li_ti = field_map.get("line_items_table_index")
-        logger.info(f"Gemini field_map: {json.dumps({k: v for k, v in field_map.items() if k != 'line_items'}, default=str)}")
+        try:
+            logger.info(f"Gemini field_map: {json.dumps({k: v for k, v in field_map.items() if k != 'line_items'}, default=str)}")
+        except Exception:
+            logger.info(f"Gemini field_map: (failed to serialize)")
 
         # Fallback: if Gemini couldn't locate the line items table, detect it ourselves
         if li_ti is None:
