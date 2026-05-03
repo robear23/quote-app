@@ -375,6 +375,54 @@ def account_page():
         return f.read()
 
 
+@app.get("/share/{doc_id}", response_class=HTMLResponse)
+def share_page(doc_id: str):
+    with open("static/share.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.get("/api/share/{doc_id}")
+async def api_share_info(doc_id: str):
+    """Returns details and a signed URL for a specific document."""
+    try:
+        res = await database.supabase.table("documents").select("*, users(email)").eq("id", doc_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        doc = res.data[0]
+
+        # Generate a signed URL for the file (valid for 1 hour)
+        file_url = doc.get("file_url")
+        signed_url = None
+        if file_url:
+            try:
+                # file_url is stored as "bucket/path/to/file"
+                parts = file_url.split("/", 1)
+                if len(parts) == 2:
+                    bucket, path = parts
+                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(path, 3600)
+                    signed_url = signed_res.get("signedURL")
+            except Exception as e:
+                logger.error(f"Failed to generate signed URL for {file_url}: {e}")
+
+        return {
+            "id": doc["id"],
+            "customer_name": doc.get("customer_name"),
+            "customer_email": doc.get("customer_email"),
+            "customer_phone": doc.get("customer_phone"),
+            "email_subject": doc.get("email_subject"),
+            "cover_message": doc.get("cover_message"),
+            "total": float(doc.get("total") or 0),
+            "created_at": doc.get("created_at"),
+            "file_url": signed_url or doc.get("file_url"),
+            "filename": file_url.split("/")[-1] if file_url else "quote.pdf"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in api_share_info: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.post("/handshake")
 async def initiate_handshake(email: str):
     """
@@ -935,14 +983,18 @@ async def _handle_subscription_deleted(sub):
         if not user:
             return
 
-        await upsert_subscription(
-            user_id=user["id"],
-            stripe_customer_id=customer_id,
-            stripe_subscription_id=_get(sub, "id"),
-            plan_tier="free",
-            status="canceled",
-            current_period_end=None,
-        )
+        return {
+            "id": doc["id"],
+            "customer_name": doc.get("customer_name"),
+            "customer_email": doc.get("customer_email"),
+            "customer_phone": doc.get("customer_phone"),
+            "email_subject": doc.get("email_subject"),
+            "cover_message": doc.get("cover_message"),
+            "total": float(doc.get("total") or 0),
+            "created_at": doc.get("created_at"),
+            "file_url": signed_url or doc.get("file_url"),
+            "filename": file_url.split("/")[-1] if file_url else "quote.pdf"
+        }
         logger.info(f"User {user['id']} downgraded to free (subscription cancelled)")
     except Exception as e:
         logger.error(f"_handle_subscription_deleted failed: {e}", exc_info=True)

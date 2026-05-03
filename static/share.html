@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share Quote | Quote Me</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #8b5cf6;
+            --whatsapp: #25D366;
+            --whatsapp-hover: #1EBE5D;
+            --email: #F59E0B;
+            --email-hover: #D97706;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            background-image: url('/static/share-bg.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px 32px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 32px;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .details {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+        }
+
+        .customer {
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .amount {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .preview-box {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: left;
+            margin-bottom: 24px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .preview-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            border: none;
+            font-family: inherit;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-whatsapp { background: var(--whatsapp); box-shadow: 0 10px 15px -3px rgba(37, 211, 102, 0.3); }
+        .btn-whatsapp:hover { background: var(--whatsapp-hover); box-shadow: 0 15px 20px -5px rgba(37, 211, 102, 0.4); }
+
+        .btn-email { background: var(--email); box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.3); }
+        .btn-email:hover { background: var(--email-hover); box-shadow: 0 15px 20px -5px rgba(245, 158, 11, 0.4); }
+
+        .btn-primary { background: var(--primary); box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover { background: var(--primary-hover); box-shadow: 0 15px 20px -5px rgba(59, 130, 246, 0.4); }
+
+        .hidden { display: none !important; }
+
+        #error-msg {
+            color: #ef4444;
+            margin-top: 16px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">Quote Me⚡</div>
+            
+            <div id="content">
+                <h1 id="doc-title">Quote Ready</h1>
+                <div class="details">
+                    <p id="doc-customer" class="customer">&nbsp;</p>
+                    <p id="doc-total" class="amount">&nbsp;</p>
+                </div>
+
+                <div class="preview-box">
+                    <span class="preview-label">Cover Message Preview</span>
+                    <div id="doc-message">Loading message...</div>
+                </div>
+
+                <div class="buttons-grid" id="actions-grid">
+                    <!-- Buttons injected via JS based on available info -->
+                </div>
+
+                <p id="error-msg" class="hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const docId = window.location.pathname.split('/').pop();
+        const titleEl = document.getElementById('doc-title');
+        const customerEl = document.getElementById('doc-customer');
+        const totalEl = document.getElementById('doc-total');
+        const messageEl = document.getElementById('doc-message');
+        const actionsGrid = document.getElementById('actions-grid');
+        const errorEl = document.getElementById('error-msg');
+
+        let docData = null;
+
+        async function init() {
+            try {
+                const response = await fetch(`/api/share/${docId}`);
+                if (!response.ok) throw new Error('Could not load quote details');
+                
+                docData = await response.json();
+                
+                customerEl.textContent = `For ${docData.customer_name || 'Client'}`;
+                totalEl.textContent = docData.total ? `Total: £${docData.total.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '';
+                messageEl.textContent = docData.cover_message || `Hi ${docData.customer_name || 'there'},\nHere is your requested quote.`;
+                
+                buildButtons();
+            } catch (err) {
+                console.error(err);
+                titleEl.textContent = 'Oops!';
+                errorEl.textContent = 'We couldn\'t find that quote. It may have expired or been moved.';
+                errorEl.classList.remove('hidden');
+                document.querySelector('.preview-box').classList.add('hidden');
+            }
+        }
+
+        function buildButtons() {
+            actionsGrid.innerHTML = '';
+            
+            const messageBody = encodeURIComponent(`${messageEl.textContent}\n\nQuote Link: ${docData.file_url}`);
+            
+            // WhatsApp Button
+            if (docData.customer_phone) {
+                const cleanPhone = docData.customer_phone.replace(/[^0-9]/g, '');
+                const waLink = `https://wa.me/${cleanPhone}?text=${messageBody}`;
+                actionsGrid.innerHTML += `
+                    <a href="${waLink}" target="_blank" class="btn btn-whatsapp">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                        WhatsApp Client
+                    </a>
+                `;
+            }
+
+            // Email Button
+            if (docData.customer_email) {
+                const subject = encodeURIComponent(docData.email_subject || `Quote from Quote Me`);
+                const mailLink = `mailto:${docData.customer_email}?subject=${subject}&body=${messageBody}`;
+                actionsGrid.innerHTML += `
+                    <a href="${mailLink}" class="btn btn-email">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        Email Quote
+                    </a>
+                `;
+            }
+
+            // System Share Button (Fallback/General)
+            const shareBtn = document.createElement('button');
+            shareBtn.className = 'btn btn-primary';
+            shareBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                More Share Options
+            `;
+            shareBtn.onclick = handleSystemShare;
+            actionsGrid.appendChild(shareBtn);
+        }
+
+        async function handleSystemShare() {
+            if (!docData || !docData.file_url) return;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: docData.email_subject || `Quote for ${docData.customer_name}`,
+                        text: messageEl.textContent,
+                        url: docData.file_url
+                    });
+                    return;
+                } catch (err) {
+                    console.log('Share failed:', err);
+                }
+            }
+            
+            // Fallback
+            window.open(docData.file_url, '_blank');
+        }
+
+        init();
+    </script>
+</body>
+</html>

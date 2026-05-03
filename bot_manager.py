@@ -471,10 +471,15 @@ async def generate_and_send_quote(
     doc_fields = {
         "customer_name": quote_data.get("customer_name"),
         "customer_address": quote_data.get("customer_address"),
+        "customer_email": quote_data.get("customer_email"),
+        "customer_phone": quote_data.get("customer_phone"),
+        "email_subject": quote_data.get("email_subject"),
+        "cover_message": quote_data.get("cover_message"),
         "line_items": quote_data.get("line_items", []),
         "subtotal": result["subtotal"],
         "tax_amount": result["tax_amount"],
         "total": result["total"],
+        "file_url": storage_url if storage_url else None,
     }
     try:
         if doc_id:

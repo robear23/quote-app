@@ -50,7 +50,11 @@ Input is often terse shorthand like "Customer Name. Job description Total" or "N
 Extract the following from the user's input in strict JSON format:
 1. "customer_name": Name of the customer (string)
 2. "customer_address": Address of the customer if mentioned (string or null)
-3. "line_items": An array of objects, each with:
+3. "customer_email": Email of the customer if mentioned (string or null)
+4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible, otherwise keep as is.
+5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - [Business Name]")
+6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
+7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
    - "quantity" (number): how many units
    - "unit_price" (number): price per unit
@@ -62,6 +66,7 @@ Rules:
 - Always produce at least one line item — never return an empty line_items array.
 - Fix any obvious spelling mistakes in the description fields (e.g. "bathrrom" → "bathroom").
 - Capitalise the first letter of each description (e.g. "new bathroom" → "New bathroom").
+
 
 Example:
 Input: "Amy Smith. New bathroom 3000"
@@ -75,7 +80,11 @@ You are an expert AI assistant who turns voice notes from tradespeople into stru
 Transcribe the following voice note and extract the quote details in strict JSON format:
 1. "customer_name": Name of the customer (string or null)
 2. "customer_address": Address of the customer if mentioned (string or null)
-3. "line_items": An array of objects, each with:
+3. "customer_email": Email of the customer if mentioned (string or null)
+4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible.
+5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - [Business Name]")
+6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
+7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
    - "quantity" (number): how many units
    - "unit_price" (number): price per unit
@@ -95,7 +104,11 @@ The image may show handwritten notes, a photo of a job, a printed list, a whiteb
 Extract the following in strict JSON format:
 1. "customer_name": Name of the customer if visible (string or null)
 2. "customer_address": Address if visible (string or null)
-3. "line_items": An array of objects, each with:
+3. "customer_email": Email if visible (string or null)
+4. "customer_phone": Phone number if visible (string or null). Format it using standard international format if possible.
+5. "email_subject": A professional, concise email subject line for this quote.
+6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known.
+7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
    - "quantity" (number): how many units
    - "unit_price" (number): price per unit
