@@ -677,6 +677,42 @@ class DocumentFactory:
                         pass
 
     @staticmethod
+    def convert_to_pdf(doc_path: str) -> str | None:
+        """
+        Converts a DOCX or XLSX file to PDF.
+        Requires LibreOffice (soffice) to be installed.
+        Returns the path to the generated PDF or None if conversion fails.
+        """
+        if not shutil.which("soffice"):
+            logger.warning("soffice not found in PATH, skipping PDF conversion")
+            return None
+
+        if not os.path.exists(doc_path):
+            logger.warning(f"Input file not found for PDF conversion: {doc_path}")
+            return None
+
+        base_name = os.path.basename(doc_path)
+        name_without_ext, _ = os.path.splitext(base_name)
+        pdf_filename = name_without_ext + ".pdf"
+        output_dir = os.path.dirname(doc_path) or OUTPUT_DIR
+        expected_pdf_path = os.path.join(output_dir, pdf_filename)
+
+        try:
+            result = subprocess.run(
+                ["soffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, doc_path],
+                capture_output=True,
+                timeout=45,
+            )
+            if result.returncode != 0 or not os.path.exists(expected_pdf_path):
+                logger.warning(f"LibreOffice PDF conversion failed: {result.stderr.decode(errors='ignore')[:200]}")
+                return None
+            
+            return expected_pdf_path
+        except Exception as e:
+            logger.warning(f"convert_to_pdf failed: {e}")
+            return None
+
+    @staticmethod
     def generate_from_template(template_bytes: bytes, quote_data: dict, brand_dna: dict, output_filename: str) -> dict:
         """
         Renders a docxtpl quote template with actual quote data.
