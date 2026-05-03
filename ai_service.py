@@ -727,6 +727,13 @@ class AIService:
             "valid_until": re.compile(
                 r'^\[\s*(expiry\s*date|expiry|valid\s*(until|to|till|thru)|quote\s*expires?|expires?\s*date?)\s*\]$', re.I
             ),
+            # Email: matches [client@email.com] style placeholders (contain @) and named variants
+            "customer_email": re.compile(
+                r'^\[\s*(?:[^\]\s@]+@[^\]\s@]+|email\s*address?|client\s*email|customer\s*email|e-?mail)\s*\]$', re.I
+            ),
+            "customer_phone": re.compile(
+                r'^\[\s*(phone|telephone|tel|mobile|contact\s*no?\.?|phone\s*no?\.?)\s*\]$', re.I
+            ),
         }
         _JINJA_FOR_FIELD = {
             "customer_name": "{{ customer_name }}",
@@ -737,6 +744,8 @@ class AIService:
             "quote_ref": "{{ quote_ref }}",
             "quote_date": "{{ quote_date }}",
             "valid_until": "{{ valid_until }}",
+            "customer_email": "{{ customer_email }}",
+            "customer_phone": "{{ customer_phone }}",
         }
         regex_matched = set()
 
@@ -765,6 +774,35 @@ class AIService:
             for row in table.rows:
                 for cell in row.cells:
                     _try_regex_inject_cell(cell)
+
+        # ── Pass 1.5: inline bracket handler ────────────────────────────────
+        # Handles "LABEL  [Placeholder]" combos where the bracket is not the
+        # entire paragraph (e.g. "DATE  [Date]", "REF  [Quote Reference]").
+        # Replaces just the bracket portion: "DATE  [Date]" → "DATE  {{ quote_date }}"
+        _INLINE_BRACKET_RE = re.compile(r'^(.+?)\s+(\[[^\]]+\])\s*$')
+
+        def _try_inline_bracket_para(para):
+            txt = para.text.strip()
+            m = _INLINE_BRACKET_RE.match(txt)
+            if not m:
+                return
+            prefix, bracket = m.group(1), m.group(2)
+            for field, pat in _BRACKET_PATTERNS.items():
+                if field in regex_matched:
+                    continue
+                if pat.match(bracket):
+                    _set_para_text(para, f"{prefix}  {_JINJA_FOR_FIELD[field]}")
+                    regex_matched.add(field)
+                    logger.info(f"Inline bracket matched '{field}': {txt!r}")
+                    return
+
+        for p in doc.paragraphs:
+            _try_inline_bracket_para(p)
+        for table in all_tables_in_doc:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        _try_inline_bracket_para(para)
 
         # ── Pass 2: Build compact structure and call Gemini for remaining fields
         non_empty_paras = [p for p in doc.paragraphs if p.text.strip()]
@@ -816,7 +854,11 @@ class AIService:
         # ── Inject simple field placeholders (skip fields matched by regex) ──
         if "customer_name" not in regex_matched:
             _inject_location(field_map.get("customer_name"), "{{ customer_name }}")
-        if "customer_address" not in regex_matched:
+        # Skip customer_address if split address fields were already matched — avoids
+        # overwriting static label paragraphs (e.g. "PREPARED FOR") when the template
+        # uses [Client Address Line 1] / [Client Address Line 2] style placeholders.
+        address_covered = bool({"customer_address", "address_line_1"} & regex_matched)
+        if not address_covered:
             _inject_location(field_map.get("customer_address"), "{{ customer_address }}")
         if "quote_ref" not in regex_matched:
             _inject_location(field_map.get("quote_ref"), "{{ quote_ref }}")

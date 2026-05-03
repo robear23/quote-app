@@ -748,6 +748,8 @@ class DocumentFactory:
             "address_line_1": _addr_parts[0] if len(_addr_parts) > 0 else "",
             "address_line_2": _addr_parts[1] if len(_addr_parts) > 1 else "",
             "address_line_3": ", ".join(_addr_parts[2:]) if len(_addr_parts) > 2 else "",
+            "customer_email": quote_data.get("customer_email") or "",
+            "customer_phone": quote_data.get("customer_phone") or "",
             "quote_ref": quote_ref,
             "quote_date": today_str,
             "valid_until": valid_until_str,
