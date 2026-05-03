@@ -1307,6 +1307,8 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
     quote_data = None
     msg = None
+    brand_dna = await get_brand_dna(db_user["id"])
+    business_name = brand_dna.get("business_name") or "Business Name"
 
     if update.message.voice:
         msg = await update.message.reply_text("Transcribing your voice note...")
@@ -1316,7 +1318,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, msg=msg)
+            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1335,7 +1337,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, msg=msg)
+            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1352,7 +1354,6 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # Show summary and move to confirmation state
-    brand_dna = await get_brand_dna(db_user["id"])
     quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
     await set_pending_state(user.id, quote_data, brand_dna)
     await update_user_state(user.id, "AWAITING_CONFIRMATION")

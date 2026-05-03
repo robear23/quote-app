@@ -52,7 +52,7 @@ Extract the following from the user's input in strict JSON format:
 2. "customer_address": Address of the customer if mentioned (string or null)
 3. "customer_email": Email of the customer if mentioned (string or null)
 4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible, otherwise keep as is.
-5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - [Business Name]")
+5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}")
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
 7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
@@ -82,7 +82,7 @@ Transcribe the following voice note and extract the quote details in strict JSON
 2. "customer_address": Address of the customer if mentioned (string or null)
 3. "customer_email": Email of the customer if mentioned (string or null)
 4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible.
-5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - [Business Name]")
+5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}")
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
 7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
@@ -105,8 +105,8 @@ Extract the following in strict JSON format:
 1. "customer_name": Name of the customer if visible (string or null)
 2. "customer_address": Address if visible (string or null)
 3. "customer_email": Email if visible (string or null)
-4. "customer_phone": Phone number if visible (string or null). Format it using standard international format if possible.
-5. "email_subject": A professional, concise email subject line for this quote.
+4. "customer_phone": Phone number of the customer if visible (string or null). Format it using standard international format if possible.
+5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}").
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known.
 7. "line_items": An array of objects, each with:
    - "description" (string): what the work or material is
@@ -547,10 +547,11 @@ class AIService:
             return None
 
     @staticmethod
-    def generate_quote_data(text: str) -> dict:
+    def generate_quote_data(text: str, business_name: str = "Business Name") -> dict:
         """Parses user text into structured quote data using Gemini."""
         try:
-            response = _generate_with_retry(f"{QUOTE_GENERATION_PROMPT}\n\nUser Input: {text}")
+            prompt = QUOTE_GENERATION_PROMPT.format(business_name=business_name)
+            response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
             return _normalize_quote(json.loads(response.text))
         except RateLimitError:
             raise
@@ -560,7 +561,7 @@ class AIService:
             return {}
 
     @staticmethod
-    def transcribe_and_extract_voice(file_path: str) -> dict:
+    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name") -> dict:
         """Transcribes a voice note (OGG) and extracts structured quote data."""
         try:
             uploaded_file = client.files.upload(
@@ -581,7 +582,8 @@ class AIService:
             if getattr(uploaded_file.state, "name", str(uploaded_file.state)) == "FAILED":
                 raise Exception(f"Gemini file processing failed for {file_path}")
 
-            response = _generate_with_retry([VOICE_QUOTE_PROMPT, uploaded_file])
+            prompt = VOICE_QUOTE_PROMPT.format(business_name=business_name)
+            response = _generate_with_retry([prompt, uploaded_file])
 
             try:
                 client.files.delete(name=uploaded_file.name)
@@ -598,12 +600,13 @@ class AIService:
             return {}
 
     @staticmethod
-    def extract_quote_from_image(file_path: str) -> dict:
+    def extract_quote_from_image(file_path: str, business_name: str = "Business Name") -> dict:
         """Extracts structured quote data from an image (photo of notes, job site, etc.)."""
         try:
             uploaded_file = client.files.upload(file=file_path)
 
-            response = _generate_with_retry([IMAGE_QUOTE_PROMPT, uploaded_file])
+            prompt = IMAGE_QUOTE_PROMPT.format(business_name=business_name)
+            response = _generate_with_retry([prompt, uploaded_file])
 
             try:
                 client.files.delete(name=uploaded_file.name)

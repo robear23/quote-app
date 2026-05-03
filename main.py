@@ -423,6 +423,35 @@ async def api_share_info(doc_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/api/download/{doc_id}")
+async def api_share_download(doc_id: str):
+    """Redirects to a freshly signed URL for downloading the document."""
+    try:
+        res = await database.supabase.table("documents").select("file_url").eq("id", doc_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        file_url = res.data[0].get("file_url")
+        if file_url:
+            try:
+                parts = file_url.split("/", 1)
+                if len(parts) == 2:
+                    bucket, path = parts
+                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(path, 3600)
+                    signed_url = signed_res.get("signedURL")
+                    if signed_url:
+                        return RedirectResponse(url=signed_url)
+            except Exception as e:
+                logger.error(f"Failed to generate signed URL for {file_url}: {e}")
+        
+        raise HTTPException(status_code=404, detail="File not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in api_share_download: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.post("/handshake")
 async def initiate_handshake(email: str):
     """

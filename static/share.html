@@ -232,7 +232,8 @@
         function buildButtons() {
             actionsGrid.innerHTML = '';
             
-            const linkText = docData.file_url ? `\n\nQuote Link: ${docData.file_url}` : '';
+            const shortLink = `${window.location.origin}/api/download/${docId}`;
+            const linkText = docData.file_url ? `\n\nQuote Link: ${shortLink}` : '';
             const messageBody = encodeURIComponent(`${messageEl.textContent}${linkText}`);
             
             // WhatsApp Button
@@ -290,7 +291,7 @@
                         text: messageEl.textContent,
                     };
                     if (docData.file_url) {
-                        shareData.url = docData.file_url;
+                        shareData.url = `${window.location.origin}/api/download/${docId}`;
                     }
                     await navigator.share(shareData);
                     return;
@@ -301,7 +302,7 @@
             
             // Fallback
             if (docData.file_url) {
-                window.open(docData.file_url, '_blank');
+                window.open(`${window.location.origin}/api/download/${docId}`, '_blank');
             } else {
                 alert('No link available to share.');
             }
