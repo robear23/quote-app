@@ -215,7 +215,9 @@ Do NOT mark as variable:
 - Business name, address, contact details, bank info listed in business_info above
 - Table header cells (Description, Qty, Price, Total etc.)
 - Static labels like "QUOTATION", "PREPARED FOR", "Bill To:", "Date:" themselves
-- Line items data rows (description/qty/price rows) — these are handled separately
+- Line items data rows (description/qty/price rows) — these are handled separately. Do NOT mark [Description] or similar placeholders within a repeating table as fields.
+- Calculated totals like Subtotal, VAT, and Grand Total (these are standard fields, NOT custom fields).
+- Signature Date or signing lines (e.g. [Signature Date], "Date: ________") — these are for the client to fill manually, so do NOT mark them as variable fields.
 
 Standard field slugs (use these exact names):
 - customer_name: the customer or client name
@@ -226,6 +228,9 @@ Standard field slugs (use these exact names):
 - valid_until: expiry or valid-until date
 - customer_email: customer email address
 - customer_phone: customer phone number
+- subtotal: the subtotal amount (calculated)
+- tax_amount: the tax/VAT amount (calculated)
+- grand_total: the total amount due (calculated)
 
 For any variable field that does NOT match a standard type, define a custom field:
 - slug must start with "custom_" followed by a snake_case name (e.g. "custom_project_name")
@@ -320,6 +325,7 @@ Respond with ONLY a valid JSON object with exactly these keys:
 - "subtotal_cell": cell address for subtotal value or null
 - "tax_cell": cell address for tax/VAT amount or null
 - "total_cell": cell address for grand total or null
+- "signature_date_cell": cell address for the signature date or null
 
 Visual pre-analysis of the rendered template image identified these fields with their label text:
 {visual_hints}
@@ -347,7 +353,8 @@ Return ONLY valid JSON with these keys:
   "line_items_table": true or false,
   "subtotal": "exact label text" or null,
   "tax": "exact label text" or null,
-  "grand_total": "exact label text" or null
+  "grand_total": "exact label text" or null,
+  "signature_date": "exact label text" or null
 }
 """
 
@@ -815,6 +822,9 @@ class AIService:
             "valid_until": "{{ valid_until }}",
             "customer_email": "{{ customer_email }}",
             "customer_phone": "{{ customer_phone }}",
+            "subtotal": "{{ subtotal }}",
+            "tax_amount": "{{ tax_amount }}",
+            "grand_total": "{{ grand_total }}",
         }
         regex_matched = set()
         custom_fields_map: dict = {}
@@ -1242,6 +1252,8 @@ def assess_docx_template_fields(template_bytes: bytes) -> dict:
         "quote_date": "quote_date" in xml,
         "valid_until": "valid_until" in xml,
         "line_items": "line_items" in xml,
+        "subtotal": "subtotal" in xml,
+        "tax_amount": "tax_amount" in xml,
         "grand_total": "grand_total" in xml,
     }
 
@@ -1258,5 +1270,7 @@ def assess_xlsx_mapping_fields(mapping: dict) -> dict:
         "quote_ref": bool(mapping.get("quote_ref")),
         "quote_date": bool(mapping.get("quote_date")),
         "line_items": bool(mapping.get("line_items_start_row") and any(cols.values())),
+        "subtotal": bool(mapping.get("subtotal_cell")),
+        "tax": bool(mapping.get("tax_cell")),
         "grand_total": bool(mapping.get("total_cell")),
     }

@@ -183,6 +183,8 @@ def _format_field_report(fields: dict, custom_fields: dict | None = None) -> str
         "quote_date": "Date",
         "valid_until": "Expiry date",
         "line_items": "Line items table",
+        "subtotal": "Subtotal",
+        "tax_amount": "VAT/Tax amount",
         "grand_total": "Total",
     }
     lines = []
@@ -206,6 +208,8 @@ def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = 
         ("quote_date",       "Date"),
         ("valid_until",      "Expiry date"),
         ("line_items_table", "Line items table"),
+        ("subtotal",         "Subtotal"),
+        ("tax",              "VAT/Tax amount"),
         ("grand_total",      "Total"),
     ]
     lines = []
@@ -247,6 +251,8 @@ def _annotate_preview_image(
             ("quote_date",       "Date"),
             ("valid_until",      "Expiry date"),
             ("line_items_table", "Line items"),
+            ("subtotal",         "Subtotal"),
+            ("tax",              "VAT/Tax"),
             ("grand_total",      "Total"),
         ]
         found_fields = []
