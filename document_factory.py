@@ -170,8 +170,15 @@ class DocumentFactory:
         brand_hex = _get_brand_color(brand_dna)
         brand_rgb = _hex_to_rgb(brand_hex)
         b_name = (brand_dna.get("business_name") or "Your Business").upper()
-        today_str = date.today().strftime("%d %B %Y")
-        quote_ref = f"QTE-{date.today().strftime('%Y%m')}-{random.randint(100, 999)}"
+        
+        # Use user-defined validity period or default to 30 days
+        validity_days = brand_dna.get("validity_days") or 30
+        today = date.today()
+        valid_until = today + timedelta(days=int(validity_days))
+        
+        today_str = today.strftime("%d %B %Y")
+        valid_until_str = valid_until.strftime("%d %B %Y")
+        quote_ref = f"QTE-{today.strftime('%Y%m')}-{random.randint(100, 999)}"
         logo_b64 = brand_dna.get("logo_base64")
 
         # ── 1. HEADER ─────────────────────────────────────────────────────
@@ -734,7 +741,10 @@ class DocumentFactory:
 
         line_items_data = quote_data.get("line_items", [])
         logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
-        valid_until_str = (date.today() + timedelta(days=30)).strftime("%d %B %Y")
+        # Use user-defined validity period or default to 30 days
+        validity_days = brand_dna.get("validity_days") or 30
+        valid_until_date = date.today() + timedelta(days=int(validity_days))
+        valid_until_str = valid_until_date.strftime("%d %B %Y")
 
         raw_address = quote_data.get("customer_address") or ""
         if '\n' in raw_address:
@@ -757,17 +767,25 @@ class DocumentFactory:
             "tax_label": f"VAT/Tax ({tax_rate:.0f}%)" if tax_rate > 0 else "",
             "tax_amount": f"{sym}{tax_amount:,.2f}" if tax_rate > 0 else "",
             "grand_total": f"{sym}{grand_total:,.2f}",
-            "line_items": [
-                {
-                    "description": str(item.get("description", "")),
-                    "qty": f"{float(item.get('quantity', 1)):.0f}",
-                    "unit_str": "",
-                    "unit_price_str": f"{sym}{float(item.get('unit_price', 0)):,.2f}",
-                    "total_str": f"{sym}{float(item.get('quantity', 1)) * float(item.get('unit_price', 0)):,.2f}",
-                }
-                for item in line_items_data
-            ],
+            "line_items": [],
         }
+
+        # Populate line items with all available fields (including dynamic ones like part_no)
+        for item in line_items_data:
+            qty = float(item.get("quantity", 1))
+            price = float(item.get("unit_price", 0))
+            li_ctx = {
+                "description": str(item.get("description", "")),
+                "qty": f"{qty:.0f}",
+                "unit_str": str(item.get("unit", "")),
+                "unit_price_str": f"{sym}{price:,.2f}",
+                "total_str": f"{sym}{(qty * price):,.2f}",
+            }
+            # Add any extra keys (e.g. part_no, weight, seats)
+            for k, v in item.items():
+                if k not in li_ctx and k not in ("quantity", "unit_price"):
+                    li_ctx[k] = str(v) if v is not None else ""
+            context["line_items"].append(li_ctx)
 
         # Inject any custom template fields (e.g. custom_project_name)
         for k, v in quote_data.items():

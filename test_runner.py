@@ -58,309 +58,293 @@ ANALYSIS_MODEL = "gemini-2.5-flash"
 
 TEMPLATES = [
     {
-        "id": "01_plumber",
-        "business_name": "Waters & Sons Plumbing Services",
-        "business_address": "14 Copper Lane, Birmingham, B3 2PQ",
-        "contact_line": "Tel: 0121 555 0190  |  info@watersplumbing.co.uk",
-        "vat_reg": "VAT Registration No: 123 456 789",
-        "bank_details": "Bank: Lloyds Bank  |  Sort Code: 30-10-15  |  Account No: 12345678",
-        "columns": ["Description", "Qty", "Unit Price", "Total"],
+        "id": "01_aura_design",
+        "business_name": "Aura Design Studio",
+        "business_address": "Studio 12, Neon Works, London, E1 6QL",
+        "contact_line": "hello@auradesign.io  |  www.auradesign.io",
+        "logo_path": "logos/aura_design.png",
+        "columns": ["Project Item", "Amount"],
         "sample_rows": [
-            ["Replace combi boiler (Worcester Bosch 30i)", "1", "£1,200.00", "£1,200.00"],
-            ["New radiator — double panel convector", "2", "£145.00", "£290.00"],
+            ["Brand Identity System (Concept + Style Guide)", "£2,500.00"],
+            ["Web UI Kit - 15 Responsive Screens", "£1,800.00"],
         ],
-        "totals_rows": [("Subtotal", "£1,490.00"), ("VAT (20%)", "£298.00"), ("TOTAL DUE", "£1,788.00")],
-        "client_label": "Client Name",
-        "address_label": "Client Address",
-        "ref_label": "Quote No.",
-        "date_label": "Date",
-        "primary_color": "1B4F72",
+        "totals_rows": [("Total Investment", "£4,300.00")],
+        "client_label": "Design Prepared For",
+        "address_label": "Client Location",
+        "ref_label": "Project ID",
+        "date_label": "Issuance Date",
+        "primary_color": "000000",
         "currency": "GBP",
-        "tax_rate": 20.0,
+        "tax_rate": 0.0,
         "quote_data": {
-            "customer_name": "Mr James Holloway",
-            "customer_address": "82 Elm Park Road, Solihull, B91 3DP",
+            "customer_name": "Zenith Ventures",
+            "customer_address": "88 Kingsway, London, WC2B 6AA",
             "line_items": [
-                {"description": "Supply and fit new combi boiler (Worcester Bosch 30i)", "quantity": 1, "unit_price": 1400.00},
-                {"description": "Emergency call-out fee", "quantity": 1, "unit_price": 95.00},
-                {"description": "Labour — installation (6 hours)", "quantity": 6, "unit_price": 65.00},
+                {"description": "Brand Identity System (Concept + Style Guide)", "quantity": 1, "unit_price": 2500.00},
+                {"description": "Web UI Kit - 15 Responsive Screens", "quantity": 1, "unit_price": 1800.00},
             ],
         },
     },
     {
-        "id": "02_web_agency",
-        "business_name": "Pixel Forge Studio",
-        "business_address": "200 Design District, London, EC2A 4NE",
-        "contact_line": "hello@pixelforge.io  |  +44 20 7946 0831",
-        "vat_reg": None,
-        "bank_details": "Bank: Monzo Business  |  Sort: 04-00-04  |  Account: 87654321",
-        "columns": ["Service", "Hours", "Rate", "Total"],
+        "id": "02_global_steel",
+        "business_name": "Global Steel & Supply Corp",
+        "business_address": "1000 Industrial Way, Pittsburgh, PA 15201",
+        "contact_line": "sales@globalsteel.com  |  Phone: 412-555-0100",
+        "logo_path": "logos/global_steel.png",
+        "vat_reg": "EIN: 12-3456789",
+        "columns": ["Part No", "Description", "Qty", "Weight (lbs)", "Unit Price", "Subtotal"],
         "sample_rows": [
-            ["Website redesign — UX/UI design phase", "40", "$150.00", "$6,000.00"],
-            ["Front-end development (React)", "60", "$175.00", "$10,500.00"],
+            ["ST-405", "Structural Steel Beam (H-Section) 20ft", "10", "4500", "$1,250.00", "$12,500.00"],
+            ["RB-12", "Reinforcement Bars (Grade 60) 1/2in", "500", "3300", "$4.50", "$2,250.00"],
         ],
-        "totals_rows": [("Total", "$16,500.00")],
-        "client_label": "Customer Name",
-        "address_label": "Customer Address",
-        "ref_label": "Invoice #",
-        "date_label": "Invoice Date",
-        "primary_color": "2C3E50",
+        "totals_rows": [("Subtotal", "$14,750.00"), ("Sales Tax (7%)", "$1,032.50"), ("TOTAL AMOUNT", "$15,782.50")],
+        "client_label": "Consignee",
+        "address_label": "Shipping Address",
+        "ref_label": "PO REF NO",
+        "date_label": "SHIP DATE",
+        "primary_color": "D35400",
+        "currency": "USD",
+        "tax_rate": 7.0,
+        "quote_data": {
+            "customer_name": "Midwest Bridge Builders",
+            "customer_address": "500 Construction Road, Chicago, IL 60601",
+            "line_items": [
+                {"description": "ST-405 Structural Steel Beam 20ft", "quantity": 10, "unit_price": 1250.00},
+                {"description": "RB-12 Reinforcement Bars 1/2in", "quantity": 500, "unit_price": 4.50},
+                {"description": "Heavy Duty Steel Coupling Pins", "quantity": 100, "unit_price": 12.00},
+            ],
+        },
+    },
+    {
+        "id": "03_azure_estate",
+        "business_name": "The Azure Estate",
+        "business_address": "Valley Road, Napa Valley, CA 94558",
+        "contact_line": "weddings@azureestate.com  |  Tel: 707-555-8888",
+        "logo_path": "logos/azure_estate.png",
+        "columns": ["Service Category", "Description", "Investment"],
+        "sample_rows": [
+            ["Venue", "Exclusive use of the Grand Ballroom & Terrace", "$8,500.00"],
+            ["Catering", "Premium 5-course dinner for 100 guests", "$12,000.00"],
+        ],
+        "totals_rows": [("Subtotal", "$20,500.00"), ("Service Charge (18%)", "$3,690.00"), ("GRAND TOTAL", "$24,190.00")],
+        "client_label": "Honoring",
+        "address_label": "Billing Contact",
+        "ref_label": "Reservation #",
+        "date_label": "Event Date",
+        "primary_color": "2E4053",
+        "currency": "USD",
+        "tax_rate": 18.0,
+        "quote_data": {
+            "customer_name": "The Miller-Ross Wedding",
+            "customer_address": "123 Vineyard Lane, St. Helena, CA 94574",
+            "line_items": [
+                {"description": "Exclusive use of the Grand Ballroom & Terrace", "quantity": 1, "unit_price": 8500.00},
+                {"description": "Premium 5-course dinner per guest", "quantity": 100, "unit_price": 120.00},
+                {"description": "Bridal Suite Accommodation (2 nights)", "quantity": 1, "unit_price": 1500.00},
+            ],
+        },
+    },
+    {
+        "id": "04_quick_handyman",
+        "business_name": "Quick Fix Handyman Services",
+        "business_address": "12 Maple Ave, Springfield",
+        "contact_line": "Call Mike: 555-0123",
+        "columns": ["Job Description", "Price"],
+        "sample_rows": [
+            ["Repair leaky faucet in kitchen", "$85.00"],
+            ["Replace door handle on front door", "$45.00"],
+        ],
+        "totals_rows": [("TOTAL DUE", "$130.00")],
+        "client_label": "Customer",
+        "address_label": "Job Site",
+        "ref_label": "Job ID",
+        "date_label": "Date",
+        "primary_color": "2874A6",
         "currency": "USD",
         "tax_rate": 0.0,
         "quote_data": {
-            "customer_name": "Sarah Chen",
-            "customer_address": "Suite 200, 45 Tech Boulevard, San Francisco, CA 94105",
+            "customer_name": "Alice Peterson",
+            "customer_address": "456 Oak Lane, Springfield",
             "line_items": [
-                {"description": "Website redesign — UX/UI design phase", "quantity": 40, "unit_price": 150.00},
-                {"description": "Front-end development (React)", "quantity": 60, "unit_price": 175.00},
-                {"description": "CMS integration and training", "quantity": 8, "unit_price": 200.00},
+                {"description": "Repair leaky faucet in kitchen", "quantity": 1, "unit_price": 85.00},
+                {"description": "Replace door handle on front door", "quantity": 1, "unit_price": 45.00},
+                {"description": "Clean gutters (rear of house)", "quantity": 1, "unit_price": 120.00},
             ],
         },
     },
     {
-        "id": "03_interior_design",
-        "business_name": "Elara Interiors Ltd",
-        "business_address": "Suite 5, The Design Quarter, London, W1K 3JZ",
-        "contact_line": "studio@elarainteriors.co.uk  |  Tel: 020 3456 7890",
-        "vat_reg": None,
-        "bank_details": "Bank: HSBC  |  Sort Code: 40-05-30  |  Account: 23456789",
-        "columns": ["Description", "Qty", "Unit", "Unit Price", "Total"],
+        "id": "05_vet_clinic",
+        "business_name": "Happy Paws Veterinary Clinic",
+        "business_address": "77 Bark Way, Melbourne VIC 3000",
+        "contact_line": "vets@happypaws.com.au  |  (03) 9876 5432",
+        "columns": ["Procedure / Item", "Qty", "Cost (inc GST)"],
         "sample_rows": [
-            ["Full design concept and mood boards", "1", "pack", "£850.00", "£850.00"],
-            ["Bespoke sofa — 3-seat velvet", "1", "item", "£2,200.00", "£2,200.00"],
-            ["Window dressing — made-to-measure curtains", "2", "pair", "£640.00", "£1,280.00"],
+            ["Annual Vaccination & Health Check", "1", "$110.00"],
+            ["Dental Scale and Polish", "1", "$350.00"],
         ],
-        "totals_rows": [("Subtotal", "£4,330.00"), ("Total", "£4,330.00")],
-        "client_label": "Client Name",
-        "address_label": "Client Address",
-        "ref_label": "Quote No.",
-        "date_label": "Quote Date",
-        "primary_color": "7D3C98",
-        "currency": "GBP",
-        "tax_rate": 0.0,
-        "quote_data": {
-            "customer_name": "Mrs Catherine Walsh",
-            "customer_address": "14 Kensington Gardens, London, W8 4PX",
-            "line_items": [
-                {"description": "Full living room design concept and mood boards", "quantity": 1, "unit_price": 850.00},
-                {"description": "Bespoke sofa (3-seater, velvet, duck-egg blue)", "quantity": 1, "unit_price": 2200.00},
-                {"description": "Window dressing — made-to-measure curtains", "quantity": 2, "unit_price": 640.00},
-                {"description": "Interior design consultation (per day)", "quantity": 3, "unit_price": 500.00},
-            ],
-        },
-    },
-    {
-        "id": "04_construction",
-        "business_name": "Blue Ridge Construction Pty Ltd",
-        "business_address": "Unit 3, 88 Industrial Drive, Fyshwick, ACT 2609",
-        "contact_line": "Phone: (02) 6123 4567  |  admin@blueridgeconstruction.com.au",
-        "vat_reg": "ABN: 51 234 567 890",
-        "bank_details": "Bank: Commonwealth  |  BSB: 062-000  |  Account: 34567890",
-        "columns": ["Item", "Units", "Rate", "Amount"],
-        "sample_rows": [
-            ["Demolition and site preparation", "1 lot", "A$4,500.00", "A$4,500.00"],
-            ["Concrete slab — 6m x 4m", "1 lot", "A$8,800.00", "A$8,800.00"],
-        ],
-        "totals_rows": [("Subtotal", "A$13,300.00"), ("GST (10%)", "A$1,330.00"), ("TOTAL", "A$14,630.00")],
-        "client_label": "Client Name",
-        "address_label": "Project Address",
-        "ref_label": "Quote Reference",
-        "date_label": "DD/MM/YYYY",
-        "primary_color": "E67E22",
+        "totals_rows": [("GST Included", "$41.82"), ("TOTAL PAYABLE", "$460.00")],
+        "client_label": "Pet Owner",
+        "address_label": "Residential Address",
+        "ref_label": "Patient Record #",
+        "date_label": "Visit Date",
+        "primary_color": "148F77",
         "currency": "AUD",
         "tax_rate": 10.0,
         "quote_data": {
-            "customer_name": "David Nguyen",
-            "customer_address": "22 Ironbark Close, Canberra ACT 2600",
+            "customer_name": "Sarah Miller (Pet: Luna)",
+            "customer_address": "15 Wattle St, Richmond VIC 3121",
             "line_items": [
-                {"description": "Demolition and site preparation", "quantity": 1, "unit_price": 4500.00},
-                {"description": "Concrete slab — 6m x 4m extension", "quantity": 1, "unit_price": 8800.00},
-                {"description": "Structural framing and roofing", "quantity": 1, "unit_price": 12000.00},
+                {"description": "Annual Vaccination & Health Check", "quantity": 1, "unit_price": 110.00},
+                {"description": "Dental Scale and Polish", "quantity": 1, "unit_price": 350.00},
+                {"description": "Antibiotic Course (10 days)", "quantity": 1, "unit_price": 45.00},
             ],
         },
     },
     {
-        "id": "05_accounting",
-        "business_name": "Meridian Advisory Services",
-        "business_address": "Floor 7, City Tower, Manchester, M1 4BT",
-        "contact_line": "info@meridianadvisory.co.uk  |  0161 234 5678",
-        "vat_reg": "VAT No: 987 654 321",
-        "bank_details": "Bank: NatWest  |  Sort Code: 60-40-05  |  Account: 45678901",
-        "columns": ["Description", "Hours", "Rate", "Amount"],
+        "id": "06_solar_rebate",
+        "business_name": "Eco-Power Solar Solutions",
+        "business_address": "Unit 5, Energy Park, Sydney NSW 2000",
+        "contact_line": "info@ecopower.com.au  |  ABN: 99 888 777 666",
+        "columns": ["System Component", "Qty", "Price"],
         "sample_rows": [
-            ["Statutory accounts preparation", "10", "£120.00", "£1,200.00"],
-            ["Management accounts — Q1 review", "5", "£95.00", "£475.00"],
+            ["6.6kW Tier 1 Solar Panel Array", "1", "$6,500.00"],
+            ["5kW Hybrid Inverter", "1", "$2,200.00"],
         ],
-        "totals_rows": [("Sub-Total", "£1,675.00"), ("VAT (20%)", "£335.00"), ("Total Due", "£2,010.00")],
-        "client_label": "Client Name",
-        "address_label": "Client Address",
-        "ref_label": "Invoice Number",
-        "date_label": "Invoice Date",
-        "primary_color": "154360",
-        "currency": "GBP",
-        "tax_rate": 20.0,
-        "quote_data": {
-            "customer_name": "Bourne Tech Limited",
-            "customer_address": "3rd Floor, Southgate House, Leeds, LS1 4AD",
-            "line_items": [
-                {"description": "Statutory accounts preparation and filing", "quantity": 1, "unit_price": 1200.00},
-                {"description": "Management accounts — quarterly review", "quantity": 4, "unit_price": 450.00},
-            ],
-        },
-    },
-    {
-        "id": "06_photography",
-        "business_name": "Luminary Photography Co.",
-        "business_address": "Studio 4, Lightworks Building, Edinburgh, EH1 1BB",
-        "contact_line": "hello@luminaryphoto.com  |  07700 900 123",
-        "vat_reg": None,
-        "bank_details": "Bank: Starling Bank  |  Sort: 60-83-71  |  Account: 56789012",
-        "columns": ["Package", "Price"],
-        "sample_rows": [
-            ["Full-day wedding photography (8 hours, 2 photographers)", "£3,200.00"],
-            ["Premium editing package (300+ digital images)", "£800.00"],
+        "totals_rows": [
+            ("Gross System Total", "$8,700.00"),
+            ("Govt Rebate (STCs)", "-$2,400.00"),
+            ("NET AMOUNT PAYABLE", "$6,300.00")
         ],
-        "totals_rows": [("Total", "£4,000.00")],
-        "client_label": "Client Name",
-        "address_label": "Client Address",
-        "ref_label": "Ref No.",
-        "date_label": "Date",
-        "primary_color": "2C3E50",
-        "currency": "GBP",
+        "client_label": "Applicant Name",
+        "address_label": "Installation Site",
+        "ref_label": "System Quote Ref",
+        "date_label": "Expiry Date",
+        "primary_color": "F1C40F",
+        "currency": "AUD",
         "tax_rate": 0.0,
         "quote_data": {
-            "customer_name": "Emily & Marcos Reyes",
-            "customer_address": "2890 Sunset Drive, Austin, TX 78701",
+            "customer_name": "Thomas Jenkins",
+            "customer_address": "82 Botany Rd, Alexandria NSW 2015",
             "line_items": [
-                {"description": "Full-day wedding photography (8 hours, 2 photographers)", "quantity": 1, "unit_price": 3200.00},
-                {"description": "Premium editing package (300+ edited digital images)", "quantity": 1, "unit_price": 800.00},
+                {"description": "6.6kW Tier 1 Solar Panel Array", "quantity": 1, "unit_price": 6500.00},
+                {"description": "5kW Hybrid Inverter (Battery Ready)", "quantity": 1, "unit_price": 2200.00},
+                {"description": "Smart Meter Installation", "quantity": 1, "unit_price": 450.00},
             ],
         },
     },
     {
-        "id": "07_it_services",
-        "business_name": "TechStream Solutions GmbH",
-        "business_address": "Hauptstrasse 120, 10117 Berlin, Germany",
-        "contact_line": "info@techstream.de  |  +49 30 1234 5678",
-        "vat_reg": "USt-IdNr.: DE 123 456 789",
-        "bank_details": "Bank: Deutsche Bank  |  IBAN: DE89 3704 0044 0532 0130 00  |  BIC: COBADEFFXXX",
-        "columns": ["Service", "Hours", "Rate (EUR)", "Total (EUR)"],
+        "id": "07_move_easy",
+        "business_name": "Move Easy Logisitics",
+        "business_address": "202 Cargo Way, Dallas, TX 75201",
+        "contact_line": "ops@moveeasy.com  |  DOT: 1234567",
+        "columns": ["Service Description", "Volume (cu.ft)", "Rate/cu.ft", "Total"],
         "sample_rows": [
-            ["Network infrastructure audit", "8", "EUR 200.00", "EUR 1,600.00"],
-            ["Cloud migration consultation", "16", "EUR 185.00", "EUR 2,960.00"],
+            ["Residential Move - 3 Bedroom House", "1200", "$4.50", "$5,400.00"],
+            ["Packing & Unpacking Services", "1", "flat", "$850.00"],
         ],
-        "totals_rows": [("Subtotal", "EUR 4,560.00"), ("Total", "EUR 4,560.00")],
+        "totals_rows": [("Fuel Surcharge (10%)", "$625.00"), ("ESTIMATED TOTAL", "$6,875.00")],
         "client_label": "Customer Name",
-        "address_label": "Customer Address",
-        "ref_label": "Ref #",
-        "date_label": "Date",
-        "primary_color": "1E8449",
-        "currency": "EUR",
-        "tax_rate": 0.0,
-        "quote_data": {
-            "customer_name": "Brandt Manufacturing AG",
-            "customer_address": "Industriestrasse 42, 80331 Munchen",
-            "line_items": [
-                {"description": "Network infrastructure audit", "quantity": 8, "unit_price": 200.00},
-                {"description": "Server migration to cloud (AWS)", "quantity": 24, "unit_price": 185.00},
-                {"description": "Cybersecurity assessment and report", "quantity": 16, "unit_price": 220.00},
-                {"description": "Staff IT training workshop", "quantity": 4, "unit_price": 350.00},
-            ],
-        },
-    },
-    {
-        "id": "08_landscaping",
-        "business_name": "GreenPath Landscapes Ltd",
-        "business_address": "34 Okarito Place, Christchurch, Canterbury 8082",
-        "contact_line": "info@greenpathlandscapes.co.nz  |  03 379 4567",
-        "vat_reg": "NZBN: 9429041234567",
-        "bank_details": "Bank: ASB Bank  |  Account: 12-3456-7890123-00",
-        "columns": ["Description", "Qty", "Unit Price", "Total"],
-        "sample_rows": [
-            ["Garden design plan and consultation", "1", "NZ$600.00", "NZ$600.00"],
-            ["Native planting — supply and install", "15", "NZ$45.00", "NZ$675.00"],
-        ],
-        "totals_rows": [("Subtotal", "NZ$1,275.00"), ("GST (15%)", "NZ$191.25"), ("Total", "NZ$1,466.25")],
-        "client_label": "Customer Name",
-        "address_label": "Property Address",
-        "ref_label": "Quote No.",
-        "date_label": "Date",
-        "primary_color": "186A3B",
-        "currency": "NZD",
-        "tax_rate": 15.0,
-        "quote_data": {
-            "customer_name": "Fiona & Stuart MacPherson",
-            "customer_address": "67 Pohutukawa Avenue, Auckland 1010",
-            "line_items": [
-                {"description": "Garden design plan and consultation", "quantity": 1, "unit_price": 600.00},
-                {"description": "Native planting — supply and install (15 plants)", "quantity": 15, "unit_price": 45.00},
-                {"description": "Lawn scarification and reseeding", "quantity": 1, "unit_price": 380.00},
-            ],
-        },
-    },
-    {
-        "id": "09_event_planning",
-        "business_name": "Occasions Unlimited Events",
-        "business_address": "Floor 12, Rockefeller Plaza, New York, NY 10020",
-        "contact_line": "events@occasionsunlimited.com  |  +1 (212) 555-0147",
-        "vat_reg": None,
-        "bank_details": "Bank: Chase  |  Routing: 021000021  |  Account: 67890123",
-        "columns": ["Service / Item", "Qty", "Price", "Total"],
-        "sample_rows": [
-            ["Venue hire — Grand Ballroom (full day)", "1", "$4,500.00", "$4,500.00"],
-            ["Catering — 3-course dinner per guest", "80", "$85.00", "$6,800.00"],
-            ["Audio-visual and technical crew", "1", "$2,800.00", "$2,800.00"],
-        ],
-        "totals_rows": [("Subtotal", "$14,100.00"), ("Total", "$14,100.00")],
-        "client_label": "Client Name",
-        "address_label": "Client Address",
-        "ref_label": "Reference",
-        "date_label": "Quote Date",
-        "primary_color": "117A65",
+        "address_label": "Origin Address",
+        "ref_label": "Booking Ref",
+        "date_label": "Proposed Move Date",
+        "primary_color": "C0392B",
         "currency": "USD",
         "tax_rate": 0.0,
         "quote_data": {
-            "customer_name": "Apex Financial Group",
-            "customer_address": "One Liberty Plaza, New York, NY 10006",
+            "customer_name": "Robert Henderson",
+            "customer_address": "77 Sunset Blvd, Dallas, TX 75204",
             "line_items": [
-                {"description": "Venue hire — Grand Ballroom (full day)", "quantity": 1, "unit_price": 4500.00},
-                {"description": "Catering — 3-course dinner for 120 guests", "quantity": 120, "unit_price": 85.00},
-                {"description": "Audio-visual equipment and technical crew", "quantity": 1, "unit_price": 2800.00},
-                {"description": "Floral arrangements and table centrepieces", "quantity": 12, "unit_price": 175.00},
-                {"description": "Event coordination and management", "quantity": 1, "unit_price": 1800.00},
+                {"description": "Residential Move - 3 Bedroom House", "quantity": 1200, "unit_price": 4.50},
+                {"description": "Packing & Unpacking Services (Flat Rate)", "quantity": 1, "unit_price": 850.00},
+                {"description": "Full Insurance Coverage (Up to $50k)", "quantity": 1, "unit_price": 250.00},
             ],
         },
     },
     {
-        "id": "10_legal_services",
-        "business_name": "Thornton & Associates Solicitors",
-        "business_address": "4 Gray's Inn Square, London, WC1R 5AH",
-        "contact_line": "enquiries@thorntonlaw.co.uk  |  020 7242 8910",
-        "vat_reg": None,
-        "bank_details": "Bank: Barclays  |  Sort Code: 20-00-00  |  Account: 78901234",
-        "columns": ["Professional Service", "Hours", "Fee (GBP)"],
+        "id": "08_code_crafters",
+        "business_name": "Code Crafters Software",
+        "business_address": "Tech Plaza, Berlin, Germany",
+        "contact_line": "billing@codecrafters.de  |  VAT: DE987654321",
+        "columns": ["Software Service", "Seats", "Monthly Fee", "Yearly Total"],
         "sample_rows": [
-            ["Residential conveyancing — freehold purchase", "6", "£900.00"],
-            ["Land Registry and disbursements", "1", "£350.00"],
+            ["Enterprise License - CRM Suite", "25", "€45.00", "€13,500.00"],
+            ["Premium Support Add-on", "1", "€200.00", "€2,400.00"],
         ],
-        "totals_rows": [("Subtotal", "£1,250.00"), ("Total", "£1,250.00")],
-        "client_label": "Client Name",
-        "address_label": "Address",
-        "ref_label": "Matter Reference",
-        "date_label": "Date",
-        "primary_color": "641E16",
+        "totals_rows": [("Subtotal (Annual)", "€15,900.00"), ("VAT (19%)", "€3,021.00"), ("TOTAL COST", "€18,921.00")],
+        "client_label": "Account Owner",
+        "address_label": "Entity Address",
+        "ref_label": "License ID",
+        "date_label": "Renewal Date",
+        "primary_color": "2471A3",
+        "currency": "EUR",
+        "tax_rate": 19.0,
+        "quote_data": {
+            "customer_name": "Innova Solutions GmbH",
+            "customer_address": "Alte Strasse 12, 10115 Berlin",
+            "line_items": [
+                {"description": "Enterprise License - CRM Suite", "quantity": 25, "unit_price": 540.00}, # 45 * 12
+                {"description": "Premium Support Add-on (Annual)", "quantity": 1, "unit_price": 2400.00},
+            ],
+        },
+    },
+    {
+        "id": "09_gourmet_catering",
+        "business_name": "Gourmet Garden Catering",
+        "business_address": "High Street, Oxford, OX1 4AH",
+        "contact_line": "events@gourmetgarden.co.uk",
+        "columns": ["Item Description", "Price Per Head", "Quantity", "Total"],
+        "sample_rows": [
+            ["Artisan Hors d'oeuvres Selection", "£12.50", "120", "£1,500.00"],
+            ["Plated Main Course - Seasonal Menu", "£45.00", "120", "£5,400.00"],
+        ],
+        "totals_rows": [("Subtotal", "£6,900.00"), ("Staffing Fee", "£850.00"), ("TOTAL QUOTE", "£7,750.00")],
+        "client_label": "Event Organized For",
+        "address_label": "Venue Address",
+        "ref_label": "Event Reference",
+        "date_label": "Booking Date",
+        "primary_color": "1D8348",
         "currency": "GBP",
         "tax_rate": 0.0,
         "quote_data": {
-            "customer_name": "Mr & Mrs Philip Drummond",
-            "customer_address": "Hillcrest Cottage, Great Missenden, HP16 0BD",
+            "customer_name": "Oxford Alumni Association",
+            "customer_address": "Sheldonian Theatre, Oxford, OX1 3AZ",
             "line_items": [
-                {"description": "Residential conveyancing — purchase of freehold property", "quantity": 1, "unit_price": 1500.00},
-                {"description": "Land Registry and search fees", "quantity": 1, "unit_price": 350.00},
+                {"description": "Artisan Hors d'oeuvres Selection", "quantity": 120, "unit_price": 12.50},
+                {"description": "Plated Main Course - Seasonal Menu", "quantity": 120, "unit_price": 45.00},
+                {"description": "Dessert Buffet & Coffee Station", "quantity": 120, "unit_price": 8.50},
+            ],
+        },
+    },
+    {
+        "id": "10_fit_pro",
+        "business_name": "FitPro Personal Training",
+        "business_address": "Health Hub, Gym Street, Manchester",
+        "contact_line": "coach@fitpro.com",
+        "columns": ["Training Package", "Cost"],
+        "sample_rows": [
+            ["10 Session Kickstart Pack", "£450.00"],
+            ["Nutritional Consultation", "£85.00"],
+        ],
+        "totals_rows": [("TOTAL", "£535.00")],
+        "client_label": "Client",
+        "address_label": "Contact Info",
+        "ref_label": "Membership #",
+        "date_label": "Start Date",
+        "primary_color": "7B241C",
+        "currency": "GBP",
+        "tax_rate": 0.0,
+        "quote_data": {
+            "customer_name": "Mark Stevens",
+            "customer_address": "12 Broadway, Manchester, M1 1AA",
+            "line_items": [
+                {"description": "10 Session Kickstart Pack", "quantity": 1, "unit_price": 450.00},
+                {"description": "Nutritional Consultation", "quantity": 1, "unit_price": 85.00},
+                {"description": "FitPro T-Shirt & Water Bottle", "quantity": 1, "unit_price": 0.00},
             ],
         },
     },
 ]
+
 
 # Synthetic quote data pool — cycled over when running against real user templates.
 _SYNTH_QUOTE_POOL = [t["quote_data"] for t in TEMPLATES]
@@ -470,6 +454,7 @@ def create_template_doc(t: dict) -> Document:
     doc = Document()
     primary = t["primary_color"]
     white = "FFFFFF"
+    tid = t["id"]
 
     for section in doc.sections:
         section.top_margin = Inches(0.75)
@@ -477,30 +462,64 @@ def create_template_doc(t: dict) -> Document:
         section.left_margin = Inches(0.9)
         section.right_margin = Inches(0.9)
 
+    # ── Logo support ─────────────────────────────────────────────────────────
+    logo_path = t.get("logo_path")
+    if logo_path and os.path.exists(logo_path):
+        # Center logo for Aura Design, Top Left for others
+        if tid == "01_aura_design":
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run()
+            r.add_picture(logo_path, width=Inches(1.5))
+        else:
+            p = doc.add_paragraph()
+            r = p.add_run()
+            r.add_picture(logo_path, width=Inches(1.2))
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
     # ── Business header ──────────────────────────────────────────────────────
-    p = doc.add_paragraph()
-    r = p.add_run(t["business_name"])
-    r.font.size = Pt(16)
-    r.font.bold = True
-    r.font.color.rgb = _rgb(primary)
-    p.paragraph_format.space_after = Pt(2)
+    # For Aura Design, center everything and make it minimalist
+    if tid == "01_aura_design":
+        header_p = doc.add_paragraph()
+        header_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = header_p.add_run(t["business_name"].upper())
+        r.font.size = Pt(14)
+        r.font.bold = True
+        r.font.color.rgb = _rgb(primary)
+        
+        addr_p = doc.add_paragraph(f"{t['business_address']} | {t['contact_line']}")
+        addr_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if addr_p.runs:
+            addr_p.runs[0].font.size = Pt(9)
+        doc.add_paragraph("").paragraph_format.space_after = Pt(20)
+    else:
+        p = doc.add_paragraph()
+        r = p.add_run(t["business_name"])
+        r.font.size = Pt(16)
+        r.font.bold = True
+        r.font.color.rgb = _rgb(primary)
+        p.paragraph_format.space_after = Pt(2)
 
-    addr_p = doc.add_paragraph(t["business_address"])
-    addr_p.paragraph_format.space_before = Pt(0)
-    addr_p.paragraph_format.space_after = Pt(0)
+        addr_p = doc.add_paragraph(t["business_address"])
+        addr_p.paragraph_format.space_before = Pt(0)
+        addr_p.paragraph_format.space_after = Pt(0)
 
-    contact_p = doc.add_paragraph(t["contact_line"])
-    contact_p.paragraph_format.space_before = Pt(0)
-    contact_p.paragraph_format.space_after = Pt(0)
+        contact_p = doc.add_paragraph(t["contact_line"])
+        contact_p.paragraph_format.space_before = Pt(0)
+        contact_p.paragraph_format.space_after = Pt(0)
 
-    if t.get("vat_reg"):
-        vp = doc.add_paragraph(t["vat_reg"])
-        vp.paragraph_format.space_before = Pt(0)
-        vp.paragraph_format.space_after = Pt(4)
+        if t.get("vat_reg"):
+            vp = doc.add_paragraph(t["vat_reg"])
+            vp.paragraph_format.space_before = Pt(0)
+            vp.paragraph_format.space_after = Pt(4)
 
     # ── QUOTATION title ──────────────────────────────────────────────────────
     title_p = doc.add_paragraph()
-    title_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    if tid == "01_aura_design":
+        title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    else:
+        title_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
     tr = title_p.add_run("QUOTATION")
     tr.font.size = Pt(18)
     tr.font.bold = True
@@ -510,27 +529,46 @@ def create_template_doc(t: dict) -> Document:
     # ── Meta table: ref + date ───────────────────────────────────────────────
     ref_label = t["ref_label"]
     date_label = t["date_label"]
-    meta = doc.add_table(rows=2, cols=4)
+    
+    # Global Steel wants a more complex meta section
+    if tid == "02_global_steel":
+        meta = doc.add_table(rows=3, cols=4)
+    else:
+        meta = doc.add_table(rows=2, cols=4)
+        
     meta.style = "Table Grid"
+    label_bg = "F4F6F7"
 
-    label_bg = "D5E8F4"
     meta.cell(0, 0).text = ref_label
     _shade_cell(meta.cell(0, 0), label_bg)
     meta.cell(0, 1).text = f"[{ref_label}]"
+    
     meta.cell(0, 2).text = date_label
     _shade_cell(meta.cell(0, 2), label_bg)
     meta.cell(0, 3).text = f"[{date_label}]"
+    
     meta.cell(1, 0).text = "Valid Until"
     _shade_cell(meta.cell(1, 0), label_bg)
-    meta.cell(1, 1).text = "[DD/MM/YYYY]"
-    meta.cell(1, 2).text = ""
-    meta.cell(1, 3).text = ""
+    meta.cell(1, 1).text = "[EXPIRY_DATE]"
+    
+    if tid == "02_global_steel":
+        meta.cell(2, 0).text = "Project Code"
+        _shade_cell(meta.cell(2, 0), label_bg)
+        meta.cell(2, 1).text = "[PROJECT_REF]"
+        meta.cell(2, 2).text = "Department"
+        _shade_cell(meta.cell(2, 2), label_bg)
+        meta.cell(2, 3).text = "[DEPT_NAME]"
+    else:
+        meta.cell(1, 2).text = "Status"
+        _shade_cell(meta.cell(1, 2), label_bg)
+        meta.cell(1, 3).text = "[QUOTE_STATUS]"
 
     doc.add_paragraph("").paragraph_format.space_before = Pt(6)
 
     # ── Bill To ──────────────────────────────────────────────────────────────
     bt = doc.add_paragraph()
-    bt_run = bt.add_run("Bill To:")
+    label_text = "BILL TO:" if tid != "03_azure_estate" else "HONORING:"
+    bt_run = bt.add_run(label_text)
     bt_run.font.bold = True
     bt_run.font.color.rgb = _rgb(primary)
     bt.paragraph_format.space_after = Pt(0)
@@ -561,6 +599,8 @@ def create_template_doc(t: dict) -> Document:
     # ── Totals table ─────────────────────────────────────────────────────────
     totals_rows = t["totals_rows"]
     totals_tbl = doc.add_table(rows=len(totals_rows), cols=2)
+    # Right align the totals table
+    totals_tbl.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     totals_tbl.style = "Table Grid"
 
     for ri, (label, val) in enumerate(totals_rows):
@@ -578,17 +618,19 @@ def create_template_doc(t: dict) -> Document:
 
     doc.add_paragraph("").paragraph_format.space_before = Pt(8)
 
-    # ── Bank / payment footer ─────────────────────────────────────────────────
+    # ── Terms / Footer ────────────────────────────────────────────────────────
     pmt = doc.add_paragraph()
-    pr = pmt.add_run("Payment Details:")
+    pr = pmt.add_run("TERMS & CONDITIONS:")
     pr.font.bold = True
     pr.font.color.rgb = _rgb(primary)
     pmt.paragraph_format.space_after = Pt(0)
 
-    doc.add_paragraph(t["bank_details"]).paragraph_format.space_after = Pt(0)
-    doc.add_paragraph("Payment due within 30 days of invoice date.")
+    doc.add_paragraph("Please review the above quote. Valid for 14 days.").paragraph_format.space_after = Pt(0)
+    if tid == "08_code_crafters":
+        doc.add_paragraph("Annual billing applies. Early cancellation fees may incur.").paragraph_format.space_after = Pt(0)
 
     return doc
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

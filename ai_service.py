@@ -47,6 +47,7 @@ Return ONLY a valid JSON object with these keys. If a field cannot be determined
 QUOTE_GENERATION_PROMPT = """
 You are an expert AI assistant who turns raw user requests into structured quote data for tradespeople.
 Input is often terse shorthand like "Customer Name. Job description Total" or "Name, job, price".
+
 Extract the following from the user's input in strict JSON format:
 1. "customer_name": Name of the customer (string)
 2. "customer_address": Address of the customer if mentioned (string or null)
@@ -54,10 +55,9 @@ Extract the following from the user's input in strict JSON format:
 4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible, otherwise keep as is.
 5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}")
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
-7. "line_items": An array of objects, each with:
-   - "description" (string): what the work or material is
-   - "quantity" (number): how many units
-   - "unit_price" (number): price per unit
+7. "line_items": An array of objects. Each object MUST contain "description", "quantity", and "unit_price".
+   - CRITICAL: If the template has extra columns (like "Part No", "Weight", "Seats"), also try to extract these into matching keys (e.g. "part_no", "weight", "seats").
+   - If a specific column value cannot be found but might be embedded in the description (e.g. "ST-405 Beam" contains part no ST-405), extract it.
 
 Rules:
 - A trailing number after the job description is ALWAYS the price — never an address, postcode, or ID.
@@ -66,7 +66,6 @@ Rules:
 - Always produce at least one line item — never return an empty line_items array.
 - Fix any obvious spelling mistakes in the description fields (e.g. "bathrrom" → "bathroom").
 - Capitalise the first letter of each description (e.g. "new bathroom" → "New bathroom").
-
 
 Example:
 Input: "Amy Smith. New bathroom 3000"
@@ -84,10 +83,9 @@ Transcribe the following voice note and extract the quote details in strict JSON
 4. "customer_phone": Phone number of the customer if mentioned (string or null). If found, format it using standard international format if possible.
 5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}")
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known. Do NOT include placeholder brackets for things you don't know, just write a generic friendly message.
-7. "line_items": An array of objects, each with:
-   - "description" (string): what the work or material is
-   - "quantity" (number): how many units
-   - "unit_price" (number): price per unit
+7. "line_items": An array of objects. Each object MUST contain "description", "quantity", and "unit_price".
+   - CRITICAL: If the template has extra columns (like "Part No", "Weight", "Seats"), also try to extract these into matching keys.
+   - If a specific column value cannot be found but might be embedded in the description, extract it.
 
 Rules:
 - If a lump-sum total is mentioned (e.g. "New bathroom, three thousand pounds"), create ONE line item with quantity=1 and unit_price equal to that total.
@@ -108,10 +106,9 @@ Extract the following in strict JSON format:
 4. "customer_phone": Phone number of the customer if visible (string or null). Format it using standard international format if possible.
 5. "email_subject": A professional, concise email subject line for this quote (e.g. "Quote for [Project] - {business_name}").
 6. "cover_message": A short, friendly message to send with the quote, using the customer's name if known.
-7. "line_items": An array of objects, each with:
-   - "description" (string): what the work or material is
-   - "quantity" (number): how many units
-   - "unit_price" (number): price per unit
+7. "line_items": An array of objects. Each object MUST contain "description", "quantity", and "unit_price".
+   - CRITICAL: If the template has extra columns (like "Part No", "Weight", "Seats"), also try to extract these into matching keys.
+   - If a specific column value cannot be found but might be embedded in the description, extract it.
 
 If prices are not visible, infer reasonable defaults based on the trade context.
 Return ONLY valid JSON.
@@ -119,9 +116,15 @@ Return ONLY valid JSON.
 
 def _custom_fields_prompt_suffix(custom_fields: dict) -> str:
     """Builds prompt instructions for template-specific custom fields."""
-    lines = ["\n\nAlso extract these template-specific fields if mentioned in the input (null if not found):"]
-    for slug, display in custom_fields.items():
+    lines = ["\n\nAlso extract these template-specific fields if mentioned in the input:"]
+    for slug, info in custom_fields.items():
+        # custom_fields can be {slug: display_name} or {slug: {"display": "...", "default": "..."}}
+        display = info["display"] if isinstance(info, dict) else info
         lines.append(f'- "{slug}": {display}')
+    
+    lines.append("\nRULES for template-specific fields:")
+    lines.append("- If a field is not mentioned in the user input, INFER a sensible default based on the field name and context (e.g. Status -> 'Draft', Payment Terms -> 'Due on Receipt', Project -> 'General').")
+    lines.append("- Return the inferred value instead of null whenever possible.")
     return "\n".join(lines)
 
 
@@ -161,16 +164,17 @@ CRITICAL: Many real templates do NOT use [bracket] placeholders. You must identi
 - Cells containing only dashes, dots, underscores, or generic text like "Enter name here"
 - Date-format cells like "DD/MM/YYYY" or "01/01/2024" → quote_date
 - Any cell with dummy/placeholder text next to a recognisable label
+- Totals mapping: Prioritize cells adjacent to or directly below recognisable keywords (VAT, Tax, Service Charge, Total Due, Grand Total).
 
 Common label → field mappings to recognise (regardless of exact wording):
-- "Bill To", "Billed To", "Customer", "Client", "Issued To", "Name", "To:" → customer_name (the cell/paragraph adjacent to or below these labels)
+- "Bill To", "Billed To", "Customer", "Client", "Issued To", "Name", "To:" → customer_name
 - "Address", "Customer Address", "Client Address", "Delivery Address" → customer_address
 - "Quote No", "Quote Ref", "Invoice No", "Invoice Number", "Reference", "Ref", "No." → quote_ref
 - "Date", "Invoice Date", "Quote Date", "Issue Date", "DD/MM/YYYY" → quote_date
 - "Expiry Date", "Expiry", "Valid Until", "Valid To", "Expires", "Quote Expires" → valid_until
-- Totals rows: "Sub Total", "Subtotal", "Net" → subtotal; "VAT", "Tax", "GST" → tax; "Total", "Total Due", "Amount Due", "Grand Total" → grand_total
+- "Sub Total", "Subtotal", "Net" → subtotal; "VAT", "Tax", "GST", "Service Charge", "Surcharge" → tax; "Total", "Total Due", "Amount Due", "Grand Total", "Total Payable" → grand_total
 
-Note: tables are indexed in document order (0-based), including nested tables (e.g. inner tables used for side-by-side layouts). Outer layout/container cells will appear empty — focus on inner cells with specific field text.
+Note: tables are indexed in document order (0-based). Focus on identifying the row and cell where the numeric VALUE should go, not the label itself.
 
 Respond with ONLY a valid JSON object with these keys:
 - "customer_name": location where the customer/client name appears or should be placed
@@ -184,13 +188,12 @@ Respond with ONLY a valid JSON object with these keys:
 - "tax_amount_value_location": location of the tax/VAT amount numeric value cell (null if absent)
 - "grand_total_value_location": location of the grand total / total due numeric value cell
 
-Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
-  OR {{"type": "paragraph", "paragraph_index": N}} (use 0-based index into the non-empty paragraphs list)
+Location format: {"type": "table", "table_index": N, "row_index": N, "col_index": N}
+  OR {"type": "paragraph", "paragraph_index": N}
 
 Visual pre-analysis of the rendered template image identified these fields with their label text:
 {visual_hints}
-Use these label texts to help locate the corresponding fields in the document structure above.
-If visual_hints says null for a field, it is likely absent — only map it if you are very confident.
+Use these label texts to help locate the corresponding fields. If visual_hints says null for a field, it is likely absent — only map it if you are very confident.
 """
 
 TEMPLATE_FIELD_DISCOVERY_PROMPT = """
@@ -495,14 +498,21 @@ def _map_line_item_columns(header_cells) -> dict:
         'package', 'scope', 'task', 'deliverable', 'product', 'items', 'services', 'works', 'activity',
     }
     qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
-    # 'unit' alone (without 'price'/'cost') → unit-of-measure column
     unit_kw = {'unit', 'uom', 'measure'}
     price_kw = {'unit price', 'unit rate', 'rate', 'per unit', 'unit cost', 'each', 'price', 'fee', 'charge'}
     total_kw = {'total', 'amount', 'sum', 'net', 'gross', 'line total', 'ex. vat', 'inc. vat'}
+    
+    # Extra recognizable columns
+    part_kw = {'part no', 'part #', 'sku', 'code', 'model'}
+    weight_kw = {'weight', 'mass', 'kg', 'lbs'}
+    seats_kw = {'seats', 'capacity', 'pax'}
 
     col_map: dict[int, str] = {}
     for ci, cell in enumerate(header_cells):
         txt = cell.text.strip().lower()
+        if not txt:
+            continue
+            
         if any(k in txt for k in desc_kw):
             col_map[ci] = 'description'
         elif any(k in txt for k in qty_kw):
@@ -513,6 +523,18 @@ def _map_line_item_columns(header_cells) -> dict:
             col_map[ci] = 'total'
         elif any(k in txt for k in unit_kw):
             col_map[ci] = 'unit'
+        elif any(k in txt for k in part_kw):
+            col_map[ci] = 'part_no'
+        elif any(k in txt for k in weight_kw):
+            col_map[ci] = 'weight'
+        elif any(k in txt for k in seats_kw):
+            col_map[ci] = 'seats'
+        else:
+            # Dynamic fallback: use snake_case of the header text for any other column
+            slug = re.sub(r'[^a-z0-9]+', '_', txt).strip('_')
+            if slug:
+                col_map[ci] = slug
+                
     return col_map
 
 
@@ -923,6 +945,47 @@ class AIService:
             if matched_any:
                 _set_para_text(p, new_txt)
 
+        # ── Smart Scan: Totals labels ───────────────────────────────────────────
+        # Scans tables for recognisable totals labels (VAT, Total, etc.) and maps
+        # the adjacent cell if it's empty or contains dummy text.
+        _SUBTOTAL_RE = re.compile(r'^\s*(sub\s*total|subtotal|net|total\s*excl?\s*vat)\s*:?\s*$', re.I)
+        _TAX_RE = re.compile(r'^\s*(vat|tax|gst|service\s*charge|surcharge|tax\s*amount)\s*:?\s*$', re.I)
+        _TOTAL_RE = re.compile(r'^\s*(total|total\s*due|grand\s*total|amount\s*due|total\s*payable)\s*:?\s*$', re.I)
+
+        for ti, table in enumerate(all_tables_in_doc):
+            for ri, row in enumerate(table.rows):
+                for ci, cell in enumerate(row.cells):
+                    txt = _cell_own_text(cell)
+                    field_to_map = None
+                    if _SUBTOTAL_RE.match(txt):
+                        field_to_map = "subtotal"
+                    elif _TAX_RE.match(txt):
+                        field_to_map = "tax_amount"
+                    elif _TOTAL_RE.match(txt):
+                        field_to_map = "grand_total"
+                    
+                    if field_to_map and field_to_map not in regex_matched:
+                        # Check adjacent cell (right)
+                        if ci + 1 < len(row.cells):
+                            adj_cell = row.cells[ci + 1]
+                            adj_txt = _cell_own_text(adj_cell)
+                            # If adjacent cell is mostly empty or contains placeholders
+                            if not adj_txt or re.match(r'^[\s0.,\-£$€]*$', adj_txt):
+                                _set_cell_text(adj_cell, _JINJA_FOR_FIELD[field_to_map])
+                                regex_matched.add(field_to_map)
+                                logger.info(f"Regex matched total '{field_to_map}' in table {ti}, row {ri}, col {ci+1} (based on label '{txt}')")
+                                break
+                        
+                        # Check cell below
+                        if ri + 1 < len(table.rows):
+                            below_cell = table.rows[ri + 1].cells[ci]
+                            below_txt = _cell_own_text(below_cell)
+                            if not below_txt or re.match(r'^[\s0.,\-£$€]*$', below_txt):
+                                _set_cell_text(below_cell, _JINJA_FOR_FIELD[field_to_map])
+                                regex_matched.add(field_to_map)
+                                logger.info(f"Regex matched total '{field_to_map}' in table {ti}, row {ri+1}, col {ci} (based on label '{txt}')")
+                                break
+
         # ── Pass 1: AI-powered field discovery ──────────────────────────────────
         # Identifies ALL variable fields regardless of bracket notation.
         # Handles explicit [Brackets], inline "LABEL [Bracket]" patterns,
@@ -1010,9 +1073,13 @@ class AIService:
                 _inject_location(field_map.get("quote_date"), "{{ quote_date }}")
             if "valid_until" not in regex_matched:
                 _inject_location(field_map.get("valid_until"), "{{ valid_until }}")
-            _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
-            _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
-            _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
+            
+            if "subtotal" not in regex_matched:
+                _inject_location(field_map.get("subtotal_value_location"), "{{ subtotal }}")
+            if "tax_amount" not in regex_matched:
+                _inject_location(field_map.get("tax_amount_value_location"), "{{ tax_amount }}")
+            if "grand_total" not in regex_matched:
+                _inject_location(field_map.get("grand_total_value_location"), "{{ grand_total }}")
         except Exception as e:
             logger.warning(f"Field placeholder injection partially failed (non-fatal): {e}")
 

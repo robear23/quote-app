@@ -1409,10 +1409,12 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
                 "vat_tax_status": vat_status,
                 "calculation_methods": calc_methods,
             }).eq("user_id", db_user["id"]).execute()
-            await update_user_state(user.id, "ACTIVE")
+            
+            # Transition to AWAITING_CONFIG to set validity period and custom defaults
+            await update_user_state(user.id, "AWAITING_CONFIG")
             await update.message.reply_text(
                 f"Tax rate set to *{tax_rate:.0f}%*.\n\n"
-                "✅ You're all set! Send me a voice note, photo, or type the job details to generate your first quote.",
+                "One last thing: how many days should your quotes be *valid* for by default? (e.g. 30)",
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -1440,16 +1442,72 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
         try:
             await database.supabase.table("user_configs").update({"preferred_format": chosen_format}).eq("user_id", db_user["id"]).execute()
-            await update_user_state(user.id, "ACTIVE")
+            
+            # Transition to AWAITING_CONFIG if this was part of onboarding
+            await update_user_state(user.id, "AWAITING_CONFIG")
             format_name = "Word (.docx)" if chosen_format == "docx" else "Excel (.xlsx)"
             await update.message.reply_text(
                 f"✅ Perfect, I'll generate your quotes as *{format_name}*.\n\n"
-                "You're all set! Send me a voice note, photo, or type the job details to generate your first quote.",
+                "One last thing: how many days should your quotes be *valid* for by default? (e.g. 30)",
                 parse_mode="Markdown"
             )
         except Exception as e:
             logger.error(f"Failed to save format preference: {e}")
             await update.message.reply_text("Failed to save your preference. Please try again.")
+        return
+
+    # ------------------------------------------------------------------
+    # AWAITING_CONFIG: collecting persistent defaults (validity, custom fields)
+    # ------------------------------------------------------------------
+    if state == "AWAITING_CONFIG":
+        text = (update.message.text or "").strip().lower()
+        brand_dna = await get_brand_dna(db_user["id"])
+        
+        # 1. Handle validity period if not yet set
+        if not brand_dna.get("valid_days"):
+            try:
+                days = int(re.sub(r'[^0-9]', '', text))
+                if days <= 0: raise ValueError()
+                await database.supabase.table("user_configs").update({"valid_days": days}).eq("user_id", db_user["id"]).execute()
+                brand_dna["valid_days"] = days # update local copy
+            except Exception:
+                await update.message.reply_text("Please enter a valid number of days (e.g. 30).")
+                return
+
+        # 2. Handle custom field defaults
+        custom_fields = brand_dna.get("custom_template_fields") or {}
+        custom_defaults = brand_dna.get("custom_field_defaults") or {}
+        
+        # Find first custom field without a default
+        missing_defaults = [slug for slug in custom_fields if slug not in custom_defaults]
+        
+        if missing_defaults:
+            current_field_slug = missing_defaults[0]
+            # If the user just replied to a field prompt, save it
+            if "_config_field" in context.user_data and context.user_data["_config_field"] == current_field_slug:
+                custom_defaults[current_field_slug] = text
+                await database.supabase.table("user_configs").update({"custom_field_defaults": custom_defaults}).eq("user_id", db_user["id"]).execute()
+                missing_defaults.pop(0)
+                context.user_data.pop("_config_field", None)
+            
+            if missing_defaults:
+                next_field_slug = missing_defaults[0]
+                display = custom_fields[next_field_slug]
+                context.user_data["_config_field"] = next_field_slug
+                await update.message.reply_text(
+                    f"Set a default value for the *{display}* field in your template.\n"
+                    f"_(Type a value, or type 'none' to leave it blank by default)_",
+                    parse_mode="Markdown"
+                )
+                return
+
+        # Done with config
+        await update_user_state(user.id, "ACTIVE")
+        await update.message.reply_text(
+            "✅ All settings saved! You're ready to go.\n\n"
+            "Send me a voice note, photo, or type the job details to generate your first quote.",
+            parse_mode="Markdown"
+        )
         return
 
     # ------------------------------------------------------------------
