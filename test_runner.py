@@ -51,6 +51,18 @@ for _d in (TEMPLATES_DIR, GENERATED_DIR, RESULTS_DIR):
 _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
 ANALYSIS_MODEL = "gemini-2.5-flash"
 
+# ── Field style helper ────────────────────────────────────────────────────────
+# Controls how fillable fields appear in the blank template being tested:
+#   "brackets" → [PlaceholderText]   (explicit markers, easiest for AI)
+#   "labels"   → blank cell          (label column only, AI infers from context)
+#   "sample"   → realistic text      (no markers, AI must detect from structure)
+def _field_val(style: str, bracket_text: str, sample_text: str = "") -> str:
+    if style == "labels":
+        return ""
+    if style == "sample":
+        return sample_text
+    return bracket_text  # default: "brackets"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TEMPLATE CONFIGURATIONS
@@ -59,6 +71,7 @@ ANALYSIS_MODEL = "gemini-2.5-flash"
 TEMPLATES = [
     {
         "id": "01_aura_design",
+        "field_style": "brackets",
         "business_name": "Aura Design Studio",
         "business_address": "Studio 12, Neon Works, London, E1 6QL",
         "contact_line": "hello@auradesign.io  |  www.auradesign.io",
@@ -87,6 +100,7 @@ TEMPLATES = [
     },
     {
         "id": "02_global_steel",
+        "field_style": "labels",
         "business_name": "Global Steel & Supply Corp",
         "business_address": "1000 Industrial Way, Pittsburgh, PA 15201",
         "contact_line": "sales@globalsteel.com  |  Phone: 412-555-0100",
@@ -117,6 +131,7 @@ TEMPLATES = [
     },
     {
         "id": "03_azure_estate",
+        "field_style": "sample",
         "business_name": "The Azure Estate",
         "business_address": "Valley Road, Napa Valley, CA 94558",
         "contact_line": "weddings@azureestate.com  |  Tel: 707-555-8888",
@@ -146,6 +161,7 @@ TEMPLATES = [
     },
     {
         "id": "04_quick_handyman",
+        "field_style": "brackets",
         "business_name": "Quick Fix Handyman Services",
         "business_address": "12 Maple Ave, Springfield",
         "contact_line": "Call Mike: 555-0123",
@@ -174,6 +190,7 @@ TEMPLATES = [
     },
     {
         "id": "05_vet_clinic",
+        "field_style": "labels",
         "business_name": "Happy Paws Veterinary Clinic",
         "business_address": "77 Bark Way, Melbourne VIC 3000",
         "contact_line": "vets@happypaws.com.au  |  (03) 9876 5432",
@@ -202,6 +219,7 @@ TEMPLATES = [
     },
     {
         "id": "06_solar_rebate",
+        "field_style": "sample",
         "business_name": "Eco-Power Solar Solutions",
         "business_address": "Unit 5, Energy Park, Sydney NSW 2000",
         "contact_line": "info@ecopower.com.au  |  ABN: 99 888 777 666",
@@ -234,6 +252,7 @@ TEMPLATES = [
     },
     {
         "id": "07_move_easy",
+        "field_style": "labels",
         "business_name": "Move Easy Logisitics",
         "business_address": "202 Cargo Way, Dallas, TX 75201",
         "contact_line": "ops@moveeasy.com  |  DOT: 1234567",
@@ -262,6 +281,7 @@ TEMPLATES = [
     },
     {
         "id": "08_code_crafters",
+        "field_style": "brackets",
         "business_name": "Code Crafters Software",
         "business_address": "Tech Plaza, Berlin, Germany",
         "contact_line": "billing@codecrafters.de  |  VAT: DE987654321",
@@ -289,6 +309,7 @@ TEMPLATES = [
     },
     {
         "id": "09_gourmet_catering",
+        "field_style": "sample",
         "business_name": "Gourmet Garden Catering",
         "business_address": "High Street, Oxford, OX1 4AH",
         "contact_line": "events@gourmetgarden.co.uk",
@@ -317,6 +338,7 @@ TEMPLATES = [
     },
     {
         "id": "10_fit_pro",
+        "field_style": "labels",
         "business_name": "FitPro Personal Training",
         "business_address": "Health Hub, Gym Street, Manchester",
         "contact_line": "coach@fitpro.com",
@@ -455,6 +477,7 @@ def create_template_doc(t: dict) -> Document:
     primary = t["primary_color"]
     white = "FFFFFF"
     tid = t["id"]
+    fs = t.get("field_style", "brackets")
 
     for section in doc.sections:
         section.top_margin = Inches(0.75)
@@ -541,27 +564,27 @@ def create_template_doc(t: dict) -> Document:
 
     meta.cell(0, 0).text = ref_label
     _shade_cell(meta.cell(0, 0), label_bg)
-    meta.cell(0, 1).text = f"[{ref_label}]"
-    
+    meta.cell(0, 1).text = _field_val(fs, f"[{ref_label}]", "QT-1001")
+
     meta.cell(0, 2).text = date_label
     _shade_cell(meta.cell(0, 2), label_bg)
-    meta.cell(0, 3).text = f"[{date_label}]"
-    
+    meta.cell(0, 3).text = _field_val(fs, f"[{date_label}]", "15 Jan 2024")
+
     meta.cell(1, 0).text = "Valid Until"
     _shade_cell(meta.cell(1, 0), label_bg)
-    meta.cell(1, 1).text = "[EXPIRY_DATE]"
-    
+    meta.cell(1, 1).text = _field_val(fs, "[EXPIRY_DATE]", "14 Feb 2024")
+
     if tid == "02_global_steel":
         meta.cell(2, 0).text = "Project Code"
         _shade_cell(meta.cell(2, 0), label_bg)
-        meta.cell(2, 1).text = "[PROJECT_REF]"
+        meta.cell(2, 1).text = _field_val(fs, "[PROJECT_REF]", "PRJ-001")
         meta.cell(2, 2).text = "Department"
         _shade_cell(meta.cell(2, 2), label_bg)
-        meta.cell(2, 3).text = "[DEPT_NAME]"
+        meta.cell(2, 3).text = _field_val(fs, "[DEPT_NAME]", "Procurement")
     else:
         meta.cell(1, 2).text = "Status"
         _shade_cell(meta.cell(1, 2), label_bg)
-        meta.cell(1, 3).text = "[QUOTE_STATUS]"
+        meta.cell(1, 3).text = _field_val(fs, "[QUOTE_STATUS]", "Draft")
 
     doc.add_paragraph("").paragraph_format.space_before = Pt(6)
 
@@ -573,8 +596,8 @@ def create_template_doc(t: dict) -> Document:
     bt_run.font.color.rgb = _rgb(primary)
     bt.paragraph_format.space_after = Pt(0)
 
-    doc.add_paragraph(f"[{t['client_label']}]").paragraph_format.space_after = Pt(0)
-    doc.add_paragraph(f"[{t['address_label']}]").paragraph_format.space_after = Pt(8)
+    doc.add_paragraph(_field_val(fs, f"[{t['client_label']}]", "ABC Company Ltd")).paragraph_format.space_after = Pt(0)
+    doc.add_paragraph(_field_val(fs, f"[{t['address_label']}]", "100 Example Street, City")).paragraph_format.space_after = Pt(8)
 
     doc.add_paragraph("")
 
@@ -1021,8 +1044,9 @@ def write_report(results: list[dict], analyses: list[dict], run_date: str):
         biz = t.get("business_name") or "(real user template)"
         cols = t.get("columns", ["(unknown)"])
         col_str = "(detected by AI)" if cols == ["(unknown)"] else ", ".join(cols)
+        fstyle = t.get("field_style", "brackets")
         lines.append(f"### {tid}")
-        lines.append(f"**Business:** {biz}  |  **Currency:** {t['currency']}  |  **Tax:** {t['tax_rate']}%  |  **Columns:** {col_str}\n")
+        lines.append(f"**Business:** {biz}  |  **Currency:** {t['currency']}  |  **Tax:** {t['tax_rate']}%  |  **Field Style:** `{fstyle}`  |  **Columns:** {col_str}\n")
 
         if analysis.get("errors"):
             lines.append(f"**Pipeline Errors:**")

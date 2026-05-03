@@ -171,8 +171,8 @@ class DocumentFactory:
         brand_rgb = _hex_to_rgb(brand_hex)
         b_name = (brand_dna.get("business_name") or "Your Business").upper()
         
-        # Use user-defined validity period or default to 30 days
-        validity_days = brand_dna.get("validity_days") or 30
+        # Use user-defined validity period or default to 14 days
+        validity_days = brand_dna.get("validity_days") or 14
         today = date.today()
         valid_until = today + timedelta(days=int(validity_days))
         
@@ -741,8 +741,8 @@ class DocumentFactory:
 
         line_items_data = quote_data.get("line_items", [])
         logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
-        # Use user-defined validity period or default to 30 days
-        validity_days = brand_dna.get("validity_days") or 30
+        # Use user-defined validity period or default to 14 days
+        validity_days = brand_dna.get("validity_days") or 14
         valid_until_date = date.today() + timedelta(days=int(validity_days))
         valid_until_str = valid_until_date.strftime("%d %B %Y")
 
@@ -791,6 +791,18 @@ class DocumentFactory:
         for k, v in quote_data.items():
             if k.startswith("custom_") and k not in context:
                 context[k] = str(v) if v is not None else ""
+
+        # Provide defaults for custom fields declared in the template but not supplied by user input
+        _custom_defaults = {
+            "custom_status": "Draft",
+            "custom_quote_status": "Draft",
+            "custom_payment_terms": "Due on Receipt",
+            "custom_terms": "",
+            "custom_notes": "",
+        }
+        for k in brand_dna.get("custom_template_fields", {}).keys():
+            if k not in context:
+                context[k] = _custom_defaults.get(k, "")
 
         def _amp(s):
             return s.replace('&', '&amp;') if isinstance(s, str) else s

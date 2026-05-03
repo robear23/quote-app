@@ -188,8 +188,8 @@ Respond with ONLY a valid JSON object with these keys:
 - "tax_amount_value_location": location of the tax/VAT amount numeric value cell (null if absent)
 - "grand_total_value_location": location of the grand total / total due numeric value cell
 
-Location format: {"type": "table", "table_index": N, "row_index": N, "col_index": N}
-  OR {"type": "paragraph", "paragraph_index": N}
+Location format: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
+  OR {{"type": "paragraph", "paragraph_index": N}}
 
 Visual pre-analysis of the rendered template image identified these fields with their label text:
 {visual_hints}
@@ -496,6 +496,7 @@ def _map_line_item_columns(header_cells) -> dict:
     desc_kw = {
         'description', 'item', 'service', 'work', 'details', 'particulars', 'goods', 'labour', 'material',
         'package', 'scope', 'task', 'deliverable', 'product', 'items', 'services', 'works', 'activity',
+        'component', 'components', 'job', 'line', 'name', 'procedure', 'treatment', 'category',
     }
     qty_kw = {'qty', 'quantity', 'units', 'hours', 'hrs', 'count', 'no.'}
     unit_kw = {'unit', 'uom', 'measure'}
@@ -534,7 +535,13 @@ def _map_line_item_columns(header_cells) -> dict:
             slug = re.sub(r'[^a-z0-9]+', '_', txt).strip('_')
             if slug:
                 col_map[ci] = slug
-                
+
+    # If no column was mapped to 'description', assign the first text column as description.
+    # This handles headers like "System Component" that don't match any keyword.
+    if 'description' not in col_map.values() and col_map:
+        first_col = min(col_map.keys())
+        col_map[first_col] = 'description'
+
     return col_map
 
 
@@ -1003,7 +1010,14 @@ class AIService:
             for sf in _discovery.get("standard_fields", []):
                 field = sf.get("field")
                 if field and field in _JINJA_FOR_FIELD:
-                    replacement = sf.get("replacement_text") or _JINJA_FOR_FIELD[field]
+                    if field in regex_matched:
+                        continue  # already correctly set by regex scan — don't overwrite
+                    canonical = _JINJA_FOR_FIELD[field]
+                    ai_repl = sf.get("replacement_text") or ""
+                    # Accept AI's replacement_text only for inline label+bracket combos
+                    # (e.g. "DATE  {{ quote_date }}"). For plain single-brace or mismatched
+                    # text, fall back to the canonical double-brace tag.
+                    replacement = ai_repl if (ai_repl and canonical in ai_repl) else canonical
                     _apply_field(sf.get("location"), replacement)
                     regex_matched.add(field)
                     logger.info(f"AI discovered field '{field}' [{sf.get('indicator')}]: {sf.get('current_text', '')!r}")
@@ -1012,7 +1026,9 @@ class AIService:
                 slug = (cf.get("slug") or "").strip()
                 display = cf.get("display") or slug
                 if slug:
-                    replacement = cf.get("replacement_text") or f"{{{{ {slug} }}}}"
+                    canonical_custom = f"{{{{ {slug} }}}}"
+                    ai_repl = cf.get("replacement_text") or ""
+                    replacement = ai_repl if (ai_repl and canonical_custom in ai_repl) else canonical_custom
                     _apply_field(cf.get("location"), replacement)
                     custom_fields_map[slug] = display
                     logger.info(f"AI discovered custom field '{slug}' [{cf.get('indicator')}]: {cf.get('current_text', '')!r}")
