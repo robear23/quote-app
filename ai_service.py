@@ -338,8 +338,10 @@ You are analyzing a rendered image of a blank quote or invoice template.
 Your job is to identify which variable fields that need to be filled with client/job data are present.
 
 For each field below, if you can see it in the template, return the exact label text that appears near it
-(e.g. "Bill To:", "Date:", "Invoice No."). Even if the field area is just blank space next to a label,
-or a blank line/underline after a label, still report it — you don't need explicit placeholder text.
+(e.g. "Bill To:", "Date:", "Invoice No."). 
+
+IMPORTANT: If there is no label (like "Name:"), but there is an explicit placeholder in brackets like "[Client Name]" or "[Date]", return that bracketed text as the label.
+
 Return null only if the field is genuinely absent from the layout.
 
 Return ONLY valid JSON with these keys:
@@ -832,7 +834,7 @@ class AIService:
         # Built before field discovery so both passes share the same document snapshot.
         non_empty_paras = [p for p in doc.paragraphs if p.text.strip()]
         structure = {
-            "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:60])],
+            "paragraphs": [{"index": i, "text": p.text.strip()} for i, p in enumerate(non_empty_paras[:100])],
             "tables": [],
         }
         for ti, table in enumerate(all_tables_in_doc):
@@ -884,25 +886,42 @@ class AIService:
             except Exception as err:
                 logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
 
-        # ── Smart Scan: Auto-detect standard bracketed placeholders ──────────────
-        # Handles users who follow instructions to use [Client Name], [Date] etc.
-        # Catches these before Pass 1 so AI doesn't duplicate or overwrite them.
-        for p in doc.paragraphs:
-            txt = p.text.strip().lower().strip('[]')
-            if txt in _BRACKET_TO_FIELD:
-                field = _BRACKET_TO_FIELD[txt]
-                _set_para_text(p, _JINJA_FOR_FIELD[field])
-                regex_matched.add(field)
+        # ── Smart Scan: Auto-detect bracketed placeholders anywhere ──────────────
+        # Iterates through ALL paragraphs (including those in tables/text boxes)
+        # to find and replace standard [Brackets] with Jinja tags.
+        from docx.text.paragraph import Paragraph
+        
+        # Regex to find [Brackets] — matches [Client Name], [ Date ], etc.
+        _BRACKET_SCAN_RE = re.compile(r'\[\s*([^\]]+?)\s*\]')
+        
+        # Normalize mapping keys (strip spaces, lower)
+        _NORM_BRACKET_MAP = {k.lower().replace("  ", " "): v for k, v in _BRACKET_TO_FIELD.items()}
 
-        for table in all_tables_in_doc:
-            for row in table.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        txt = p.text.strip().lower().strip('[]')
-                        if txt in _BRACKET_TO_FIELD:
-                            field = _BRACKET_TO_FIELD[txt]
-                            _set_para_text(p, _JINJA_FOR_FIELD[field])
-                            regex_matched.add(field)
+        all_p_elements = doc.element.xpath('//w:p')
+        for p_elem in all_p_elements:
+            p = Paragraph(p_elem, doc)
+            txt = p.text.strip()
+            if not txt:
+                continue
+                
+            matches = list(_BRACKET_SCAN_RE.finditer(txt))
+            if not matches:
+                continue
+                
+            new_txt = txt
+            matched_any = False
+            for match in matches:
+                bracket_content = match.group(1).lower().replace("  ", " ")
+                if bracket_content in _NORM_BRACKET_MAP:
+                    field = _NORM_BRACKET_MAP[bracket_content]
+                    jinja = _JINJA_FOR_FIELD[field]
+                    # Replace the specific bracket instance in the text
+                    new_txt = new_txt.replace(match.group(0), jinja)
+                    regex_matched.add(field)
+                    matched_any = True
+            
+            if matched_any:
+                _set_para_text(p, new_txt)
 
         # ── Pass 1: AI-powered field discovery ──────────────────────────────────
         # Identifies ALL variable fields regardless of bracket notation.
