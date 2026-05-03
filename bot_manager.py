@@ -511,21 +511,6 @@ async def generate_and_send_quote(
         except Exception:
             pass
 
-    share_url = f"{_settings.APP_URL}/share/{doc_id}" if doc_id else None
-    reply_markup = None
-    if share_url:
-        reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🚀 Share Quote (Email/Messages)", url=share_url)
-        ]])
-
-    await status_msg.edit_text(
-        "Here is your generated quote!\n\n"
-        "Use commands:\n"
-        "/restart to re-upload your quote template\n"
-        "/feedback along with a message to give us feedback and tell us what features you want added.",
-        reply_markup=reply_markup
-    )
-
     # Persist the document record: update the reserved placeholder if we have one,
     # otherwise insert a new row (fallback path when the RPC was unavailable).
     doc_fields = {
@@ -545,10 +530,26 @@ async def generate_and_send_quote(
         if doc_id:
             await database.supabase.table("documents").update(doc_fields).eq("id", doc_id).execute()
         else:
-            await database.supabase.table("documents").insert({"user_id": db_user["id"], **doc_fields}).execute()
+            insert_res = await database.supabase.table("documents").insert({"user_id": db_user["id"], **doc_fields}).execute()
+            doc_id = insert_res.data[0]["id"] if insert_res.data else None
         logger.info(f"Document recorded for user {db_user['id']} (telegram_id={user.id})")
     except Exception as e:
         logger.error(f"Failed to persist document record for user {db_user['id']}: {e}")
+
+    share_url = f"{_settings.APP_URL}/share/{doc_id}" if doc_id else None
+    reply_markup = None
+    if share_url:
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🚀 Share Quote (Email/Messages)", url=share_url)
+        ]])
+
+    await status_msg.edit_text(
+        "Here is your generated quote!\n\n"
+        "Use commands:\n"
+        "/restart to re-upload your quote template\n"
+        "/feedback along with a message to give us feedback and tell us what features you want added.",
+        reply_markup=reply_markup
+    )
 
     # Clear pending state and return user to ACTIVE
     await clear_pending_state(user.id)
