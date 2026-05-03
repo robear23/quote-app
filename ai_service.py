@@ -238,31 +238,31 @@ For all other cases, replacement_text is just the Jinja tag:
   "replacement_text": "{{ customer_name }}"
 
 Location format:
-  paragraph: {"type": "paragraph", "paragraph_index": N}   (N is 0-based index into the paragraphs list above)
-  table cell: {"type": "table", "table_index": N, "row_index": N, "col_index": N}
+  paragraph: {{"type": "paragraph", "paragraph_index": N}}   (N is 0-based index into the paragraphs list above)
+  table cell: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
 
 Return ONLY valid JSON:
-{
+{{
   "standard_fields": [
-    {
+    {{
       "field": "customer_name",
-      "location": {"type": "table", "table_index": 0, "row_index": 2, "col_index": 1},
+      "location": {{"type": "table", "table_index": 0, "row_index": 2, "col_index": 1}},
       "indicator": "bracket",
       "current_text": "[Client Name]",
-      "replacement_text": "{{ customer_name }}"
-    }
+      "replacement_text": "{{{{ customer_name }}}}"
+    }}
   ],
   "custom_fields": [
-    {
+    {{
       "slug": "custom_project_name",
       "display": "Project Name",
-      "location": {"type": "table", "table_index": 1, "row_index": 3, "col_index": 2},
+      "location": {{"type": "table", "table_index": 1, "row_index": 3, "col_index": 2}},
       "indicator": "implicit",
       "current_text": "___________",
-      "replacement_text": "{{ custom_project_name }}"
-    }
+      "replacement_text": "{{{{ custom_project_name }}}}"
+    }}
   ]
-}
+}}
 """
 
 XLSX_DNA_PROMPT = """
