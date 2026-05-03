@@ -244,14 +244,14 @@ For all other cases, replacement_text is just the Jinja tag:
 
 Location format:
   paragraph: {{"type": "paragraph", "paragraph_index": N}}   (N is 0-based index into the paragraphs list above)
-  table cell: {{"type": "table", "table_index": N, "row_index": N, "col_index": N}}
+  table cell: {{"type": "table", "table_index": N, "row_index": N, "col_index": N, "paragraph_index": N}}
 
 Return ONLY valid JSON:
 {{
   "standard_fields": [
     {{
       "field": "customer_name",
-      "location": {{"type": "table", "table_index": 0, "row_index": 2, "col_index": 1}},
+      "location": {{"type": "table", "table_index": 0, "row_index": 2, "col_index": 1, "paragraph_index": 0}},
       "indicator": "bracket",
       "current_text": "[Client Name]",
       "replacement_text": "{{{{ customer_name }}}}"
@@ -367,6 +367,35 @@ JSON_CONFIG = types.GenerateContentConfig(
     response_mime_type="application/json",
     thinking_config=types.ThinkingConfig(thinking_budget=0),
 )
+
+# Standard bracketed placeholders -> standard field slugs
+_BRACKET_TO_FIELD = {
+    "client name": "customer_name",
+    "customer name": "customer_name",
+    "client": "customer_name",
+    "customer": "customer_name",
+    "name": "customer_name",
+    "client address line 1": "address_line_1",
+    "client address line 2": "address_line_2",
+    "client address line 3": "address_line_3",
+    "town, county postcode": "address_line_3",
+    "town, postcode": "address_line_3",
+    "postcode": "address_line_3",
+    "address": "customer_address",
+    "customer address": "customer_address",
+    "client email": "customer_email",
+    "client@email.com": "customer_email",
+    "email": "customer_email",
+    "quote reference": "quote_ref",
+    "quote ref": "quote_ref",
+    "reference": "quote_ref",
+    "ref": "quote_ref",
+    "date": "quote_date",
+    "expiry date": "valid_until",
+    "expiry": "valid_until",
+    "valid until": "valid_until",
+    "valid to": "valid_until",
+}
 
 # Limits concurrent Gemini calls to prevent thread pool exhaustion under load.
 # Tune this based on your Gemini API quota (free tier: lower; paid tier: higher).
@@ -768,12 +797,20 @@ class AIService:
             else:
                 para.add_run(text)
 
-        def _set_cell_text(cell, text: str):
-            _set_para_text(cell.paragraphs[0], text)
+        def _set_cell_text(cell, text: str, paragraph_index: int = 0):
+            if paragraph_index < len(cell.paragraphs):
+                _set_para_text(cell.paragraphs[paragraph_index], text)
+            else:
+                p = cell.add_paragraph()
+                _set_para_text(p, text)
 
         def _cell_own_text(cell) -> str:
             """Direct paragraph text only — excludes text that lives in nested tables."""
             return ' '.join(p.text.strip() for p in cell.paragraphs if p.text.strip())
+
+        def _cell_structure(cell) -> list[str]:
+            """Returns list of stripped text for each paragraph in the cell."""
+            return [p.text.strip() for p in cell.paragraphs]
 
         def _collect_all_tables(tables_list):
             """Collect all tables recursively, including those nested inside cells."""
@@ -801,9 +838,8 @@ class AIService:
         for ti, table in enumerate(all_tables_in_doc):
             table_data = {"index": ti, "rows": []}
             for ri, row in enumerate(table.rows[:20]):
-                # Use only direct paragraph text so outer layout cells appear
-                # empty and Gemini focuses on the inner cells with real content.
-                cells = [{"col": ci, "text": _cell_own_text(cell)} for ci, cell in enumerate(row.cells)]
+                # List paragraphs individually so Gemini can target specific lines within a cell.
+                cells = [{"col": ci, "paragraphs": _cell_structure(cell)} for ci, cell in enumerate(row.cells)]
                 table_data["rows"].append(cells)
             structure["tables"].append(table_data)
 
@@ -841,11 +877,32 @@ class AIService:
                     _ti = location.get("table_index")
                     _ri = location.get("row_index")
                     _ci = location.get("col_index")
+                    _pi = location.get("paragraph_index", 0)
                     if _ti is not None and _ri is not None and _ci is not None:
                         _cell = all_tables_in_doc[_ti].rows[_ri].cells[_ci]
-                        _set_cell_text(_cell, replacement_text)
+                        _set_cell_text(_cell, replacement_text, _pi)
             except Exception as err:
                 logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
+
+        # ── Smart Scan: Auto-detect standard bracketed placeholders ──────────────
+        # Handles users who follow instructions to use [Client Name], [Date] etc.
+        # Catches these before Pass 1 so AI doesn't duplicate or overwrite them.
+        for p in doc.paragraphs:
+            txt = p.text.strip().lower().strip('[]')
+            if txt in _BRACKET_TO_FIELD:
+                field = _BRACKET_TO_FIELD[txt]
+                _set_para_text(p, _JINJA_FOR_FIELD[field])
+                regex_matched.add(field)
+
+        for table in all_tables_in_doc:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        txt = p.text.strip().lower().strip('[]')
+                        if txt in _BRACKET_TO_FIELD:
+                            field = _BRACKET_TO_FIELD[txt]
+                            _set_para_text(p, _JINJA_FOR_FIELD[field])
+                            regex_matched.add(field)
 
         # ── Pass 1: AI-powered field discovery ──────────────────────────────────
         # Identifies ALL variable fields regardless of bracket notation.
@@ -1054,8 +1111,15 @@ class AIService:
                 _set_para_text(para, "{{ valid_until }}")
                 cleared[0] += 1
             elif _PH_RE.match(txt):
-                _set_para_text(para, "")
-                cleared[0] += 1
+                # Smarter check: if it looks like a known field, map it instead of clearing.
+                inner = txt.strip('[]').lower()
+                if inner in _BRACKET_TO_FIELD:
+                    field = _BRACKET_TO_FIELD[inner]
+                    _set_para_text(para, _JINJA_FOR_FIELD[field])
+                    cleared[0] += 1
+                else:
+                    _set_para_text(para, "")
+                    cleared[0] += 1
 
         for p in doc.paragraphs:
             _sweep_para(p)
