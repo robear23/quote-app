@@ -220,6 +220,111 @@ def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = 
     return "\n".join(lines)
 
 
+def _annotate_preview_image(
+    png_bytes: bytes,
+    visual_hints: dict | None,
+    custom_fields: dict | None,
+) -> bytes | None:
+    """
+    Draws a semi-transparent overlay banner at the bottom of the template preview
+    listing which fields were detected (checkmark) and which were not (cross).
+    Returns annotated PNG bytes, or None if annotation fails (caller falls back
+    to the raw image).
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io as _io
+
+        img = Image.open(_io.BytesIO(png_bytes)).convert("RGBA")
+        w, h = img.size
+
+        # Build the list of field labels and their detection status
+        checks = [
+            ("customer_name",    "Client name"),
+            ("customer_address", "Client address"),
+            ("customer_email",   "Client email"),
+            ("quote_ref",        "Quote ref"),
+            ("quote_date",       "Date"),
+            ("valid_until",      "Expiry date"),
+            ("line_items_table", "Line items"),
+            ("grand_total",      "Total"),
+        ]
+        found_fields = []
+        missing_fields = []
+        for key, label in checks:
+            val = (visual_hints or {}).get(key)
+            if bool(val):
+                found_fields.append(label)
+            else:
+                missing_fields.append(label)
+
+        if custom_fields:
+            for display in custom_fields.values():
+                found_fields.append(display)
+
+        # Try to load a readable font; fall back to default
+        font_size = max(14, w // 50)
+        small_font_size = max(12, w // 60)
+        try:
+            font = ImageFont.truetype("arial.ttf", font_size)
+            small_font = ImageFont.truetype("arial.ttf", small_font_size)
+        except Exception:
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", small_font_size)
+            except Exception:
+                font = ImageFont.load_default()
+                small_font = font
+
+        # Create an overlay layer for the banner
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        # Banner dimensions
+        padding = max(8, w // 80)
+        line_height = font_size + 4
+        small_line_height = small_font_size + 3
+
+        # Calculate banner height
+        total_field_lines = len(found_fields) + len(missing_fields)
+        banner_height = padding * 2 + line_height + total_field_lines * small_line_height + padding
+
+        # Draw semi-transparent dark banner at the bottom
+        banner_y = h - banner_height
+        draw.rectangle(
+            [(0, banner_y), (w, h)],
+            fill=(20, 40, 60, 200),
+        )
+
+        # Title
+        y = banner_y + padding
+        title = "Detected fields:"
+        draw.text((padding, y), title, fill=(255, 255, 255, 255), font=font)
+        y += line_height + 2
+
+        # Found fields (green checkmarks)
+        for label in found_fields:
+            draw.text((padding + 4, y), ">> " + label, fill=(120, 255, 120, 255), font=small_font)
+            y += small_line_height
+
+        # Missing fields (red crosses)
+        for label in missing_fields:
+            draw.text((padding + 4, y), "x  " + label + " (not detected)", fill=(255, 140, 140, 200), font=small_font)
+            y += small_line_height
+
+        # Composite the overlay onto the original image
+        result = Image.alpha_composite(img, overlay)
+        result = result.convert("RGB")
+
+        buf = _io.BytesIO()
+        result.save(buf, format="PNG")
+        return buf.getvalue()
+
+    except Exception as e:
+        logger.warning(f"_annotate_preview_image failed (non-fatal): {e}")
+        return None
+
+
 async def _save_currency_and_ask_tax(
     update: Update, _context: ContextTypes.DEFAULT_TYPE, db_user: dict, currency_code: str
 ) -> None:
@@ -795,6 +900,23 @@ async def redeem(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Database sanitisation helpers
+# ---------------------------------------------------------------------------
+
+_USER_CONFIGS_COLUMNS = {
+    "user_id", "business_name", "business_address", "contact_details",
+    "bank_info", "vat_tax_status", "currency", "calculation_methods",
+    "layout_preferences", "preferred_format", "template_docx_path",
+    "primary_color_hex", "secondary_color_hex", "logo_path",
+    "blank_template_path", "template_xlsx_path", "xlsx_field_mapping",
+    "custom_template_fields",
+}
+
+def _sanitize_dna_for_db(dna_data: dict) -> dict:
+    """Strips keys that do not correspond to user_configs columns to prevent upsert failures."""
+    return {k: v for k, v in dna_data.items() if k in _USER_CONFIGS_COLUMNS}
+
+# ---------------------------------------------------------------------------
 # Message handlers
 # ---------------------------------------------------------------------------
 
@@ -919,20 +1041,25 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 else:
                     field_report = _format_field_report(assess_docx_template_fields(jinja_bytes), _custom_fields)
 
-                # Send preview — PNG inline photo if available, else fallback to docx file
+                # Send preview — annotated PNG if available, else fallback to docx file
                 preview_sent = False
                 if png_bytes:
                     try:
+                        # Annotate the preview image with detected field highlights
+                        annotated_png = await asyncio.to_thread(
+                            _annotate_preview_image, png_bytes, visual_hints, _custom_fields
+                        )
+                        preview_image = annotated_png or png_bytes
                         await status_msg.edit_text(
                             "✅ *Template saved!*\n\n"
-                            "Here's a preview image of your template — I've detected the fields below that will be filled in automatically when you generate quotes "
+                            "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
                             "(your actual quotes will be sent as editable Word files):\n\n"
                             + field_report,
                             parse_mode="Markdown"
                         )
                         await update.message.reply_photo(
-                            photo=png_bytes,
-                            caption="Your quote template"
+                            photo=preview_image,
+                            caption="Your quote template — detected fields are highlighted"
                         )
                         preview_sent = True
                     except Exception as e:
@@ -967,7 +1094,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 else:
                     # All preview attempts failed — skip straight to currency
                     dna_data["user_id"] = db_user["id"]
-                    await database.supabase.table("user_configs").upsert(dna_data).execute()
+                    try:
+                        await database.supabase.table("user_configs").upsert(_sanitize_dna_for_db(dna_data)).execute()
+                    except Exception as e:
+                        logger.error(f"Failed to upsert brand DNA (no-preview path): {e}")
                     await update_user_state(user.id, "ONBOARDING_CURRENCY")
                     await status_msg.edit_text(
                         "Template saved!\n\n"
@@ -1042,20 +1172,24 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 else:
                     field_report = _format_field_report(assess_xlsx_mapping_fields(mapping))
 
-                # Send preview — PNG inline photo if available, else fallback to xlsx file
+                # Send preview — annotated PNG if available, else fallback to xlsx file
                 preview_sent = False
                 if png_bytes:
                     try:
+                        annotated_png = await asyncio.to_thread(
+                            _annotate_preview_image, png_bytes, visual_hints, None
+                        )
+                        preview_image = annotated_png or png_bytes
                         await status_msg.edit_text(
                             "✅ *Template saved!*\n\n"
-                            "Here's a preview image of your template — I've detected the fields below that will be filled in automatically when you generate quotes "
+                            "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
                             "(your actual quotes will be sent as editable Excel files):\n\n"
                             + field_report,
                             parse_mode="Markdown"
                         )
                         await update.message.reply_photo(
-                            photo=png_bytes,
-                            caption="Your quote template"
+                            photo=preview_image,
+                            caption="Your quote template — detected fields are highlighted"
                         )
                         preview_sent = True
                     except Exception as e:
@@ -1089,7 +1223,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     )
                 else:
                     dna_data["user_id"] = db_user["id"]
-                    await database.supabase.table("user_configs").upsert(dna_data).execute()
+                    try:
+                        await database.supabase.table("user_configs").upsert(_sanitize_dna_for_db(dna_data)).execute()
+                    except Exception as e:
+                        logger.error(f"Failed to upsert brand DNA (xlsx no-preview path): {e}")
                     await update_user_state(user.id, "ONBOARDING_CURRENCY")
                     await status_msg.edit_text(
                         "Template saved!\n\n"
@@ -1101,7 +1238,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             # Persist brand DNA (currency/tax come from Q&A after preview confirmation)
             dna_data["user_id"] = db_user["id"]
-            await database.supabase.table("user_configs").upsert(dna_data).execute()
+            try:
+                await database.supabase.table("user_configs").upsert(_sanitize_dna_for_db(dna_data)).execute()
+            except Exception as e:
+                logger.error(f"Failed to upsert brand DNA: {e}", exc_info=True)
+                # Don't wipe the already-displayed field report — just log the error
+                # The preview was already sent successfully at this point
             # State stays ONBOARDING — handle_template_preview_ok advances it to ONBOARDING_CURRENCY
 
         except Exception as e:

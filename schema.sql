@@ -268,3 +268,10 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS xlsx_field_mapping JSONB;
 
 COMMENT ON COLUMN users.bot_state IS
 'States: HANDSHAKE | ONBOARDING | ONBOARDING_CURRENCY | ONBOARDING_TAX | AWAITING_FORMAT (legacy) | ACTIVE | AWAITING_CONFIRMATION';
+
+-- ============================================================
+-- MIGRATION: Custom template fields — stores AI-discovered custom fields per template
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS custom_template_fields JSONB;
