@@ -1284,8 +1284,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             brand_dna = await get_brand_dna(db_user["id"])
             business_name = brand_dna.get("business_name") or "Business Name"
             custom_fields = brand_dna.get("custom_template_fields") or None
+            extra_columns = brand_dna.get("extra_line_item_columns") or None
             try:
-                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, business_name, custom_fields, msg=msg)
+                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, business_name, custom_fields, extra_columns, msg=msg)
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
@@ -1597,6 +1598,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     brand_dna = await get_brand_dna(db_user["id"])
     business_name = brand_dna.get("business_name") or "Business Name"
     custom_fields = brand_dna.get("custom_template_fields") or None
+    extra_columns = brand_dna.get("extra_line_item_columns") or None
 
     if update.message.voice:
         msg = await update.message.reply_text("Transcribing your voice note...")
@@ -1606,7 +1608,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, custom_fields, msg=msg)
+            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, custom_fields, extra_columns, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1625,7 +1627,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, custom_fields, msg=msg)
+            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, custom_fields, extra_columns, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return

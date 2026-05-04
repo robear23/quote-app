@@ -121,11 +121,22 @@ def _custom_fields_prompt_suffix(custom_fields: dict) -> str:
         # custom_fields can be {slug: display_name} or {slug: {"display": "...", "default": "..."}}
         display = info["display"] if isinstance(info, dict) else info
         lines.append(f'- "{slug}": {display}')
-    
+
     lines.append("\nRULES for template-specific fields:")
-    lines.append("- If a field is not mentioned in the user input, INFER a sensible default based on the field name and context (e.g. Status -> 'Draft', Payment Terms -> 'Due on Receipt', Project -> 'General').")
+    lines.append("- If a field is not mentioned in the user input, INFER a sensible default based on the field name and context (e.g. Status -> 'Final', Payment Terms -> 'Due on Receipt', Project -> 'General').")
     lines.append("- Return the inferred value instead of null whenever possible.")
     return "\n".join(lines)
+
+
+def _extra_columns_prompt_suffix(extra_columns: list) -> str:
+    """Builds prompt instructions for non-standard line item columns detected in the template."""
+    cols_str = ", ".join(f'"{c}"' for c in extra_columns)
+    return (
+        f'\n\nThis template has extra line item columns beyond description/qty/unit_price: {cols_str}. '
+        'For each line item, try to extract or infer the value for these columns from the user input. '
+        'For example, if the column is "weight" or "weight_lbs" and the item description mentions a weight, extract it. '
+        'If a value truly cannot be determined, use an empty string "".'
+    )
 
 
 REFINEMENT_PROMPT = """
@@ -695,12 +706,14 @@ class AIService:
             return None
 
     @staticmethod
-    def generate_quote_data(text: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
+    def generate_quote_data(text: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
         """Parses user text into structured quote data using Gemini."""
         try:
             prompt = QUOTE_GENERATION_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
                 prompt += _custom_fields_prompt_suffix(custom_fields)
+            if extra_columns:
+                prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
             return _normalize_quote(json.loads(response.text))
         except RateLimitError:
@@ -711,7 +724,7 @@ class AIService:
             return {}
 
     @staticmethod
-    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
+    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
         """Transcribes a voice note (OGG) and extracts structured quote data."""
         try:
             uploaded_file = client.files.upload(
@@ -735,6 +748,8 @@ class AIService:
             prompt = VOICE_QUOTE_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
                 prompt += _custom_fields_prompt_suffix(custom_fields)
+            if extra_columns:
+                prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
@@ -752,7 +767,7 @@ class AIService:
             return {}
 
     @staticmethod
-    def extract_quote_from_image(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None) -> dict:
+    def extract_quote_from_image(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
         """Extracts structured quote data from an image (photo of notes, job site, etc.)."""
         try:
             uploaded_file = client.files.upload(file=file_path)
@@ -760,6 +775,8 @@ class AIService:
             prompt = IMAGE_QUOTE_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
                 prompt += _custom_fields_prompt_suffix(custom_fields)
+            if extra_columns:
+                prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry([prompt, uploaded_file])
 
             try:
@@ -878,6 +895,17 @@ class AIService:
             "business_name", "business_address", "contact_details", "bank_info", "vat_tax_status"
         ) if brand_dna.get(k)}
 
+        # Labels that must never be overwritten by field injection
+        _STATIC_LABEL_RE = re.compile(
+            r'^\s*(bill\s*to|billed\s*to|prepared\s*for|issued\s*to|attention\s*to|'
+            r'from:|date:|invoice\s*date:|quote\s*date:|customer\s*name:|client\s*name:|'
+            r'name:|to:)\s*:?\s*$',
+            re.I,
+        )
+
+        def _is_static_label(text: str) -> bool:
+            return bool(_STATIC_LABEL_RE.match(text.strip()))
+
         _JINJA_FOR_FIELD = {
             "customer_name": "{{ customer_name }}",
             "address_line_1": "{{ address_line_1 }}",
@@ -903,6 +931,8 @@ class AIService:
                 if location.get("type") == "paragraph":
                     idx = location.get("paragraph_index")
                     if idx is not None and idx < len(non_empty_paras):
+                        if _is_static_label(non_empty_paras[idx].text):
+                            return
                         _set_para_text(non_empty_paras[idx], replacement_text)
                 elif location.get("type") == "table":
                     _ti = location.get("table_index")
@@ -911,6 +941,8 @@ class AIService:
                     _pi = location.get("paragraph_index", 0)
                     if _ti is not None and _ri is not None and _ci is not None:
                         _cell = all_tables_in_doc[_ti].rows[_ri].cells[_ci]
+                        if _is_static_label(_cell_own_text(_cell)):
+                            return
                         _set_cell_text(_cell, replacement_text, _pi)
             except Exception as err:
                 logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
@@ -956,8 +988,10 @@ class AIService:
         # Scans tables for recognisable totals labels (VAT, Total, etc.) and maps
         # the adjacent cell if it's empty or contains dummy text.
         _SUBTOTAL_RE = re.compile(r'^\s*(sub\s*total|subtotal|net|total\s*excl?\s*vat)\s*:?\s*$', re.I)
-        _TAX_RE = re.compile(r'^\s*(vat|tax|gst|service\s*charge|surcharge|tax\s*amount)\s*:?\s*$', re.I)
-        _TOTAL_RE = re.compile(r'^\s*(total|total\s*due|grand\s*total|amount\s*due|total\s*payable)\s*:?\s*$', re.I)
+        _TAX_RE = re.compile(r'^\s*(vat|tax|gst|service\s*charge|tax\s*amount)\s*:?\s*$', re.I)
+        _TOTAL_RE = re.compile(r'^\s*(total|total\s*due|grand\s*total|amount\s*due|total\s*payable|net\s*amount\s*payable|estimated\s*total)\s*:?\s*$', re.I)
+        # Matches surcharge rows that embed a percentage e.g. "Fuel Surcharge (10%)"
+        _SURCHARGE_PCT_RE = re.compile(r'^(.+?)\s*\(\s*(\d+(?:\.\d+)?)\s*%\s*\)\s*:?\s*$', re.I)
 
         for ti, table in enumerate(all_tables_in_doc):
             for ri, row in enumerate(table.rows):
@@ -970,7 +1004,7 @@ class AIService:
                         field_to_map = "tax_amount"
                     elif _TOTAL_RE.match(txt):
                         field_to_map = "grand_total"
-                    
+
                     if field_to_map and field_to_map not in regex_matched:
                         # Check adjacent cell (right)
                         if ci + 1 < len(row.cells):
@@ -982,7 +1016,7 @@ class AIService:
                                 regex_matched.add(field_to_map)
                                 logger.info(f"Regex matched total '{field_to_map}' in table {ti}, row {ri}, col {ci+1} (based on label '{txt}')")
                                 break
-                        
+
                         # Check cell below
                         if ri + 1 < len(table.rows):
                             below_cell = table.rows[ri + 1].cells[ci]
@@ -992,6 +1026,25 @@ class AIService:
                                 regex_matched.add(field_to_map)
                                 logger.info(f"Regex matched total '{field_to_map}' in table {ti}, row {ri+1}, col {ci} (based on label '{txt}')")
                                 break
+
+                    # Detect percentage-based surcharge rows e.g. "Fuel Surcharge (10%)"
+                    # Store a compute rule in brand_dna and inject a Jinja placeholder.
+                    elif not field_to_map:
+                        surcharge_match = _SURCHARGE_PCT_RE.match(txt)
+                        if surcharge_match:
+                            label_text = surcharge_match.group(1).strip()
+                            rate_pct = float(surcharge_match.group(2))
+                            slug = "computed_" + re.sub(r'[^a-z0-9]+', '_', label_text.lower()).strip('_')
+                            existing = brand_dna.setdefault("computed_surcharges", [])
+                            if not any(s["field"] == slug for s in existing):
+                                existing.append({"field": slug, "label": txt, "rate": rate_pct / 100})
+                                logger.info(f"Detected percentage surcharge '{txt}' → field '{slug}' rate={rate_pct}%")
+                            # Inject placeholder so the value is filled at render time
+                            if ci + 1 < len(row.cells):
+                                adj_cell = row.cells[ci + 1]
+                                adj_txt = _cell_own_text(adj_cell)
+                                if not adj_txt or re.match(r'^[\s0.,\-£$€]*$', adj_txt):
+                                    _set_cell_text(adj_cell, f'{{{{ {slug} }}}}')
 
         # ── Pass 1: AI-powered field discovery ──────────────────────────────────
         # Identifies ALL variable fields regardless of bracket notation.
@@ -1026,6 +1079,15 @@ class AIService:
                 slug = (cf.get("slug") or "").strip()
                 display = cf.get("display") or slug
                 if slug:
+                    # Preserve original T&C text before replacing with a Jinja tag
+                    _TC_SLUGS = ("terms", "conditions", "t_c", "t_and_c", "terms_conditions")
+                    if any(x in slug for x in _TC_SLUGS):
+                        original_text = (cf.get("current_text") or "").strip()
+                        # Only save if it looks like real content (not just brackets/underscores)
+                        if original_text and not re.match(r'^[\[\]\._\-\s]+$', original_text):
+                            brand_dna.setdefault("default_terms", original_text[:2000])
+                            logger.info(f"Preserved T&C text as default_terms ({len(original_text)} chars)")
+
                     canonical_custom = f"{{{{ {slug} }}}}"
                     ai_repl = cf.get("replacement_text") or ""
                     replacement = ai_repl if (ai_repl and canonical_custom in ai_repl) else canonical_custom
@@ -1066,9 +1128,13 @@ class AIService:
                 if loc.get("type") == "paragraph":
                     idx = loc["paragraph_index"]
                     if idx < len(non_empty_paras):
+                        if _is_static_label(non_empty_paras[idx].text):
+                            return
                         _set_para_text(non_empty_paras[idx], placeholder)
                 elif loc.get("type") == "table":
                     cell = all_tables_in_doc[loc["table_index"]].rows[loc["row_index"]].cells[loc["col_index"]]
+                    if _is_static_label(_cell_own_text(cell)):
+                        return
                     _set_cell_text(cell, placeholder)
             except Exception as e:
                 logger.warning(f"Failed to inject placeholder '{placeholder}': {e}")
@@ -1162,13 +1228,22 @@ class AIService:
                         'unit_price': '{{ item.unit_price_str }}',
                         'total': '{{ item.total_str }}',
                     }
+
+                    # Store any non-standard columns so the quote extraction AI knows to ask for them
+                    _STANDARD_COLS = {'description', 'qty', 'unit', 'unit_price', 'total'}
+                    _extra_col_names = [f for f in col_field_map.values() if f not in _STANDARD_COLS]
+                    if _extra_col_names:
+                        brand_dna["extra_line_item_columns"] = _extra_col_names
+                        logger.info(f"Extra line item columns stored in brand_dna: {_extra_col_names}")
+
                     # Set the template row to field expressions ONLY — no loop control tag.
                     # docxtpl replaces the ENTIRE <w:tr> that contains {%tr for %}, discarding
                     # all cell content. The for/endfor tags must live in their own dedicated
                     # rows so the field-expression row is preserved and repeated.
                     for ci in range(num_cols):
                         field = col_field_map.get(ci)
-                        jinja_expr = _FIELD_JINJA.get(field, '') if field else ''
+                        # Fall back to a dynamic {{ item.FIELDNAME }} expression for non-standard columns
+                        jinja_expr = (_FIELD_JINJA.get(field) or f'{{{{ item.{field} }}}}') if field else ''
                         _set_cell_text(template_row.cells[ci], jinja_expr)
 
                     # Delete extra data rows (keep only the first as the loop template)

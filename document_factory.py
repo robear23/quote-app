@@ -737,7 +737,16 @@ class DocumentFactory:
             for item in quote_data.get("line_items", [])
         )
         tax_amount = subtotal * (tax_rate / 100)
-        grand_total = subtotal + tax_amount
+
+        # Compute percentage-based surcharges detected during template processing
+        surcharge_total = 0.0
+        surcharge_context: dict = {}
+        for sc in brand_dna.get("computed_surcharges", []):
+            sc_amount = subtotal * sc["rate"]
+            surcharge_total += sc_amount
+            surcharge_context[sc["field"]] = f"{sym}{sc_amount:,.2f}"
+
+        grand_total = subtotal + tax_amount + surcharge_total
 
         line_items_data = quote_data.get("line_items", [])
         logger.info(f"generate_from_template: rendering {len(line_items_data)} line item(s) for '{quote_data.get('customer_name')}'")
@@ -768,6 +777,7 @@ class DocumentFactory:
             "tax_amount": f"{sym}{tax_amount:,.2f}" if tax_rate > 0 else "",
             "grand_total": f"{sym}{grand_total:,.2f}",
             "line_items": [],
+            **surcharge_context,
         }
 
         # Populate line items with all available fields (including dynamic ones like part_no)
@@ -794,15 +804,34 @@ class DocumentFactory:
 
         # Provide defaults for custom fields declared in the template but not supplied by user input
         _custom_defaults = {
-            "custom_status": "Draft",
-            "custom_quote_status": "Draft",
+            "custom_status": "Final",
+            "custom_quote_status": "Final",
             "custom_payment_terms": "Due on Receipt",
-            "custom_terms": "",
+            "custom_terms": brand_dna.get("default_terms") or "",
             "custom_notes": "",
         }
         for k in brand_dna.get("custom_template_fields", {}).keys():
             if k not in context:
-                context[k] = _custom_defaults.get(k, "")
+                if k in _custom_defaults:
+                    context[k] = _custom_defaults[k]
+                else:
+                    slug = k.lower()
+                    if any(x in slug for x in ("_date", "visit_date", "service_date", "appointment")):
+                        context[k] = today_str
+                    elif any(x in slug for x in ("record", "patient_record", "file_no", "case_no")):
+                        context[k] = quote_ref
+                    elif any(x in slug for x in ("project", "job_name", "job_title")):
+                        context[k] = "General"
+                    elif any(x in slug for x in ("department", "dept", "division")):
+                        context[k] = "General"
+                    elif "status" in slug:
+                        context[k] = "Final"
+                    elif any(x in slug for x in ("terms", "conditions", "t_c", "t_and_c")):
+                        context[k] = brand_dna.get("default_terms") or ""
+                    elif any(x in slug for x in ("payment", "pay_terms", "payment_terms")):
+                        context[k] = "Due on Receipt"
+                    else:
+                        context[k] = ""
 
         def _amp(s):
             return s.replace('&', '&amp;') if isinstance(s, str) else s
