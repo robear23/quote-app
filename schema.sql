@@ -275,3 +275,10 @@ COMMENT ON COLUMN users.bot_state IS
 -- ============================================================
 
 ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS custom_template_fields JSONB;
+
+-- ============================================================
+-- MIGRATION: User-defined quote validity period
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS validity_days INT DEFAULT 30;

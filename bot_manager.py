@@ -1465,12 +1465,14 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         brand_dna = await get_brand_dna(db_user["id"])
         
         # 1. Handle validity period if not yet set
-        if not brand_dna.get("valid_days"):
+        if not brand_dna.get("validity_days"):
             try:
                 days = int(re.sub(r'[^0-9]', '', text))
                 if days <= 0: raise ValueError()
-                await database.supabase.table("user_configs").update({"valid_days": days}).eq("user_id", db_user["id"]).execute()
-                brand_dna["valid_days"] = days # update local copy
+                await asyncio.to_thread(
+                    lambda: database.supabase.table("user_configs").update({"validity_days": days}).eq("user_id", db_user["id"]).execute()
+                )
+                brand_dna["validity_days"] = days
             except Exception:
                 await update.message.reply_text("Please enter a valid number of days (e.g. 30).")
                 return
