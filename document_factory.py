@@ -741,7 +741,7 @@ class DocumentFactory:
         # Compute percentage-based surcharges detected during template processing
         surcharge_total = 0.0
         surcharge_context: dict = {}
-        for sc in brand_dna.get("computed_surcharges", []):
+        for sc in (brand_dna.get("computed_surcharges") or []):
             sc_amount = subtotal * sc["rate"]
             surcharge_total += sc_amount
             surcharge_context[sc["field"]] = f"{sym}{sc_amount:,.2f}"
@@ -810,7 +810,7 @@ class DocumentFactory:
             "custom_terms": brand_dna.get("default_terms") or "",
             "custom_notes": "",
         }
-        for k in brand_dna.get("custom_template_fields", {}).keys():
+        for k in (brand_dna.get("custom_template_fields") or {}).keys():
             if k not in context:
                 if k in _custom_defaults:
                     context[k] = _custom_defaults[k]

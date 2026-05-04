@@ -97,6 +97,42 @@ async def _download_logo(logo_path: str) -> str | None:
         return None
 
 
+async def _notify_admin_of_failure(
+    context: ContextTypes.DEFAULT_TYPE,
+    db_user: dict,
+    tg_user,
+    quote_data: dict,
+    brand_dna: dict,
+    error: Exception,
+    is_fallback: bool = False,
+) -> None:
+    """Sends a Telegram alert to ADMIN_CHAT_ID when quote generation fails or falls back."""
+    if not settings.ADMIN_CHAT_ID:
+        return
+    import traceback as _tb
+    tb = _tb.format_exc()
+    label = "TEMPLATE FALLBACK USED" if is_fallback else "QUOTE GENERATION FAILED"
+    template_path = brand_dna.get("template_docx_path", "N/A")
+    customer = quote_data.get("customer_name", "?")
+    msg = (
+        f"⚠️ *{label}*\n\n"
+        f"User: `{tg_user.id}` (@{tg_user.username or 'no-username'})\n"
+        f"Email: {db_user.get('email', '?')}\n"
+        f"Customer: {customer}\n"
+        f"Template: `{template_path}`\n\n"
+        f"Error: `{error}`\n\n"
+        f"```\n{tb[-1800:]}\n```"
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=settings.ADMIN_CHAT_ID,
+            text=msg,
+            parse_mode="Markdown",
+        )
+    except Exception as notify_err:
+        logger.warning(f"Failed to send admin failure notification: {notify_err}")
+
+
 async def _upload_blank_template(user_id: str, template_bytes: bytes) -> str:
     """Upload the original blank DOCX template to Supabase Storage. Returns the storage path."""
     storage_path = f"templates/{user_id}/blank_template.docx"
@@ -167,10 +203,13 @@ def _currency_keyboard() -> InlineKeyboardMarkup:
 
 
 def _template_preview_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Looks good ✓", callback_data="template_preview_ok"),
-        InlineKeyboardButton("Re-upload template", callback_data="template_preview_reupload"),
-    ]])
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Looks good ✓", callback_data="template_preview_ok"),
+            InlineKeyboardButton("Re-upload template", callback_data="template_preview_reupload"),
+        ],
+        [InlineKeyboardButton("🔍 Re-examine fields", callback_data="template_preview_reanalyse")],
+    ])
 
 
 def _format_field_report(fields: dict, custom_fields: dict | None = None) -> str:
@@ -179,6 +218,7 @@ def _format_field_report(fields: dict, custom_fields: dict | None = None) -> str
         "customer_name": "Client name",
         "customer_address": "Client address",
         "customer_email": "Client email",
+        "customer_phone": "Client phone",
         "quote_ref": "Quote reference",
         "quote_date": "Date",
         "valid_until": "Expiry date",
@@ -204,6 +244,7 @@ def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = 
         ("customer_name",    "Client name"),
         ("customer_address", "Client address"),
         ("customer_email",   "Client email"),
+        ("customer_phone",   "Client phone"),
         ("quote_ref",        "Quote reference"),
         ("quote_date",       "Date"),
         ("valid_until",      "Expiry date"),
@@ -222,113 +263,6 @@ def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = 
         for display in custom_fields.values():
             lines.append(f"✓ {display} *(you'll be asked for this when generating quotes)*")
     return "\n".join(lines)
-
-
-def _annotate_preview_image(
-    png_bytes: bytes,
-    visual_hints: dict | None,
-    custom_fields: dict | None,
-) -> bytes | None:
-    """
-    Draws a semi-transparent overlay banner at the bottom of the template preview
-    listing which fields were detected (checkmark) and which were not (cross).
-    Returns annotated PNG bytes, or None if annotation fails (caller falls back
-    to the raw image).
-    """
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-        import io as _io
-
-        img = Image.open(_io.BytesIO(png_bytes)).convert("RGBA")
-        w, h = img.size
-
-        # Build the list of field labels and their detection status
-        checks = [
-            ("customer_name",    "Client name"),
-            ("customer_address", "Client address"),
-            ("customer_email",   "Client email"),
-            ("quote_ref",        "Quote ref"),
-            ("quote_date",       "Date"),
-            ("valid_until",      "Expiry date"),
-            ("line_items_table", "Line items"),
-            ("subtotal",         "Subtotal"),
-            ("tax",              "VAT/Tax"),
-            ("grand_total",      "Total"),
-        ]
-        found_fields = []
-        missing_fields = []
-        for key, label in checks:
-            val = (visual_hints or {}).get(key)
-            if bool(val):
-                found_fields.append(label)
-            else:
-                missing_fields.append(label)
-
-        if custom_fields:
-            for display in custom_fields.values():
-                found_fields.append(display)
-
-        # Try to load a readable font; fall back to default
-        font_size = max(14, w // 50)
-        small_font_size = max(12, w // 60)
-        try:
-            font = ImageFont.truetype("arial.ttf", font_size)
-            small_font = ImageFont.truetype("arial.ttf", small_font_size)
-        except Exception:
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-                small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", small_font_size)
-            except Exception:
-                font = ImageFont.load_default()
-                small_font = font
-
-        # Create an overlay layer for the banner
-        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-
-        # Banner dimensions
-        padding = max(8, w // 80)
-        line_height = font_size + 4
-        small_line_height = small_font_size + 3
-
-        # Calculate banner height
-        total_field_lines = len(found_fields) + len(missing_fields)
-        banner_height = padding * 2 + line_height + total_field_lines * small_line_height + padding
-
-        # Draw semi-transparent dark banner at the bottom
-        banner_y = h - banner_height
-        draw.rectangle(
-            [(0, banner_y), (w, h)],
-            fill=(20, 40, 60, 200),
-        )
-
-        # Title
-        y = banner_y + padding
-        title = "Detected fields:"
-        draw.text((padding, y), title, fill=(255, 255, 255, 255), font=font)
-        y += line_height + 2
-
-        # Found fields (green checkmarks)
-        for label in found_fields:
-            draw.text((padding + 4, y), ">> " + label, fill=(120, 255, 120, 255), font=small_font)
-            y += small_line_height
-
-        # Missing fields (red crosses)
-        for label in missing_fields:
-            draw.text((padding + 4, y), "x  " + label + " (not detected)", fill=(255, 140, 140, 200), font=small_font)
-            y += small_line_height
-
-        # Composite the overlay onto the original image
-        result = Image.alpha_composite(img, overlay)
-        result = result.convert("RGB")
-
-        buf = _io.BytesIO()
-        result.save(buf, format="PNG")
-        return buf.getvalue()
-
-    except Exception as e:
-        logger.warning(f"_annotate_preview_image failed (non-fatal): {e}")
-        return None
 
 
 async def _save_currency_and_ask_tax(
@@ -545,6 +479,7 @@ async def generate_and_send_quote(
     # Generate the document; release the reserved slot on any failure
     result = None
     doc_path = None
+    _template_err = None
     try:
         if preferred_format == "xlsx":
             template_xlsx_path = brand_dna.get("template_xlsx_path")
@@ -593,14 +528,21 @@ async def generate_and_send_quote(
                 )
                 return
 
-            result = await asyncio.to_thread(
-                DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
-            )
+            try:
+                result = await asyncio.to_thread(
+                    DocumentFactory.generate_from_template, template_bytes, quote_data, brand_dna, output_filename
+                )
+            except Exception as _te:
+                _template_err = _te
+                logger.error("Template rendering failed — falling back to scratch DOCX", exc_info=True)
+                result = await asyncio.to_thread(
+                    DocumentFactory.generate_docx, quote_data, brand_dna, output_filename
+                )
         doc_path = result["filepath"]
         if not os.path.exists(doc_path):
             raise RuntimeError("Generated file not found on disk")
     except Exception as e:
-        logger.error(f"Document generation failed: {e}")
+        logger.error("Document generation failed", exc_info=True)
         if _sentry and settings.SENTRY_DSN:
             _sentry.capture_exception(e)
         if doc_id:
@@ -608,9 +550,11 @@ async def generate_and_send_quote(
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
             except Exception:
                 pass
+        await _notify_admin_of_failure(context, db_user, user, quote_data, brand_dna, e)
         await status_msg.edit_text(
-            "Failed to generate the document. Please try again.\n\n"
-            "If this keeps happening, use /restart to re-upload your template."
+            "⚠️ Something went wrong generating your quote.\n\n"
+            "Our team has been notified and will look into it. "
+            "We'll get back to you shortly."
         )
         return
 
@@ -657,6 +601,21 @@ async def generate_and_send_quote(
         try:
             if os.path.exists(doc_path): os.remove(doc_path)
             if pdf_path and os.path.exists(pdf_path): os.remove(pdf_path)
+        except Exception:
+            pass
+
+    # If template rendering failed but fallback succeeded, alert admin and inform user
+    if _template_err:
+        await _notify_admin_of_failure(context, db_user, user, quote_data, brand_dna, _template_err, is_fallback=True)
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=(
+                    "📄 Note: your quote template had a rendering issue, so the document above uses "
+                    "plain formatting instead. Our team has been notified and will get your template "
+                    "working shortly."
+                ),
+            )
         except Exception:
             pass
 
@@ -1051,11 +1010,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 preview_sent = False
                 if png_bytes:
                     try:
-                        # Annotate the preview image with detected field highlights
-                        annotated_png = await asyncio.to_thread(
-                            _annotate_preview_image, png_bytes, visual_hints, _custom_fields
-                        )
-                        preview_image = annotated_png or png_bytes
                         await status_msg.edit_text(
                             "✅ *Template saved!*\n\n"
                             "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
@@ -1064,8 +1018,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             parse_mode="Markdown"
                         )
                         await update.message.reply_photo(
-                            photo=preview_image,
-                            caption="Your quote template — detected fields are highlighted"
+                            photo=png_bytes,
+                            caption="Your quote template"
                         )
                         preview_sent = True
                     except Exception as e:
@@ -1182,10 +1136,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 preview_sent = False
                 if png_bytes:
                     try:
-                        annotated_png = await asyncio.to_thread(
-                            _annotate_preview_image, png_bytes, visual_hints, None
-                        )
-                        preview_image = annotated_png or png_bytes
                         await status_msg.edit_text(
                             "✅ *Template saved!*\n\n"
                             "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
@@ -1194,8 +1144,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                             parse_mode="Markdown"
                         )
                         await update.message.reply_photo(
-                            photo=preview_image,
-                            caption="Your quote template — detected fields are highlighted"
+                            photo=png_bytes,
+                            caption="Your quote template"
                         )
                         preview_sent = True
                     except Exception as e:
@@ -1348,6 +1298,49 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
     _sentry_user(db_user)
     state = db_user.get("bot_state")
+
+    # ------------------------------------------------------------------
+    # ONBOARDING_REANALYSE: user provided a hint for re-examining template fields
+    # ------------------------------------------------------------------
+    if state == "ONBOARDING_REANALYSE":
+        raw_text = (update.message.text or "").strip()
+        hint = "" if raw_text.lower() == "skip" else raw_text
+
+        config_res = await database.supabase.table("user_configs").select("*").eq("user_id", db_user["id"]).maybe_single().execute()
+        config = config_res.data or {}
+        blank_path = config.get("blank_template_path")
+        custom_fields = config.get("custom_template_fields") or None
+
+        status = await update.message.reply_text("Re-examining your template...")
+
+        visual_hints: dict = {}
+        if blank_path:
+            try:
+                template_bytes = await _download_quote_template(blank_path)
+                if template_bytes:
+                    png_bytes = await asyncio.to_thread(DocumentFactory.convert_to_preview_png, template_bytes, "docx")
+                    if png_bytes:
+                        visual_hints = await run_ai(analyze_template_visually, png_bytes, hint)
+            except Exception as e:
+                logger.warning(f"Re-examine visual analysis failed (non-fatal): {e}")
+
+        if visual_hints:
+            field_report = _format_field_report_from_visual(visual_hints, custom_fields)
+        else:
+            field_report = "_Could not re-analyse the template — please try re-uploading if a field is missing._"
+
+        await update_user_state(user.id, "ONBOARDING")
+        await status.edit_text(
+            "Here's the updated field detection:\n\n" + field_report,
+            parse_mode="Markdown"
+        )
+        await update.message.reply_text(
+            "Does this look right now? Confirm to continue, or re-upload if anything's off.\n\n"
+            "_Note: actual quotes you generate will be sent as editable .docx files._",
+            parse_mode="Markdown",
+            reply_markup=_template_preview_keyboard()
+        )
+        return
 
     # ------------------------------------------------------------------
     # ONBOARDING_CURRENCY: user is choosing their invoice currency
@@ -1814,6 +1807,25 @@ async def handle_template_preview_reupload(update: Update, _context: ContextType
     )
 
 
+async def handle_template_preview_reanalyse(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User wants Gemini to re-examine the template for missed fields."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    db_user = await get_user(query.from_user.id)
+    if not db_user or db_user.get("bot_state") != "ONBOARDING":
+        return
+    await update_user_state(query.from_user.id, "ONBOARDING_REANALYSE")
+    await query.message.reply_text(
+        "Which field do you think I missed? Describe it (e.g. *phone number*, *company number*) "
+        "and I'll take another look.\n\nOr type *skip* to re-analyse without a hint.",
+        parse_mode="Markdown"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Bot runner
 # ---------------------------------------------------------------------------
@@ -1843,6 +1855,7 @@ def build_application():
     application.add_handler(CallbackQueryHandler(handle_onboarding_currency_callback, pattern="^onboarding_currency_"))
     application.add_handler(CallbackQueryHandler(handle_template_preview_ok, pattern="^template_preview_ok$"))
     application.add_handler(CallbackQueryHandler(handle_template_preview_reupload, pattern="^template_preview_reupload$"))
+    application.add_handler(CallbackQueryHandler(handle_template_preview_reanalyse, pattern="^template_preview_reanalyse$"))
 
     # Photos and file documents
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document))

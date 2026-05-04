@@ -363,6 +363,7 @@ Return ONLY valid JSON with these keys:
   "customer_name": "exact label text" or null,
   "customer_address": "exact label text" or null,
   "customer_email": "exact label text" or null,
+  "customer_phone": "exact label text" or null,
   "quote_ref": "exact label text" or null,
   "quote_date": "exact label text" or null,
   "valid_until": "exact label text" or null,
@@ -1431,7 +1432,7 @@ class AIService:
             return None
 
 
-def analyze_template_visually(png_bytes: bytes) -> dict:
+def analyze_template_visually(png_bytes: bytes, hint: str = "") -> dict:
     """
     Sends a rendered PNG of the template to Gemini Vision to identify which
     variable fields are present and what label text surrounds them.
@@ -1442,9 +1443,12 @@ def analyze_template_visually(png_bytes: bytes) -> dict:
         return {}
     try:
         img_part = types.Part.from_bytes(data=png_bytes, mime_type="image/png")
+        prompt = VISUAL_FIELD_DETECT_PROMPT
+        if hint:
+            prompt += f'\n\nThe user believes a field matching "{hint}" may be present — look carefully for it.'
         response = client.models.generate_content(
             model=MODEL,
-            contents=[img_part, VISUAL_FIELD_DETECT_PROMPT],
+            contents=[img_part, prompt],
             config=JSON_CONFIG,
         )
         raw = (response.text or "").strip()

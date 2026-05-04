@@ -39,6 +39,9 @@ class Settings:
     # Supabase Storage bucket for per-user docxtpl quote templates
     SUPABASE_TEMPLATES_BUCKET: str = os.getenv("SUPABASE_TEMPLATES_BUCKET", "quote-templates")
 
+    # Telegram chat ID for admin failure alerts — set to your own Telegram user ID
+    ADMIN_CHAT_ID: str = os.getenv("ADMIN_CHAT_ID", "").strip()
+
     # Sentry error tracking — leave empty to disable
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "").strip()
 
