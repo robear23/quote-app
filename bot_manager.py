@@ -685,13 +685,18 @@ async def generate_and_send_quote(
 
     await context.bot.send_message(
         chat_id=user.id,
+        text="Ready to send?",
+        reply_markup=reply_markup,
+    )
+
+    await context.bot.send_message(
+        chat_id=user.id,
         text=(
-            "Here is your generated quote!\n\n"
+            "Tooltips\n\n"
             "Use commands:\n"
             "/restart to re-upload your quote template\n"
             "/feedback along with a message to give us feedback and tell us what features you want added."
         ),
-        reply_markup=reply_markup,
     )
 
     # Clear pending state and return user to ACTIVE
@@ -1497,7 +1502,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     # AWAITING_CONFIG: collecting persistent defaults (validity, custom fields)
     # ------------------------------------------------------------------
     if state == "AWAITING_CONFIG":
-        text = (update.message.text or "").strip().lower()
+        text = (update.message.text or "").strip()
         brand_dna = await get_brand_dna(db_user["id"])
         
         # 1. Handle validity period if not yet set
