@@ -153,7 +153,12 @@ Current quote data (JSON):
 User's reply: "{user_response}"
 
 Determine whether the user is CONFIRMING the quote (e.g. yes, ok, looks good, send it, correct, fine, that's right, generate it)
-or REQUESTING CHANGES (e.g. mentioning different prices, names, items to add/remove, corrections, currency changes).
+or REQUESTING CHANGES (e.g. mentioning different prices, names, items to add/remove, corrections, currency changes, CAPITALIZATION changes).
+
+RULES for requesting changes:
+1. If the user mentions a field name and a value (e.g. "Prepared by: James Milne"), update that specific field in the updated_quote.
+2. IMPORTANT: Respect the user's exact capitalization. If they provide a capitalized name, do NOT lowercase it. 
+3. A change in capitalization ALONE (e.g. "james" to "James") counts as a request for change (confirmed=false) and MUST be applied to the updated_quote.
 
 If the user requests a currency change (e.g. "currency is £", "use GBP", "change to euros", "currency should be USD"):
 - Update the "currency" field in updated_quote to the correct ISO code (e.g. "GBP" for £/pounds, "EUR" for euros, "USD" for dollars).
