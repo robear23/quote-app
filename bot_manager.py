@@ -723,7 +723,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "📄 *Quick tip before you upload:*\n\n"
                 "Your template should be a blank quote with your *business info already filled in*. "
                 "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
-                "Send your *.docx or .xlsx* file when you're ready.",
+                "Send your .docx/.xlsx (Word/Excel) file when you're ready.",
                 parse_mode="Markdown"
             )
         elif state == "ONBOARDING":
@@ -766,7 +766,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     "📄 *Quick tip before you upload:*\n\n"
                     "Your template should be a blank quote with your *business info already filled in*. "
                     "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
-                    "Send your *.docx or .xlsx* file when you're ready.",
+                    "Send your .docx/.xlsx (Word/Excel) file when you're ready.",
                     parse_mode="Markdown"
                 )
             else:
@@ -812,7 +812,7 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         "📄 *Quick tip before you upload:*\n\n"
         "Your template should be a blank quote with your *business info already filled in*. "
         "For client details, use labels like `[Client Name]`, `[Date]`, `[Quote Ref]` — these are picked up automatically.\n\n"
-        "Send your *.docx* file when you're ready.",
+        "Send your .docx/.xlsx (Word/Excel) file when you're ready.",
         parse_mode="Markdown"
     )
 
