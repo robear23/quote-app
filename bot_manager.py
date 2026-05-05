@@ -229,8 +229,8 @@ def _format_field_report(fields: dict, custom_fields: dict | None = None) -> str
     }
     lines = []
     for key, label in labels.items():
-        found = fields.get(key, False)
-        lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected — will be blank)*"))
+        if fields.get(key, False):
+            lines.append(f"✓ {label}")
     if custom_fields:
         lines.append("\nCustom fields detected in your template:")
         for display in custom_fields.values():
@@ -255,9 +255,8 @@ def _format_field_report_from_visual(visual: dict, custom_fields: dict | None = 
     ]
     lines = []
     for key, label in checks:
-        val = visual.get(key)
-        found = bool(val)
-        lines.append(f"{'✓' if found else '✗'} {label}" + ("" if found else " *(not detected)*"))
+        if visual.get(key):
+            lines.append(f"✓ {label}")
     if custom_fields:
         lines.append("\nCustom fields detected in your template:")
         for display in custom_fields.values():
@@ -728,7 +727,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
         elif state == "ONBOARDING":
             await update.message.reply_text(
-                "You're in the setup phase. Please upload your blank .docx quote template to continue."
+                "You're in the setup phase. Please upload your blank .docx/.xlsx quote template to continue."
             )
         elif state in ("ONBOARDING_CURRENCY",):
             await update.message.reply_text(
@@ -1014,7 +1013,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         "❌ I couldn't set up your template for auto-fill.\n\n"
                         "Make sure your template has clear column headers (Description, Qty, Price, Total) "
                         "and labeled fields for client name and date.\n\n"
-                        "Please upload a corrected .docx template to continue."
+                        "Please upload a corrected .docx/.xlsx template to continue."
                     )
                     return
 
@@ -1046,66 +1045,16 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 else:
                     field_report = _format_field_report(assess_docx_template_fields(jinja_bytes), _custom_fields)
 
-                # Send preview — annotated PNG if available, else fallback to docx file
-                preview_sent = False
-                if png_bytes:
-                    try:
-                        await status_msg.edit_text(
-                            "✅ *Template saved!*\n\n"
-                            "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
-                            "(your actual quotes will be sent as editable Word files):\n\n"
-                            + field_report,
-                            parse_mode="Markdown"
-                        )
-                        await update.message.reply_photo(
-                            photo=png_bytes,
-                            caption="Your quote template"
-                        )
-                        preview_sent = True
-                    except Exception as e:
-                        logger.warning(f"PNG preview send failed (non-fatal): {e}")
-
-                if not preview_sent:
-                    # Fallback: generate filled docx preview
-                    try:
-                        preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.docx"
-                        preview_result = await asyncio.to_thread(
-                            DocumentFactory.generate_from_template, jinja_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
-                        )
-                        preview_path = preview_result["filepath"]
-                        await status_msg.edit_text(
-                            "✅ *Template saved!* Here's a sample quote using your template:\n\n" + field_report,
-                            parse_mode="Markdown"
-                        )
-                        with open(preview_path, "rb") as f:
-                            await update.message.reply_document(document=f, filename="Preview.docx")
-                        os.remove(preview_path)
-                        preview_sent = True
-                    except Exception as e:
-                        logger.warning(f"DOCX preview generation failed (non-fatal): {e}")
-
-                if preview_sent:
-                    await update.message.reply_text(
-                        "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
-                        "_Note: actual quotes you generate will be sent as editable .docx files._",
-                        parse_mode="Markdown",
-                        reply_markup=_template_preview_keyboard()
-                    )
-                else:
-                    # All preview attempts failed — skip straight to currency
-                    dna_data["user_id"] = db_user["id"]
-                    try:
-                        await database.supabase.table("user_configs").upsert(_sanitize_dna_for_db(dna_data)).execute()
-                    except Exception as e:
-                        logger.error(f"Failed to upsert brand DNA (no-preview path): {e}")
-                    await update_user_state(user.id, "ONBOARDING_CURRENCY")
-                    await status_msg.edit_text(
-                        "Template saved!\n\n"
-                        "What currency do you use for your quotes?\n\n"
-                        "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
-                        reply_markup=_currency_keyboard()
-                    )
-                    return  # skip the shared upsert/state update below
+                # Send field report with confirmation buttons
+                await status_msg.edit_text(
+                    "✅ *Template saved!*\n\n"
+                    "The fields below will be filled in automatically when you generate quotes:\n\n"
+                    + field_report + "\n\n"
+                    "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                    "_Note: actual quotes you generate will be sent as editable .docx files._",
+                    parse_mode="Markdown",
+                    reply_markup=_template_preview_keyboard()
+                )
 
             else:
                 # ── XLSX branch ──────────────────────────────────────────────
@@ -1172,65 +1121,16 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 else:
                     field_report = _format_field_report(assess_xlsx_mapping_fields(mapping))
 
-                # Send preview — annotated PNG if available, else fallback to xlsx file
-                preview_sent = False
-                if png_bytes:
-                    try:
-                        await status_msg.edit_text(
-                            "✅ *Template saved!*\n\n"
-                            "Here's a preview of your template — the fields below will be filled in automatically when you generate quotes "
-                            "(your actual quotes will be sent as editable Excel files):\n\n"
-                            + field_report,
-                            parse_mode="Markdown"
-                        )
-                        await update.message.reply_photo(
-                            photo=png_bytes,
-                            caption="Your quote template"
-                        )
-                        preview_sent = True
-                    except Exception as e:
-                        logger.warning(f"PNG preview send failed (non-fatal): {e}")
-
-                if not preview_sent:
-                    # Fallback: generate filled xlsx preview
-                    try:
-                        preview_filename = f"Preview_{uuid.uuid4().hex[:8]}.xlsx"
-                        preview_result = await asyncio.to_thread(
-                            DocumentFactory.generate_from_xlsx_template, template_bytes, SAMPLE_QUOTE_DATA, dna_data, preview_filename
-                        )
-                        preview_path = preview_result["filepath"]
-                        await status_msg.edit_text(
-                            "✅ *Template saved!* Here's a sample quote using your template:\n\n" + field_report,
-                            parse_mode="Markdown"
-                        )
-                        with open(preview_path, "rb") as f:
-                            await update.message.reply_document(document=f, filename="Preview.xlsx")
-                        os.remove(preview_path)
-                        preview_sent = True
-                    except Exception as e:
-                        logger.warning(f"XLSX preview generation failed (non-fatal): {e}")
-
-                if preview_sent:
-                    await update.message.reply_text(
-                        "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
-                        "_Note: actual quotes you generate will be sent as editable .xlsx files._",
-                        parse_mode="Markdown",
-                        reply_markup=_template_preview_keyboard()
-                    )
-                else:
-                    dna_data["user_id"] = db_user["id"]
-                    try:
-                        await database.supabase.table("user_configs").upsert(_sanitize_dna_for_db(dna_data)).execute()
-                    except Exception as e:
-                        logger.error(f"Failed to upsert brand DNA (xlsx no-preview path): {e}")
-                    await update_user_state(user.id, "ONBOARDING_CURRENCY")
-                    await status_msg.edit_text(
-                        "Template saved!\n\n"
-                        "What currency do you use for your quotes?\n\n"
-                        "Select from the options below, or type the 3-letter code (e.g. NZD, CHF, AED).",
-                        reply_markup=_currency_keyboard()
-                    )
-                    return  # skip the shared upsert/state update below
+                # Send field report with confirmation buttons
+                await status_msg.edit_text(
+                    "✅ *Template saved!*\n\n"
+                    "The fields below will be filled in automatically when you generate quotes:\n\n"
+                    + field_report + "\n\n"
+                    "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                    "_Note: actual quotes you generate will be sent as editable .xlsx files._",
+                    parse_mode="Markdown",
+                    reply_markup=_template_preview_keyboard()
+                )
 
             # Persist brand DNA (currency/tax come from Q&A after preview confirmation)
             dna_data["user_id"] = db_user["id"]
@@ -1379,12 +1279,9 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await update_user_state(user.id, "ONBOARDING")
         await status.edit_text(
-            "Here's the updated field detection:\n\n" + field_report,
-            parse_mode="Markdown"
-        )
-        await update.message.reply_text(
+            "Here's the updated field detection:\n\n" + field_report + "\n\n"
             "Does this look right now? Confirm to continue, or re-upload if anything's off.\n\n"
-            "_Note: actual quotes you generate will be sent as editable .docx files._",
+            "_Note: actual quotes you generate will be sent as editable files._",
             parse_mode="Markdown",
             reply_markup=_template_preview_keyboard()
         )
