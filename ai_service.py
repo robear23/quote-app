@@ -114,17 +114,22 @@ If prices are not visible, infer reasonable defaults based on the trade context.
 Return ONLY valid JSON.
 """
 
-def _custom_fields_prompt_suffix(custom_fields: dict) -> str:
+def _custom_fields_prompt_suffix(custom_fields: dict, custom_field_defaults: dict | None = None) -> str:
     """Builds prompt instructions for template-specific custom fields."""
     lines = ["\n\nAlso extract these template-specific fields if mentioned in the input:"]
-    for slug, info in custom_fields.items():
-        # custom_fields can be {slug: display_name} or {slug: {"display": "...", "default": "..."}}
-        display = info["display"] if isinstance(info, dict) else info
-        lines.append(f'- "{slug}": {display}')
+    defaults = custom_field_defaults or {}
+    for slug, display in custom_fields.items():
+        default_val = defaults.get(slug)
+        if default_val and default_val.lower() != "none":
+            lines.append(f'- "{slug}": {display} (Default value: "{default_val}")')
+        else:
+            lines.append(f'- "{slug}": {display}')
 
     lines.append("\nRULES for template-specific fields:")
-    lines.append("- If a field is not mentioned in the user input, INFER a sensible default based on the field name and context (e.g. Status -> 'Final', Payment Terms -> 'Due on Receipt', Project -> 'General').")
-    lines.append("- Return the inferred value instead of null whenever possible.")
+    lines.append("- If a field is mentioned in the user input, extract that value.")
+    lines.append("- If NOT mentioned, use the provided Default value if listed above.")
+    lines.append("- If no Default is listed and it's not in the input, infer a sensible default (e.g. Status -> 'Final').")
+    lines.append("- If the Default is \"none\" or no value can be inferred, use an empty string \"\".")
     return "\n".join(lines)
 
 
@@ -707,12 +712,12 @@ class AIService:
             return None
 
     @staticmethod
-    def generate_quote_data(text: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
+    def generate_quote_data(text: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None, custom_field_defaults: dict | None = None) -> dict:
         """Parses user text into structured quote data using Gemini."""
         try:
             prompt = QUOTE_GENERATION_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
-                prompt += _custom_fields_prompt_suffix(custom_fields)
+                prompt += _custom_fields_prompt_suffix(custom_fields, custom_field_defaults)
             if extra_columns:
                 prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
@@ -725,7 +730,7 @@ class AIService:
             return {}
 
     @staticmethod
-    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
+    def transcribe_and_extract_voice(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None, custom_field_defaults: dict | None = None) -> dict:
         """Transcribes a voice note (OGG) and extracts structured quote data."""
         try:
             uploaded_file = client.files.upload(
@@ -748,7 +753,7 @@ class AIService:
 
             prompt = VOICE_QUOTE_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
-                prompt += _custom_fields_prompt_suffix(custom_fields)
+                prompt += _custom_fields_prompt_suffix(custom_fields, custom_field_defaults)
             if extra_columns:
                 prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry([prompt, uploaded_file])
@@ -768,14 +773,14 @@ class AIService:
             return {}
 
     @staticmethod
-    def extract_quote_from_image(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None) -> dict:
+    def extract_quote_from_image(file_path: str, business_name: str = "Business Name", custom_fields: dict | None = None, extra_columns: list | None = None, custom_field_defaults: dict | None = None) -> dict:
         """Extracts structured quote data from an image (photo of notes, job site, etc.)."""
         try:
             uploaded_file = client.files.upload(file=file_path)
 
             prompt = IMAGE_QUOTE_PROMPT.replace("{business_name}", business_name)
             if custom_fields:
-                prompt += _custom_fields_prompt_suffix(custom_fields)
+                prompt += _custom_fields_prompt_suffix(custom_fields, custom_field_defaults)
             if extra_columns:
                 prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry([prompt, uploaded_file])

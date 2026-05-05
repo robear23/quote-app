@@ -803,17 +803,27 @@ class DocumentFactory:
                 context[k] = str(v) if v is not None else ""
 
         # Provide defaults for custom fields declared in the template but not supplied by user input
-        _custom_defaults = {
+        # PRIORITIZE user-defined defaults from onboarding
+        user_defaults = brand_dna.get("custom_field_defaults") or {}
+        
+        _hardcoded_defaults = {
             "custom_status": "Final",
             "custom_quote_status": "Final",
             "custom_payment_terms": "Due on Receipt",
             "custom_terms": brand_dna.get("default_terms") or "",
             "custom_notes": "",
         }
+
         for k in (brand_dna.get("custom_template_fields") or {}).keys():
             if k not in context:
-                if k in _custom_defaults:
-                    context[k] = _custom_defaults[k]
+                # 1. Use user-defined default if it exists
+                if k in user_defaults:
+                    val = user_defaults[k]
+                    context[k] = "" if str(val).lower() == "none" else str(val)
+                # 2. Use hardcoded defaults for specific known slugs
+                elif k in _hardcoded_defaults:
+                    context[k] = _hardcoded_defaults[k]
+                # 3. Last resort: infer based on slug
                 else:
                     slug = k.lower()
                     if any(x in slug for x in ("_date", "visit_date", "service_date", "appointment")):

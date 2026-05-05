@@ -1233,10 +1233,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             brand_dna = await get_brand_dna(db_user["id"])
             business_name = brand_dna.get("business_name") or "Business Name"
-            custom_fields = brand_dna.get("custom_template_fields") or None
+            custom_fields = brand_dna.get("custom_template_fields") or {}
             extra_columns = brand_dna.get("extra_line_item_columns") or None
+            custom_field_defaults = brand_dna.get("custom_field_defaults") or None
             try:
-                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, business_name, custom_fields, extra_columns, msg=msg)
+                quote_data = await run_ai_notify(AIService.extract_quote_from_image, filepath, business_name, custom_fields, extra_columns, custom_field_defaults, msg=msg)
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
@@ -1254,11 +1255,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
             quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
-            missing = [
-                {"slug": slug, "display": display}
-                for slug, display in (custom_fields or {}).items()
-                if not quote_data.get(slug)
-            ]
+            
+            # Skip fields that have a valid default set (except "none")
+            defaults = brand_dna.get("custom_field_defaults") or {}
+            missing = []
+            for slug, display in custom_fields.items():
+                val = quote_data.get(slug)
+                if val and str(val).strip():
+                    continue
+                if slug in defaults:
+                    continue
+                missing.append({"slug": slug, "display": display})
+
             if missing:
                 quote_data["_pending_custom_fields"] = missing
                 await _ask_next_custom_field(msg.edit_text, quote_data, brand_dna, user.id)
@@ -1595,6 +1603,8 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     custom_fields = brand_dna.get("custom_template_fields") or None
     extra_columns = brand_dna.get("extra_line_item_columns") or None
 
+    custom_field_defaults = brand_dna.get("custom_field_defaults") or None
+
     if update.message.voice:
         msg = await update.message.reply_text("Transcribing your voice note...")
 
@@ -1603,7 +1613,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         await file_obj.download_to_drive(custom_path=filepath)
 
         try:
-            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, custom_fields, extra_columns, msg=msg)
+            quote_data = await run_ai_notify(AIService.transcribe_and_extract_voice, filepath, business_name, custom_fields, extra_columns, custom_field_defaults, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1622,7 +1632,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     elif update.message.text:
         msg = await update.message.reply_text("Parsing your message...")
         try:
-            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, custom_fields, extra_columns, msg=msg)
+            quote_data = await run_ai_notify(AIService.generate_quote_data, update.message.text, business_name, custom_fields, extra_columns, custom_field_defaults, msg=msg)
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
@@ -1641,12 +1651,20 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
     quote_data.setdefault("currency", brand_dna.get("currency") or "USD")
 
     # Check if the template has custom fields the AI couldn't fill from the user's input
+    # Skip fields that have a valid default set (except "none")
     custom_fields = brand_dna.get("custom_template_fields") or {}
-    missing = [
-        {"slug": slug, "display": display}
-        for slug, display in custom_fields.items()
-        if not quote_data.get(slug)
-    ]
+    defaults = brand_dna.get("custom_field_defaults") or {}
+    missing = []
+    for slug, display in custom_fields.items():
+        val = quote_data.get(slug)
+        # If AI found it, it's not missing
+        if val and str(val).strip():
+            continue
+        # If it has a default, it's not missing (it will use the default/empty string)
+        if slug in defaults:
+            continue
+        # Otherwise, we need to ask
+        missing.append({"slug": slug, "display": display})
     if missing:
         quote_data["_pending_custom_fields"] = missing
         await _ask_next_custom_field(msg.edit_text, quote_data, brand_dna, user.id)
