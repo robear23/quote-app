@@ -282,3 +282,11 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS custom_template_fields JSONB;
 -- ============================================================
 
 ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS validity_days INT DEFAULT 30;
+
+-- ============================================================
+-- MIGRATION: Persistent custom field defaults
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS custom_field_defaults JSONB;
+
