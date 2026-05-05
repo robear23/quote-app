@@ -322,6 +322,14 @@ async def clear_pending_state(telegram_id: int):
 # Quote formatting helper
 # ---------------------------------------------------------------------------
 
+_STANDARD_QUOTE_KEYS = {
+    "customer_name", "customer_address", "customer_email", "customer_phone",
+    "email_subject", "cover_message", "line_items", "currency",
+    "validity_period", "quote_date", "quote_number", "quote_ref",
+    "_pending_custom_fields",
+}
+
+
 def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
     """Formats a structured quote as a readable Telegram message with a confirmation prompt."""
     currency = quote_data.get("currency") or brand_dna.get("currency") or "USD"
@@ -330,6 +338,10 @@ def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
 
     if quote_data.get("customer_address"):
         lines.append(f"_{quote_data['customer_address']}_")
+    if quote_data.get("customer_email"):
+        lines.append(f"Email: {quote_data['customer_email']}")
+    if quote_data.get("customer_phone"):
+        lines.append(f"Phone: {quote_data['customer_phone']}")
 
     lines.append("")
     subtotal = 0.0
@@ -349,6 +361,17 @@ def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
         tax_amount = subtotal * (tax_rate / 100)
         lines.append(f"VAT/Tax ({tax_rate:.0f}%): {currency} {tax_amount:.2f}")
         lines.append(f"*TOTAL: {currency} {subtotal + tax_amount:.2f}*")
+
+    if quote_data.get("email_subject"):
+        lines.append(f"\nEmail subject: _{quote_data['email_subject']}_")
+    if quote_data.get("cover_message"):
+        lines.append(f"Cover message: _{quote_data['cover_message']}_")
+
+    custom_keys = sorted(k for k in quote_data if k not in _STANDARD_QUOTE_KEYS and quote_data[k])
+    if custom_keys:
+        lines.append("")
+        for key in custom_keys:
+            lines.append(f"{key.replace('_', ' ').title()}: {quote_data[key]}")
 
     lines.append("\nDoes this look right? Press *YES* or tell me what to change.")
     return "\n".join(lines)
@@ -570,16 +593,19 @@ async def generate_and_send_quote(
         
         # Send the primary document
         with open(doc_path, 'rb') as f:
-            await context.bot.send_document(chat_id=user.id, document=f, filename=output_filename)
-        
+            await context.bot.send_document(
+                chat_id=user.id, document=f, filename=output_filename,
+                caption=f"Here is the {output_ext} version for easy editing.",
+            )
+
         # Send the PDF version too if requested/available
         if pdf_path and os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as f:
                 await context.bot.send_document(
-                    chat_id=user.id, 
-                    document=f, 
+                    chat_id=user.id,
+                    document=f,
                     filename=pdf_filename,
-                    caption="Here is the PDF version for easy sharing."
+                    caption="Here is the PDF version for easy sharing.",
                 )
 
         # ── UPLOAD FOR SHARING ───────────────────────────────────────────
@@ -651,12 +677,21 @@ async def generate_and_send_quote(
             InlineKeyboardButton("🚀 Share Quote (Email/Messages)", url=share_url)
         ]])
 
-    await status_msg.edit_text(
-        "Here is your generated quote!\n\n"
-        "Use commands:\n"
-        "/restart to re-upload your quote template\n"
-        "/feedback along with a message to give us feedback and tell us what features you want added.",
-        reply_markup=reply_markup
+    # Delete the "Generating..." status message so the success message appears after the files
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    await context.bot.send_message(
+        chat_id=user.id,
+        text=(
+            "Here is your generated quote!\n\n"
+            "Use commands:\n"
+            "/restart to re-upload your quote template\n"
+            "/feedback along with a message to give us feedback and tell us what features you want added."
+        ),
+        reply_markup=reply_markup,
     )
 
     # Clear pending state and return user to ACTIVE
