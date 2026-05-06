@@ -913,7 +913,7 @@ _USER_CONFIGS_COLUMNS = {
     "layout_preferences", "preferred_format", "template_docx_path",
     "primary_color_hex", "secondary_color_hex", "logo_path",
     "blank_template_path", "template_xlsx_path", "xlsx_field_mapping",
-    "custom_template_fields",
+    "custom_template_fields", "validity_days", "custom_field_defaults",
 }
 
 def _sanitize_dna_for_db(dna_data: dict) -> dict:
@@ -1050,7 +1050,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     "✅ *Template saved!*\n\n"
                     "The fields below will be filled in automatically when you generate quotes:\n\n"
                     + field_report + "\n\n"
-                    "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                    "*Looks good* — confirm and move on.\n"
+                    "*Re-examine* — AI takes another look at the fields without re-uploading.\n"
+                    "*Re-upload* — start fresh with a different file.\n\n"
                     "_Note: actual quotes you generate will be sent as editable .docx files._",
                     parse_mode="Markdown",
                     reply_markup=_template_preview_keyboard()
@@ -1126,7 +1128,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     "✅ *Template saved!*\n\n"
                     "The fields below will be filled in automatically when you generate quotes:\n\n"
                     + field_report + "\n\n"
-                    "Does this look right? Confirm to continue, or re-upload if anything's off.\n\n"
+                    "*Looks good* — confirm and move on.\n"
+                    "*Re-examine* — AI takes another look at the fields without re-uploading.\n"
+                    "*Re-upload* — start fresh with a different file.\n\n"
                     "_Note: actual quotes you generate will be sent as editable .xlsx files._",
                     parse_mode="Markdown",
                     reply_markup=_template_preview_keyboard()
@@ -1277,11 +1281,14 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             field_report = "_Could not re-analyse the template — please try re-uploading if a field is missing._"
 
+        file_ext = ".xlsx" if blank_path and blank_path.lower().endswith(".xlsx") else ".docx"
         await update_user_state(user.id, "ONBOARDING")
         await status.edit_text(
             "Here's the updated field detection:\n\n" + field_report + "\n\n"
-            "Does this look right now? Confirm to continue, or re-upload if anything's off.\n\n"
-            "_Note: actual quotes you generate will be sent as editable files._",
+            "*Looks good* — confirm and move on.\n"
+            "*Re-examine* — AI takes another look at the fields without re-uploading.\n"
+            "*Re-upload* — start fresh with a different file.\n\n"
+            f"_Note: actual quotes you generate will be sent as editable {file_ext} files._",
             parse_mode="Markdown",
             reply_markup=_template_preview_keyboard()
         )
