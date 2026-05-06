@@ -362,7 +362,8 @@ def format_quote_summary(quote_data: dict, brand_dna: dict) -> str:
         lines.append(f"*TOTAL: {currency} {subtotal + tax_amount:.2f}*")
 
     if quote_data.get("email_subject"):
-        lines.append(f"\nEmail subject: _{quote_data['email_subject']}_")
+        lines.append(f"\n_(If you're ready to send, you can share via email/SMS/WhatsApp using this message)_")
+        lines.append(f"Email subject: _{quote_data['email_subject']}_")
     if quote_data.get("cover_message"):
         lines.append(f"Cover message: _{quote_data['cover_message']}_")
 

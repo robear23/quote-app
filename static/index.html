@@ -375,6 +375,7 @@
             border-radius: 999px;
             margin-left: 8px;
             vertical-align: middle;
+            display: none; /* Hidden as features are now built-in */
         }
 
         /* ── How it works ── */
@@ -740,96 +741,6 @@
             60% { transform: translateY(-2px); }
         }
 
-        /* ── Email delivery coming soon card ── */
-        .email-coming-soon {
-            max-width: 720px;
-            margin: 32px auto 0;
-            background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.06));
-            border: 1px dashed rgba(139,92,246,0.35);
-            border-radius: 20px;
-            padding: 28px 36px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .email-coming-soon::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.06) 50%, transparent 100%);
-            animation: sweep 3.5s ease-in-out infinite;
-        }
-
-        @keyframes sweep {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        .ecs-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 14px;
-            background: rgba(139,92,246,0.12);
-            border: 1px solid rgba(139,92,246,0.25);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            flex-shrink: 0;
-            animation: icon-glow 2.5s ease-in-out infinite;
-        }
-
-        @keyframes icon-glow {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
-            50% { box-shadow: 0 0 0 8px rgba(139,92,246,0.12); }
-        }
-
-        .ecs-text {
-            flex: 1;
-            position: relative;
-            z-index: 1;
-        }
-
-        .ecs-text h4 {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 4px;
-            letter-spacing: -0.01em;
-        }
-
-        .ecs-text p {
-            color: var(--secondary);
-            font-size: 0.88rem;
-            line-height: 1.6;
-            margin: 0;
-        }
-
-        .ecs-badge {
-            flex-shrink: 0;
-            font-size: 0.68rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            background: rgba(139,92,246,0.15);
-            border: 1px solid rgba(139,92,246,0.4);
-            color: #c4b5fd;
-            padding: 5px 14px;
-            border-radius: 999px;
-            animation: badge-pulse 2.5s ease-in-out infinite;
-        }
-
-        @keyframes badge-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.65; }
-        }
-
-        @media (max-width: 640px) {
-            .email-coming-soon { flex-direction: column; text-align: center; padding: 24px 20px; }
-            .ecs-badge { align-self: center; }
-        }
 
         /* Steps (right column) */
         .steps {
@@ -1677,16 +1588,16 @@
                         <p>Every quote is saved to your account so you can re-use, reference, or rebill past jobs
                             without digging through paperwork.</p>
                     </div>
-                    <div class="feature-card fade-up" style="transition-delay: 0.48s; opacity: 0.75;">
+                    <div class="feature-card fade-up" style="transition-delay: 0.48s;">
                         <div class="feature-icon fi-orange">📋</div>
-                        <h3>PDF Export <span class="coming-soon">Coming Soon</span></h3>
+                        <h3>PDF Export</h3>
                         <p>Generate a polished, print-ready PDF of your quote to send straight to your client — no
                             editing software needed.</p>
                     </div>
-                    <div class="feature-card fade-up" style="transition-delay: 0.56s; opacity: 0.75;">
-                        <div class="feature-icon fi-green">📧</div>
-                        <h3>Email Delivery <span class="coming-soon">Coming Soon</span></h3>
-                        <p>Send the finished quote directly to your client from Telegram with one tap — no computer
+                    <div class="feature-card fade-up" style="transition-delay: 0.56s;">
+                        <div class="feature-icon fi-green">📲</div>
+                        <h3>Send to Client</h3>
+                        <p>Easily send a link to the quote via Email, SMS, or WhatsApp with one tap — no computer
                             needed.</p>
                     </div>
                 </div>
@@ -1712,6 +1623,7 @@
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> PDF &amp; Link sharing (Email/SMS/WhatsApp)</li>
                             <li><span class="check">✓</span> Quote history</li>
                         </ul>
                         <a href="#signup" class="pricing-cta pricing-cta-ghost">Get started free</a>
@@ -1727,6 +1639,7 @@
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> PDF &amp; Link sharing (Email/SMS/WhatsApp)</li>
                             <li><span class="check">✓</span> Quote history</li>
                         </ul>
                         <a href="/auth/google?intent=pro" class="pricing-cta pricing-cta-ghost">Start with Pro</a>
@@ -1743,6 +1656,7 @@
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>
+                            <li><span class="check">✓</span> PDF &amp; Link sharing (Email/SMS/WhatsApp)</li>
                             <li><span class="check">✓</span> Quote history</li>
                             <li><span class="check">✓</span> Priority support</li>
                         </ul>
@@ -1751,15 +1665,6 @@
                     </div>
                 </div>
 
-                <!-- Email Delivery Coming Soon -->
-                <div class="email-coming-soon fade-up" style="transition-delay:0.15s">
-                    <div class="ecs-icon">📧</div>
-                    <div class="ecs-text">
-                        <h4>Email Delivery — coming soon</h4>
-                        <p>Send the finished quote directly to your client from Telegram with one tap — no computer needed. Launching for all plans.</p>
-                    </div>
-                    <div class="ecs-badge">Coming Soon</div>
-                </div>
 
             </div>
         </section>
