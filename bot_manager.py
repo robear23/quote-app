@@ -695,7 +695,7 @@ async def generate_and_send_quote(
             "Tooltips\n\n"
             "Use commands:\n"
             "/restart to re-upload your quote template\n"
-            "/feedback along with a message to give us feedback and tell us what features you want added."
+            "/contact along with a message if you need help with getting your template working properly, or if you have any feedback."
         ),
     )
 
@@ -817,7 +817,7 @@ async def restart(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def feedback(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+async def contact(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     """Stores user feedback in the Supabase feedback table."""
     user = update.effective_user
     db_user = await get_user(user.id)
@@ -826,17 +826,17 @@ async def feedback(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Please register first at our website.")
         return
 
-    # Extract the feedback message (everything after /feedback)
+    # Extract the message (everything after /contact)
     message_text = (update.message.text or "").strip()
-    if message_text.lower().startswith("/feedback"):
-        feedback_text = message_text[len("/feedback"):].strip()
+    if message_text.lower().startswith("/contact"):
+        feedback_text = message_text[len("/contact"):].strip()
     else:
         feedback_text = ""
 
     if not feedback_text:
         await update.message.reply_text(
-            "Please include your feedback message after the command.\n\n"
-            "_Example: /feedback I love it but could you include invoices too?!?_",
+            "Please include your message after the command.\n\n"
+            "_Example: /contact I need help getting my template working_",
             parse_mode="Markdown"
         )
         return
@@ -873,7 +873,7 @@ async def commands(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         "📋 *Available Commands*\n\n"
         "/start — Link your account and get started\n"
         "/restart — Reset and re-upload your quote template\n"
-        "/feedback — Send feedback to the developers\n"
+        "/contact — Get help or send feedback to the developers\n"
         "/whoami — Check which email is linked to your account\n"
         "/redeem — Apply a promo code\n"
         "/commands — Show this list of commands",
@@ -1808,7 +1808,7 @@ def build_application():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("restart", restart))
-    application.add_handler(CommandHandler("feedback", feedback))
+    application.add_handler(CommandHandler("contact", contact))
     application.add_handler(CommandHandler("whoami", whoami))
     application.add_handler(CommandHandler("commands", commands))
     application.add_handler(CommandHandler("redeem", redeem))
