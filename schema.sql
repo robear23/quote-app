@@ -290,3 +290,22 @@ ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS validity_days INT DEFAULT 30;
 
 ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS custom_field_defaults JSONB;
 
+-- ============================================================
+-- MIGRATION: Generated quote sharing — documents extra columns
+-- Run in Supabase SQL editor
+-- ============================================================
+
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS customer_email TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS email_subject TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS cover_message TEXT;
+
+-- ============================================================
+-- MIGRATION: Supabase Storage bucket for generated quotes
+-- Run these steps in the Supabase dashboard (Storage section):
+--   1. Create a new PRIVATE bucket named exactly "generated-quotes"
+--   2. No public access — signed URLs (1-hour expiry) handle download access
+-- No SQL required — bucket creation is done via the dashboard.
+-- Without this bucket the share/download link will always return 404.
+-- ============================================================
+

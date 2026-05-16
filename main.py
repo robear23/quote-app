@@ -399,7 +399,9 @@ async def api_share_info(doc_id: str):
                 parts = file_url.split("/", 1)
                 if len(parts) == 2:
                     bucket, path = parts
-                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(path, 3600)
+                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(
+                        path, 3600, options={"download": True}
+                    )
                     signed_url = signed_res.get("signedURL")
             except Exception as e:
                 logger.error(f"Failed to generate signed URL for {file_url}: {e}")
@@ -437,7 +439,9 @@ async def api_share_download(doc_id: str):
                 parts = file_url.split("/", 1)
                 if len(parts) == 2:
                     bucket, path = parts
-                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(path, 3600)
+                    signed_res = await database.supabase.storage.from_(bucket).create_signed_url(
+                        path, 3600, options={"download": True}
+                    )
                     signed_url = signed_res.get("signedURL")
                     if signed_url:
                         return RedirectResponse(url=signed_url)
