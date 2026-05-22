@@ -21,3 +21,7 @@ Thumbs.db
 # Test artifacts
 Quote_*.docx
 generate_samples.py
+test_generated/
+test_templates/
+logos/
+

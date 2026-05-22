@@ -216,7 +216,8 @@
                 docData = await response.json();
                 
                 customerEl.textContent = `For ${docData.customer_name || 'Client'}`;
-                totalEl.textContent = docData.total ? `Total: £${docData.total.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '';
+                const currencySymbol = { GBP: '£', USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', ZAR: 'R', INR: '₹', AED: 'AED ', SGD: 'S$' }[docData.currency] || (docData.currency ? docData.currency + ' ' : '£');
+                totalEl.textContent = docData.total ? `Total: ${currencySymbol}${docData.total.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '';
                 messageEl.textContent = docData.cover_message || `Hi ${docData.customer_name || 'there'},\nHere is your requested quote.`;
                 
                 buildButtons();
@@ -237,8 +238,10 @@
             const messageBody = encodeURIComponent(`${messageEl.textContent}${linkText}`);
             
             // WhatsApp Button
-            const cleanPhone = docData.customer_phone ? docData.customer_phone.replace(/[^0-9]/g, '') : '';
-            const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${messageBody}` : `https://wa.me/?text=${messageBody}`;
+            const cleanPhone = docData.customer_phone ? docData.customer_phone.replace(/[^0-9+]/g, '') : '';
+            const waPhone = cleanPhone.replace('+', '');  // wa.me/ requires digits only
+            const smsPhone = cleanPhone;                  // sms: scheme needs + for international
+            const waLink = waPhone ? `https://wa.me/${waPhone}?text=${messageBody}` : `https://wa.me/?text=${messageBody}`;
             
             actionsGrid.innerHTML += `
                 <a href="${waLink}" target="_blank" class="btn btn-whatsapp">
@@ -250,7 +253,7 @@
             // SMS Button
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             const smsSeparator = isIOS ? '&' : '?';
-            const smsLink = `sms:${cleanPhone}${smsSeparator}body=${messageBody}`;
+            const smsLink = `sms:${smsPhone}${smsSeparator}body=${messageBody}`;
             
             actionsGrid.innerHTML += `
                 <a href="${smsLink}" class="btn" style="background: #34d399; color: white; box-shadow: 0 10px 15px -3px rgba(52, 211, 153, 0.3);">

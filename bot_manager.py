@@ -960,6 +960,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         tmp_ext = "docx" if is_docx else "xlsx"
         file_obj = await context.bot.get_file(update.message.document.file_id)
+
+        MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+        if file_obj.file_size and file_obj.file_size > MAX_UPLOAD_BYTES:
+            await status_msg.edit_text("That file is too large (max 20 MB). Please reduce the file size and try again.")
+            return
+
         tmp_path = os.path.join(TEMP_DIR, f"{user.id}_{file_obj.file_id}.{tmp_ext}")
         await file_obj.download_to_drive(custom_path=tmp_path)
 
@@ -1186,11 +1192,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             except RateLimitError:
                 await msg.edit_text(RATE_LIMIT_MSG)
                 return
-
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
+            finally:
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
 
             if not quote_data or not quote_data.get("line_items"):
                 await msg.edit_text(
@@ -1415,9 +1421,7 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
             try:
                 days = int(re.sub(r'[^0-9]', '', text))
                 if days <= 0: raise ValueError()
-                await asyncio.to_thread(
-                    lambda: database.supabase.table("user_configs").update({"validity_days": days}).eq("user_id", db_user["id"]).execute()
-                )
+                await database.supabase.table("user_configs").update({"validity_days": days}).eq("user_id", db_user["id"]).execute()
                 brand_dna["validity_days"] = days
             except Exception:
                 await update.message.reply_text("Please enter a valid number of days (e.g. 30).")
@@ -1562,11 +1566,11 @@ async def handle_text_or_voice(update: Update, context: ContextTypes.DEFAULT_TYP
         except RateLimitError:
             await msg.edit_text(RATE_LIMIT_MSG)
             return
-
-        try:
-            os.remove(filepath)
-        except Exception:
-            pass
+        finally:
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass
 
         if not quote_data or not quote_data.get("line_items"):
             await msg.edit_text(

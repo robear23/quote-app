@@ -43,6 +43,7 @@ bot_app = None
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global bot_app
+    settings.validate()
     await init_supabase()
     from bot_manager import build_application
     bot_app = build_application()
@@ -385,7 +386,7 @@ def share_page(doc_id: str):
 async def api_share_info(doc_id: str):
     """Returns details and a signed URL for a specific document."""
     try:
-        res = await database.supabase.table("documents").select("*, users(email)").eq("id", doc_id).execute()
+        res = await database.supabase.table("documents").select("*, users(email, currency)").eq("id", doc_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Document not found")
         doc = res.data[0]
@@ -414,6 +415,7 @@ async def api_share_info(doc_id: str):
             "email_subject": doc.get("email_subject"),
             "cover_message": doc.get("cover_message"),
             "total": float(doc.get("total") or 0),
+            "currency": (doc.get("users") or {}).get("currency") or "GBP",
             "created_at": doc.get("created_at"),
             "file_url": signed_url or doc.get("file_url"),
             "filename": file_url.split("/")[-1] if file_url else "quote.pdf"
@@ -851,7 +853,8 @@ async def billing_portal(request: Request):
         raise HTTPException(status_code=400, detail="No billing account found")
 
     try:
-        portal = stripe.billing_portal.Session.create(
+        portal = await asyncio.to_thread(
+            stripe.billing_portal.Session.create,
             customer=customer_id,
             return_url=f"{settings.APP_URL}/account",
         )
@@ -1016,18 +1019,19 @@ async def _handle_subscription_deleted(sub):
         if not user:
             return
 
-        return {
-            "id": doc["id"],
-            "customer_name": doc.get("customer_name"),
-            "customer_email": doc.get("customer_email"),
-            "customer_phone": doc.get("customer_phone"),
-            "email_subject": doc.get("email_subject"),
-            "cover_message": doc.get("cover_message"),
-            "total": float(doc.get("total") or 0),
-            "created_at": doc.get("created_at"),
-            "file_url": signed_url or doc.get("file_url"),
-            "filename": file_url.split("/")[-1] if file_url else "quote.pdf"
-        }
+        period_end = None
+        period_end_ts = _get(sub, "current_period_end")
+        if period_end_ts:
+            period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc)
+
+        await upsert_subscription(
+            user_id=user["id"],
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=_get(sub, "id"),
+            plan_tier="free",
+            status="canceled",
+            current_period_end=period_end,
+        )
         logger.info(f"User {user['id']} downgraded to free (subscription cancelled)")
     except Exception as e:
         logger.error(f"_handle_subscription_deleted failed: {e}", exc_info=True)

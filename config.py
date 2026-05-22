@@ -30,9 +30,6 @@ class Settings:
     # Price ID for the £5/month Pro plan — create in Stripe dashboard
     STRIPE_PRO_PRICE_ID: str = os.getenv("STRIPE_PRO_PRICE_ID", "").strip()
 
-    # Supabase Storage bucket for generated quote documents
-    SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
-
     # Supabase Storage bucket for onboarding sample files (created separately in Supabase dashboard)
     SUPABASE_ONBOARDING_BUCKET: str = os.getenv("SUPABASE_ONBOARDING_BUCKET", "onboarding")
 
@@ -47,5 +44,20 @@ class Settings:
 
     # Session signing secret — set a long random string in production
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "change-me-in-production").strip()
+
+    def validate(self):
+        """Raise ValueError listing all missing required environment variables."""
+        _REQUIRED = [
+            "SUPABASE_URL",
+            "SUPABASE_KEY",
+            "TELEGRAM_BOT_TOKEN",
+            "GEMINI_API_KEY",
+            "SESSION_SECRET",
+        ]
+        missing = [k for k in _REQUIRED if not getattr(self, k)]
+        if missing:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        if self.SESSION_SECRET == "change-me-in-production":
+            raise ValueError("SESSION_SECRET must be set to a unique secret in production")
 
 settings = Settings()
