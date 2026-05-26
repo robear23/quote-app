@@ -386,10 +386,20 @@ def share_page(doc_id: str):
 async def api_share_info(doc_id: str):
     """Returns details and a signed URL for a specific document."""
     try:
-        res = await database.supabase.table("documents").select("*, users(email, currency)").eq("id", doc_id).execute()
+        res = await database.supabase.table("documents").select("*, users(email)").eq("id", doc_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Document not found")
         doc = res.data[0]
+
+        # Fetch currency from user_configs (currency lives there, not on users)
+        currency = "GBP"
+        if doc.get("user_id"):
+            try:
+                cfg_res = await database.supabase.table("user_configs").select("currency").eq("user_id", doc["user_id"]).execute()
+                if cfg_res.data and cfg_res.data[0].get("currency"):
+                    currency = cfg_res.data[0]["currency"]
+            except Exception as e:
+                logger.warning(f"Failed to get currency for doc {doc_id}: {e}")
 
         # Generate a signed URL for the file (valid for 1 hour)
         file_url = doc.get("file_url")
@@ -415,7 +425,7 @@ async def api_share_info(doc_id: str):
             "email_subject": doc.get("email_subject"),
             "cover_message": doc.get("cover_message"),
             "total": float(doc.get("total") or 0),
-            "currency": (doc.get("users") or {}).get("currency") or "GBP",
+            "currency": currency,
             "created_at": doc.get("created_at"),
             "file_url": signed_url or doc.get("file_url"),
             "filename": file_url.split("/")[-1] if file_url else "quote.pdf"
