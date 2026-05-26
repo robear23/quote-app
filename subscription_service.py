@@ -144,11 +144,13 @@ async def redeem_promo_code(user_id: str, code: str) -> dict:
         "benefit_value": benefit_value,
     }).execute()
 
-    # Increment uses_count
-    await database.supabase.table("promo_codes") \
+    # Optimistic lock on capped codes guards against two concurrent requests both passing the gate.
+    update_q = database.supabase.table("promo_codes") \
         .update({"uses_count": promo.get("uses_count", 0) + 1}) \
-        .eq("code", code) \
-        .execute()
+        .eq("code", code)
+    if max_uses is not None:
+        update_q = update_q.eq("uses_count", promo.get("uses_count", 0))
+    await update_q.execute()
 
     expires_str = expires_at.strftime("%-d %B %Y")
     return {
@@ -182,7 +184,7 @@ async def get_billing_period_start(user_id: str) -> datetime:
         .execute()
     sub = res.data[0] if res.data else None
 
-    if sub and sub.get("plan_tier") == "premium" and sub.get("status") in ("active", "trialing"):
+    if sub and sub.get("plan_tier") in ("premium", "pro") and sub.get("status") in ("active", "trialing"):
         start_str = sub.get("current_period_start")
         if start_str:
             return datetime.fromisoformat(start_str.replace("Z", "+00:00"))

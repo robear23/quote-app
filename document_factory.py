@@ -658,9 +658,10 @@ class DocumentFactory:
 
             try:
                 from pdf2image import convert_from_bytes
-                images = convert_from_bytes(
-                    open(tmp_pdf, "rb").read(), first_page=1, last_page=1, dpi=150
-                )
+                with open(tmp_pdf, "rb") as _pdf_f:
+                    images = convert_from_bytes(
+                        _pdf_f.read(), first_page=1, last_page=1, dpi=150
+                    )
             except Exception as e:
                 logger.warning(f"pdf2image conversion failed: {e}")
                 return None

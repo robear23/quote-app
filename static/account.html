@@ -451,10 +451,10 @@
         document.getElementById('stateLoading').style.display = 'none';
         document.getElementById('accountContent').style.display = 'block';
 
-        // Nav email
-        document.getElementById('navRight').innerHTML =
-            `<span style="font-size:0.82rem;color:var(--muted)">${d.email}</span>` +
-            `<form method="POST" action="/auth/logout" style="margin:0"><button type="submit" class="nav-logout">Sign out</button></form>`;
+        // Nav email — use textContent to avoid XSS with malformed email values
+        const navRight = document.getElementById('navRight');
+        navRight.innerHTML = '<span style="font-size:0.82rem;color:var(--muted)"></span><form method="POST" action="/auth/logout" style="margin:0"><button type="submit" class="nav-logout">Sign out</button></form>';
+        navRight.querySelector('span').textContent = d.email;
 
         // Plan
         const tier = d.subscription_tier;

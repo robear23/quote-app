@@ -746,6 +746,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Reply *2* for Excel (.xlsx)",
                 parse_mode="Markdown"
             )
+        elif state == "ONBOARDING_REANALYSE":
+            await update.message.reply_text(
+                "I'm re-examining your template. Describe a field you think I missed, or type *skip* to re-analyse without a hint.",
+                parse_mode="Markdown"
+            )
+        elif state == "AWAITING_CONFIG":
+            brand_dna = await get_brand_dna(existing_user["id"])
+            if not brand_dna.get("validity_days"):
+                await update.message.reply_text(
+                    "Almost there! How many days should your quotes be *valid* for by default? (e.g. 30)",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    "Finishing up your configuration — please answer the setup question above."
+                )
         elif state in ("ACTIVE", "AWAITING_CONFIRMATION", "AWAITING_CUSTOM_FIELD"):
             await update.message.reply_text(
                 "Your account is active! Send me a voice note, photo, or type the job details to generate a quote."

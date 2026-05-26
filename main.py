@@ -108,17 +108,17 @@ async def _generate_login_token(user_id: str) -> str:
 
 
 async def _consume_login_token(token: str) -> str | None:
-    """Returns user_id if token is valid and unexpired, then deletes it (single-use)."""
+    """Atomic single-use: DELETE + gt(expires_at) ensures only one concurrent caller gets the row."""
     try:
-        res = await database.supabase.table("login_tokens").select("user_id, expires_at").eq("token", token).execute()
+        now = datetime.now(tz=timezone.utc).isoformat()
+        res = await database.supabase.table("login_tokens") \
+            .delete() \
+            .eq("token", token) \
+            .gt("expires_at", now) \
+            .execute()
         if not res.data:
             return None
-        row = res.data[0]
-        await database.supabase.table("login_tokens").delete().eq("token", token).execute()
-        expires_at = datetime.fromisoformat(row["expires_at"])
-        if datetime.now(tz=timezone.utc) > expires_at:
-            return None
-        return row["user_id"]
+        return res.data[0]["user_id"]
     except Exception as e:
         logger.error(f"Failed to consume login token: {e}")
         return None
@@ -478,12 +478,16 @@ async def initiate_handshake(email: str):
     if not email or not EMAIL_RE.match(email) or len(email) > 254:
         raise HTTPException(status_code=400, detail="Invalid email address")
 
-    # Rate limit: one email per address per 60 seconds
+    # Rate limit: one email per address per 60 seconds.
+    # Prune stale entries every time we write, keeping the dict small.
     now = time.time()
     if now - _handshake_last_sent.get(email, 0) < HANDSHAKE_COOLDOWN_SECONDS:
-        # Return the same response as success so as not to reveal rate limiting
         return JSONResponse({"status": "check_email"})
     _handshake_last_sent[email] = now
+    stale_cutoff = now - HANDSHAKE_COOLDOWN_SECONDS * 2
+    stale_keys = [k for k, v in _handshake_last_sent.items() if v < stale_cutoff]
+    for k in stale_keys:
+        _handshake_last_sent.pop(k, None)
 
     if not settings.RESEND_API_KEY:
         raise HTTPException(status_code=503, detail="Email service not configured")
@@ -821,7 +825,12 @@ async def sync_subscription(request: Request):
         from subscription_service import upsert_subscription
 
         status = _get(sub, "status") or "canceled"
-        tier = "premium" if status in ("active", "trialing") else "free"
+        if status in ("active", "trialing"):
+            items_data = _get(_get(sub, "items") or {}, "data") or []
+            sub_price_id = _get(_get(items_data[0], "price") if items_data else {}, "id") if items_data else None
+            tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
+        else:
+            tier = "free"
         period_end_ts = _get(sub, "current_period_end")
         period_start_ts = _get(sub, "current_period_start")
         period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
