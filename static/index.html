@@ -445,11 +445,56 @@
             width: 100%;
             max-width: 780px;
             margin: 0 auto;
+            position: relative;
         }
 
         .demo-video {
             width: 100%;
             display: block;
+        }
+
+        /* Play overlay */
+        .video-play-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(160deg, rgba(10,14,26,0.72) 0%, rgba(10,14,26,0.55) 100%);
+            cursor: pointer;
+            transition: opacity 0.35s ease;
+            border-radius: 16px;
+        }
+
+        .video-play-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .video-play-btn {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+            backdrop-filter: blur(6px);
+        }
+
+        .video-play-overlay:hover .video-play-btn {
+            transform: scale(1.1);
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.85);
+        }
+
+        .video-play-btn svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+            margin-left: 4px; /* optical centre for triangle */
         }
 
         .video-section {
@@ -1463,6 +1508,11 @@
                             controls
                             preload="metadata"
                         ></video>
+                        <div class="video-play-overlay" id="video-play-overlay" aria-label="Play demo video">
+                            <div class="video-play-btn">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1771,6 +1821,30 @@
             loader.style.display = 'none';
             submitBtn.disabled = false;
         });
+
+        // Demo video play overlay
+        (function () {
+            const video = document.getElementById('demo-video');
+            const overlay = document.getElementById('video-play-overlay');
+            if (!video || !overlay) return;
+
+            function hideOverlay() {
+                overlay.classList.add('hidden');
+            }
+
+            overlay.addEventListener('click', function () {
+                video.play();
+                hideOverlay();
+            });
+
+            // Also hide if the user uses the native controls to play
+            video.addEventListener('play', hideOverlay);
+
+            // Restore overlay when video ends so first frame is hidden again
+            video.addEventListener('ended', function () {
+                overlay.classList.remove('hidden');
+            });
+        })();
 
         // Demo tabs
         function switchTab(name, btn) {
