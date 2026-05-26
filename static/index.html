@@ -410,18 +410,17 @@
             line-height: 1.7;
         }
 
-        /* ── How it works layout ── */
-        .how-it-works-layout {
+        /* ── How it works – new stacked layout ── */
+        .steps-row {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 64px;
-            align-items: start;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 40px;
         }
 
         @media (max-width: 860px) {
-            .how-it-works-layout {
+            .steps-row {
                 grid-template-columns: 1fr;
-                gap: 48px;
             }
         }
 
@@ -444,13 +443,25 @@
             box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
             background: #000;
             width: 100%;
-            position: sticky;
-            top: 96px;
+            max-width: 780px;
+            margin: 0 auto;
         }
 
         .demo-video {
             width: 100%;
             display: block;
+        }
+
+        .video-section {
+            margin-top: 72px;
+            text-align: center;
+        }
+
+        .video-heading {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 32px;
         }
 
         .demo-card-header {
@@ -680,11 +691,6 @@
             50% { transform: translateY(-8px); }
         }
 
-        .how-it-works-layout .demo-card {
-            position: sticky;
-            top: 96px; /* clears the fixed nav with comfortable breathing room */
-        }
-
         /* Step cards: slide in from right on visibility */
         .step-card {
             opacity: 0;
@@ -723,16 +729,16 @@
             50%, 100% { transform: translateX(200%); }
         }
 
-        /* Telegram prereq notice slide-in from left */
+        /* Telegram prereq notice fade-up */
         .telegram-prereq {
             opacity: 0;
-            transform: translateX(-40px);
+            transform: translateY(20px);
             transition: opacity 0.55s ease, transform 0.55s ease;
         }
 
         .telegram-prereq.visible {
             opacity: 1;
-            transform: translateX(0);
+            transform: translateY(0);
         }
 
         /* Pulse on the YES button in demo */
@@ -757,13 +763,6 @@
             60% { transform: translateY(-2px); }
         }
 
-
-        /* Steps (right column) */
-        .steps {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
 
         .step-card {
             background: var(--surface);
@@ -1406,10 +1405,55 @@
                 <h2 class="section-title fade-up">Up and running in minutes</h2>
                 <p class="section-sub fade-up">Three steps to never manually create another quote again.</p>
 
-                <div class="how-it-works-layout">
+                <!-- Telegram prereq – full width -->
+                <div class="telegram-prereq fade-up">
+                    <span class="tg-prereq-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z"
+                                fill="#2AABEE" />
+                        </svg>
+                    </span>
+                    <span>
+                        You'll need <strong>Telegram</strong> on your phone to send quotes on the go, and we
+                        recommend the <strong>desktop app</strong> to review and send finished quotes from your
+                        computer.
+                        <span class="tg-links">
+                            <a href="https://telegram.org/dl/android" target="_blank" rel="noopener">Android</a>
+                            <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener">iOS</a>
+                            <a href="https://desktop.telegram.org" target="_blank" rel="noopener">Desktop</a>
+                        </span>
+                    </span>
+                </div>
 
-                    <!-- Left: Demo video -->
-                    <div class="demo-video-wrapper fade-up">
+                <!-- 3 steps – horizontal row -->
+                <div class="steps-row">
+                    <div class="step-card" style="transition-delay:0.05s">
+                        <div class="step-number">1</div>
+                        <h3>Register &amp; Link</h3>
+                        <p>Enter your email below. We generate a unique link that connects your account to Telegram
+                            in a single tap.</p>
+                    </div>
+                    <div class="step-card" style="transition-delay:0.18s">
+                        <div class="step-number">2</div>
+                        <h3>Upload Your Template</h3>
+                        <p>Send your existing quote template (Word, Excel, or PDF). The AI reads your business name,
+                            VAT rate, bank details, and layout — then uses it for every quote it generates.</p>
+                    </div>
+                    <div class="step-card" style="transition-delay:0.31s">
+                        <div class="step-number">3</div>
+                        <h3>Generate Quotes</h3>
+                        <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded
+                            Word or Excel quote back in seconds. Review it on your computer in the evening, then
+                            email it straight to the client.</p>
+                    </div>
+                </div>
+
+                <!-- Video – centred -->
+                <div class="video-section fade-up">
+                    <h3 class="video-heading">See it in action</h3>
+                    <div class="demo-video-wrapper">
                         <video
                             id="demo-video"
                             class="demo-video"
@@ -1420,51 +1464,6 @@
                             preload="metadata"
                         ></video>
                     </div>
-
-                    <!-- Right: Steps stacked vertically -->
-                    <div class="steps">
-                        <div class="telegram-prereq fade-up">
-                            <span class="tg-prereq-icon">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                    xmlns="http://www.w3.org/2000/svg">
-                                    <path
-                                        d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z"
-                                        fill="#2AABEE" />
-                                </svg>
-                            </span>
-                            <span>
-                                You'll need <strong>Telegram</strong> on your phone to send quotes on the go, and we
-                                recommend the <strong>desktop app</strong> to review and send finished quotes from your
-                                computer.
-                                <span class="tg-links">
-                                    <a href="https://telegram.org/dl/android" target="_blank" rel="noopener">Android</a>
-                                    <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener">iOS</a>
-                                    <a href="https://desktop.telegram.org" target="_blank" rel="noopener">Desktop</a>
-                                </span>
-                            </span>
-                        </div>
-
-                        <div class="step-card" style="transition-delay:0.05s">
-                            <div class="step-number">1</div>
-                            <h3>Register &amp; Link</h3>
-                            <p>Enter your email below. We generate a unique link that connects your account to Telegram
-                                in a single tap.</p>
-                        </div>
-                        <div class="step-card" style="transition-delay:0.18s">
-                            <div class="step-number">2</div>
-                            <h3>Upload Your Template</h3>
-                            <p>Send your existing quote template (Word, Excel, or PDF). The AI reads your business name,
-                                VAT rate, bank details, and layout — then uses it for every quote it generates.</p>
-                        </div>
-                        <div class="step-card" style="transition-delay:0.31s">
-                            <div class="step-number">3</div>
-                            <h3>Generate Quotes</h3>
-                            <p>Voice note, photo of your notes, or a quick text — describe the job and get a branded
-                                Word or Excel quote back in seconds. Review it on your computer in the evening, then
-                                email it straight to the client.</p>
-                        </div>
-                    </div>
-
                 </div>
             </div>
         </section>
@@ -1794,24 +1793,6 @@
             entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
         }, { threshold: 0.12 });
         document.querySelectorAll('.fade-up, .step-card, .telegram-prereq').forEach(el => observer.observe(el));
-
-        (function () {
-            const video = document.getElementById('demo-video');
-            if (!video) return;
-            const videoObserver = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach((entry) => {
-                        if (entry.isIntersecting) {
-                            video.play().catch(() => {});
-                        } else {
-                            video.pause();
-                        }
-                    });
-                },
-                { threshold: 0.4 }
-            );
-            videoObserver.observe(video);
-        })();
 
     </script>
 
