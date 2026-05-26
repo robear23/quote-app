@@ -106,6 +106,16 @@
         .cancel-notice-text { font-size: 0.85rem; color: #fcd34d; line-height: 1.5; }
         .cancel-notice-text strong { font-weight: 700; }
 
+        /* Launch bonus notice */
+        .launch-notice {
+            display: flex; align-items: flex-start; gap: 12px;
+            margin-top: 16px; padding: 12px 14px; border-radius: 12px;
+            background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25);
+        }
+        .launch-notice-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+        .launch-notice-text { font-size: 0.82rem; color: #c4b5fd; line-height: 1.5; }
+        .launch-notice-text strong { font-weight: 600; color: #ddd6fe; }
+
         /* Usage bar */
         .usage-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         .usage-label { font-size: 0.9rem; color: var(--secondary); }
@@ -243,6 +253,21 @@
     <!-- Account content -->
     <div id="accountContent" style="display:none">
 
+        <!-- Telegram -->
+        <div class="card">
+            <div class="card-title">Telegram Bot</div>
+            <div class="telegram-row">
+                <div class="telegram-icon">✈️</div>
+                <div class="telegram-info">
+                    <h3>Quote Me Bot
+                        <span class="linked-badge" id="linkedBadge" style="display:none">✓ Linked</span>
+                    </h3>
+                    <p id="telegramDesc">Open the bot to start generating quotes by voice, photo, or text.</p>
+                </div>
+                <a id="telegramBtn" href="#" class="btn btn-telegram btn-sm" target="_blank">Open in Telegram</a>
+            </div>
+        </div>
+
         <!-- Plan & usage -->
         <div class="card">
             <div class="card-title">Subscription</div>
@@ -255,6 +280,14 @@
                     <div class="plan-pill-dot"></div>
                     <span id="planPillText">Free</span>
                 </div>
+            </div>
+
+            <!-- Launch bonus notice (free users only) -->
+            <div class="launch-notice" id="launchNotice" style="display:none">
+                <span class="launch-notice-icon">🎁</span>
+                <span class="launch-notice-text">
+                    <strong>Launch bonus active.</strong> You get <strong>10 quotes</strong> this month instead of the usual <strong>5</strong> — our thanks for joining early.
+                </span>
             </div>
 
             <div style="margin-top: 28px;">
@@ -330,21 +363,6 @@
                     border-radius:8px; color:var(--primary); font-size:0.9rem; outline:none;
                 " />
                 <button class="btn btn-ghost btn-sm" id="promoBtn" onclick="redeemPromo()">Apply</button>
-            </div>
-        </div>
-
-        <!-- Telegram -->
-        <div class="card">
-            <div class="card-title">Telegram Bot</div>
-            <div class="telegram-row">
-                <div class="telegram-icon">✈️</div>
-                <div class="telegram-info">
-                    <h3>Quote Me Bot
-                        <span class="linked-badge" id="linkedBadge" style="display:none">✓ Linked</span>
-                    </h3>
-                    <p id="telegramDesc">Open the bot to start generating quotes by voice, photo, or text.</p>
-                </div>
-                <a id="telegramBtn" href="#" class="btn btn-telegram btn-sm" target="_blank">Open in Telegram</a>
             </div>
         </div>
 
@@ -502,6 +520,7 @@
         // Free → show both Pro and Premium upgrade options
         // Pro → show only Premium upgrade option (+ billing)
         // Premium → show only billing
+        document.getElementById('launchNotice').style.display = (tier === 'free') ? 'flex' : 'none';
         document.getElementById('upgradeProCard').style.display = (tier === 'free') ? 'block' : 'none';
         document.getElementById('upgradePremiumCard').style.display = (tier === 'free' || isPro) ? 'block' : 'none';
         document.getElementById('billingCard').style.display = isPaid ? 'block' : 'none';
