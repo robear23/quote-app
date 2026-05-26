@@ -437,6 +437,22 @@
             box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4);
         }
 
+        /* Demo video (replaces demo-card) */
+        .demo-video-wrapper {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+            background: #000;
+            width: 100%;
+            position: sticky;
+            top: 96px;
+        }
+
+        .demo-video {
+            width: 100%;
+            display: block;
+        }
+
         .demo-card-header {
             display: flex;
             align-items: center;
@@ -1392,110 +1408,17 @@
 
                 <div class="how-it-works-layout">
 
-                    <!-- Left: Demo widget -->
-                    <div class="demo-card fade-up">
-                        <div class="demo-card-header">
-                            <div class="demo-avatar">QM</div>
-                            <div>
-                                <div class="demo-name">Quote Me</div>
-                                <div class="demo-sub-name">AI Assistant · Online</div>
-                            </div>
-                        </div>
-
-                        <div class="demo-tabs-label">Try it →</div>
-                        <div class="demo-tabs">
-                            <button class="demo-tab active" onclick="switchTab('voice', this)">🎙️ Voice</button>
-                            <button class="demo-tab" onclick="switchTab('photo', this)">📸 Photo</button>
-                            <button class="demo-tab" onclick="switchTab('text', this)">💬 Text</button>
-                        </div>
-
-                        <!-- Voice tab -->
-                        <div class="demo-panel active" id="tab-voice">
-                            <div>
-                                <div class="msg msg-user">🎙️ Voice note — 0:12</div>
-                                <div class="msg-time" style="text-align:right">Just now</div>
-                            </div>
-                            <div>
-                                <div class="msg msg-bot">
-                                    Got it! Here's what I extracted:<br><br>
-                                    <strong>Quote for John Smith</strong><br>
-                                    • Replace boiler — 1 × £850<br>
-                                    • Labour (4hrs) — 4 × £65<br>
-                                    <strong>Total: £1,110.00</strong><br><br>
-                                    Does this look right? Press YES or tell me what to change.
-                                </div>
-                            </div>
-                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                            <div>
-                                <div class="msg-doc">
-                                    <span class="doc-icon">📄</span>
-                                    <div>
-                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Smith_001.docx</div>
-                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
-                                            finalise and send from your computer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Photo tab -->
-                        <div class="demo-panel" id="tab-photo">
-                            <div>
-                                <div class="msg msg-user">📸 Photo · site_notes.jpg</div>
-                                <div class="msg-time" style="text-align:right">Just now</div>
-                            </div>
-                            <div>
-                                <div class="msg msg-bot">
-                                    Read your notes! Here's what I found:<br><br>
-                                    <strong>Quote for D. Patel</strong><br>
-                                    • Rewire kitchen sockets — 1 × £220<br>
-                                    • New consumer unit — 1 × £480<br>
-                                    <strong>Total: £700.00</strong><br><br>
-                                    Does this look right? Press YES or tell me what to change.
-                                </div>
-                            </div>
-                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                            <div>
-                                <div class="msg-doc">
-                                    <span class="doc-icon">📄</span>
-                                    <div>
-                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Patel_001.docx</div>
-                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
-                                            finalise and send from your computer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Text tab -->
-                        <div class="demo-panel" id="tab-text">
-                            <div>
-                                <div class="msg msg-user">Quote for Sarah Jones — fit new radiator, 3 hrs labour at £55,
-                                    parts £90</div>
-                                <div class="msg-time" style="text-align:right">Just now</div>
-                            </div>
-                            <div>
-                                <div class="msg msg-bot">
-                                    Here's your quote:<br><br>
-                                    <strong>Quote for Sarah Jones</strong><br>
-                                    • Fit new radiator — 1 × £90<br>
-                                    • Labour (3hrs) — 3 × £55<br>
-                                    <strong>Total: £255.00</strong><br><br>
-                                    Does this look right? Press YES or tell me what to change.
-                                </div>
-                            </div>
-                            <div class="tg-yes-btn"><span class="tg-yes-check">✓</span> YES</div>
-                            <div>
-                                <div class="msg-doc">
-                                    <span class="doc-icon">📄</span>
-                                    <div>
-                                        <div style="font-weight:600;font-size:0.85rem;">Quote_Jones_001.docx</div>
-                                        <div style="font-size:0.75rem;color:var(--secondary)">Ready to review · open,
-                                            finalise and send from your computer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Left: Demo video -->
+                    <div class="demo-video-wrapper fade-up">
+                        <video
+                            id="demo-video"
+                            class="demo-video"
+                            src="/static/demo_landing_page_web.mp4"
+                            muted
+                            playsinline
+                            controls
+                            preload="metadata"
+                        ></video>
                     </div>
 
                     <!-- Right: Steps stacked vertically -->
@@ -1871,6 +1794,24 @@
             entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
         }, { threshold: 0.12 });
         document.querySelectorAll('.fade-up, .step-card, .telegram-prereq').forEach(el => observer.observe(el));
+
+        (function () {
+            const video = document.getElementById('demo-video');
+            if (!video) return;
+            const videoObserver = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            video.play().catch(() => {});
+                        } else {
+                            video.pause();
+                        }
+                    });
+                },
+                { threshold: 0.4 }
+            );
+            videoObserver.observe(video);
+        })();
 
     </script>
 
