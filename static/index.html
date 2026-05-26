@@ -218,13 +218,15 @@
 
         /* ── Hero ── */
         :root {
-            --nav-h: 84px; /* fallback; overridden by JS */
+            --nav-h: 84px;
+            /* fallback; overridden by JS */
         }
 
         #hero {
             position: relative;
             min-height: 100vh;
-            padding-top: var(--nav-h); /* content clears nav; video stays full-viewport behind translucent nav */
+            padding-top: var(--nav-h);
+            /* content clears nav; video stays full-viewport behind translucent nav */
             text-align: center;
             overflow: hidden;
             display: flex;
@@ -244,7 +246,7 @@
             opacity: 0.55;
         }
 
-        #hero > .container {
+        #hero>.container {
             position: relative;
             z-index: 1;
         }
@@ -252,12 +254,10 @@
         .hero-overlay {
             position: absolute;
             inset: 0;
-            background: linear-gradient(
-                to bottom,
-                rgba(10, 15, 30, 0.45) 0%,
-                rgba(10, 15, 30, 0.25) 60%,
-                rgba(10, 15, 30, 0.5) 100%
-            );
+            background: linear-gradient(to bottom,
+                    rgba(10, 15, 30, 0.45) 0%,
+                    rgba(10, 15, 30, 0.25) 60%,
+                    rgba(10, 15, 30, 0.5) 100%);
             z-index: 0;
         }
 
@@ -375,7 +375,8 @@
             border-radius: 999px;
             margin-left: 8px;
             vertical-align: middle;
-            display: none; /* Hidden as features are now built-in */
+            display: none;
+            /* Hidden as features are now built-in */
         }
 
         /* ── How it works ── */
@@ -460,7 +461,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(160deg, rgba(10,14,26,0.72) 0%, rgba(10,14,26,0.55) 100%);
+            background: #000;
             cursor: pointer;
             transition: opacity 0.35s ease;
             border-radius: 16px;
@@ -475,8 +476,8 @@
             width: 72px;
             height: 72px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.55);
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.55);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -486,15 +487,16 @@
 
         .video-play-overlay:hover .video-play-btn {
             transform: scale(1.1);
-            background: rgba(255,255,255,0.25);
-            border-color: rgba(255,255,255,0.85);
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.85);
         }
 
         .video-play-btn svg {
             width: 28px;
             height: 28px;
             fill: white;
-            margin-left: 4px; /* optical centre for triangle */
+            margin-left: 4px;
+            /* optical centre for triangle */
         }
 
         .video-section {
@@ -732,8 +734,15 @@
         }
 
         @keyframes float-card {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-8px); }
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-8px);
+            }
         }
 
         /* Step cards: slide in from right on visibility */
@@ -764,14 +773,20 @@
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%);
+            background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.2) 50%, transparent 60%);
             transform: translateX(-100%);
             animation: shimmer-step 3s ease-in-out infinite;
         }
 
         @keyframes shimmer-step {
-            0% { transform: translateX(-100%); }
-            50%, 100% { transform: translateX(200%); }
+            0% {
+                transform: translateX(-100%);
+            }
+
+            50%,
+            100% {
+                transform: translateX(200%);
+            }
         }
 
         /* Telegram prereq notice fade-up */
@@ -792,8 +807,15 @@
         }
 
         @keyframes pulse-yes {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
-            50% { box-shadow: 0 0 0 6px rgba(59,130,246,0.2); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+            }
         }
 
         /* Doc icon bounce */
@@ -803,9 +825,19 @@
         }
 
         @keyframes bounce-doc {
-            0%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-4px); }
-            60% { transform: translateY(-2px); }
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-4px);
+            }
+
+            60% {
+                transform: translateY(-2px);
+            }
         }
 
 
@@ -1145,7 +1177,7 @@
         .launch-card {
             border-color: rgba(245, 158, 11, 0.45);
             box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25),
-                        0 24px 48px rgba(245, 158, 11, 0.08);
+                0 24px 48px rgba(245, 158, 11, 0.08);
         }
 
         .launch-badge {
@@ -1171,23 +1203,38 @@
             position: absolute;
             inset: 0;
             background: linear-gradient(90deg,
-                transparent 0%,
-                rgba(255,255,255,0.45) 50%,
-                transparent 100%);
+                    transparent 0%,
+                    rgba(255, 255, 255, 0.45) 50%,
+                    transparent 100%);
             transform: translateX(-120%);
             animation: launch-shimmer 2.2s ease-in-out infinite;
             border-radius: 999px;
         }
 
         @keyframes launch-shimmer {
-            0%   { transform: translateX(-120%); }
-            60%  { transform: translateX(220%); }
-            100% { transform: translateX(220%); }
+            0% {
+                transform: translateX(-120%);
+            }
+
+            60% {
+                transform: translateX(220%);
+            }
+
+            100% {
+                transform: translateX(220%);
+            }
         }
 
         @keyframes launch-pulse {
-            0%, 100% { box-shadow: 0 0 0 0   rgba(245, 158, 11, 0.5); }
-            50%       { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+            }
         }
 
         .bonus-feature {
@@ -1209,8 +1256,15 @@
         }
 
         @keyframes bonus-float {
-            0%, 100% { transform: translateY(0px); }
-            50%       { transform: translateY(-3px); }
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-3px);
+            }
         }
 
         .pricing-name {
@@ -1419,7 +1473,8 @@
 
         <!-- Hero -->
         <section id="hero">
-            <img src="/static/hero_photo_trade.png" class="hero-bg" alt="Tradesperson taking a photo of a quote illustration">
+            <img src="/static/hero_photo_trade.png" class="hero-bg"
+                alt="Tradesperson taking a photo of a quote illustration">
             <div class="hero-overlay"></div>
 
             <div class="container">
@@ -1453,8 +1508,7 @@
                 <!-- Telegram prereq – full width -->
                 <div class="telegram-prereq fade-up">
                     <span class="tg-prereq-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            xmlns="http://www.w3.org/2000/svg">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path
                                 d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.708-1.67 7.87c-.125.558-.453.694-.918.432l-2.54-1.873-1.226 1.18c-.135.135-.25.25-.512.25l.182-2.584 4.7-4.247c.204-.182-.044-.283-.317-.1L7.89 14.17l-2.497-.78c-.543-.17-.554-.543.113-.803l9.73-3.75c.452-.163.848.1.694.87z"
                                 fill="#2AABEE" />
@@ -1483,7 +1537,7 @@
                     <div class="step-card" style="transition-delay:0.18s">
                         <div class="step-number">2</div>
                         <h3>Upload Your Template</h3>
-                        <p>Send your existing quote template (Word, Excel, or PDF). The AI reads your business name,
+                        <p>Send your existing quote template (Word or Excel). The AI reads your business name,
                             VAT rate, bank details, and layout — then uses it for every quote it generates.</p>
                     </div>
                     <div class="step-card" style="transition-delay:0.31s">
@@ -1499,18 +1553,13 @@
                 <div class="video-section fade-up">
                     <h3 class="video-heading">See it in action</h3>
                     <div class="demo-video-wrapper">
-                        <video
-                            id="demo-video"
-                            class="demo-video"
-                            src="/static/demo_landing_page_web.mp4"
-                            muted
-                            playsinline
-                            controls
-                            preload="metadata"
-                        ></video>
+                        <video id="demo-video" class="demo-video" src="/static/demo_landing_page_web.mp4" muted
+                            playsinline controls preload="metadata"></video>
                         <div class="video-play-overlay" id="video-play-overlay" aria-label="Play demo video">
                             <div class="video-play-btn">
-                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
                             </div>
                         </div>
                     </div>
@@ -1591,7 +1640,8 @@
                         <div class="pricing-period">forever</div>
                         <ul class="pricing-features">
                             <li><span class="check">✓</span> 5 quotes per month</li>
-                            <li class="bonus-feature"><span class="bonus-icon">✨</span> +5 bonus quotes, first month</li>
+                            <li class="bonus-feature"><span class="bonus-icon">✨</span> +5 bonus quotes, first month
+                            </li>
                             <li><span class="check">✓</span> Voice, photo &amp; text input</li>
                             <li><span class="check">✓</span> Brand DNA training</li>
                             <li><span class="check">✓</span> Word &amp; Excel output</li>
@@ -1698,18 +1748,23 @@
         </section>
 
         <!-- Contact -->
-        <section id="contact" class="section" style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+        <section id="contact" class="section"
+            style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
             <div class="container">
                 <div class="section-label fade-up">Contact</div>
                 <h2 class="section-title fade-up">Get in touch</h2>
-                <p class="section-sub fade-up" style="margin-bottom: 0;">Have any questions? Need any support?<br>Email us at <a href="mailto:contact@foresttechsolutions.net" style="color: var(--accent); text-decoration: none; font-weight: 600;">contact@foresttechsolutions.net</a></p>
+                <p class="section-sub fade-up" style="margin-bottom: 0;">Have any questions? Need any support?<br>Email
+                    us at <a href="mailto:contact@foresttechsolutions.net"
+                        style="color: var(--accent); text-decoration: none; font-weight: 600;">contact@foresttechsolutions.net</a>
+                </p>
             </div>
         </section>
 
         <!-- Footer -->
         <footer>
             <div class="container">
-                <p>© 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" target="_blank" style="color: inherit; text-decoration: underline;">ForestTech Solutions</a></p>
+                <p>© 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/"
+                        target="_blank" style="color: inherit; text-decoration: underline;">ForestTech Solutions</a></p>
             </div>
         </footer>
 
