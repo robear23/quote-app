@@ -689,9 +689,9 @@ async def api_account(request: Request):
                             stripe.Subscription.retrieve, _get(subs.data[0], "id")
                         )
             if stripe_sub:
-                raw = stripe_sub.__dict__
-                logger.info(f"Stripe sub __dict__ keys: {sorted(raw.keys())}")
-                logger.info(f"Direct attrs: cpe={stripe_sub.current_period_end!r} cps={stripe_sub.current_period_start!r} bca={stripe_sub.billing_cycle_anchor!r} created={stripe_sub.created!r} status={stripe_sub.status!r}")
+                data = stripe_sub._data if hasattr(stripe_sub, '_data') else {}
+                logger.info(f"Stripe _data keys: {sorted(data.keys())}")
+                logger.info(f"_data cpe={data.get('current_period_end')!r} cps={data.get('current_period_start')!r} bca={data.get('billing_cycle_anchor')!r} created={data.get('created')!r}")
                 pe_ts = _get(stripe_sub, "current_period_end")
                 ps_ts = _get(stripe_sub, "current_period_start")
                 period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
