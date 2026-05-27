@@ -688,6 +688,7 @@ async def api_account(request: Request):
                         stripe_sub = await asyncio.to_thread(
                             stripe.Subscription.retrieve, _get(subs.data[0], "id")
                         )
+            logger.info(f"stripe_sub type={type(stripe_sub).__name__!r} is_none={stripe_sub is None} bool={bool(stripe_sub) if stripe_sub is not None else 'n/a'} _data_len={len(stripe_sub._data) if (stripe_sub is not None and hasattr(stripe_sub, '_data')) else 'n/a'}")
             if stripe_sub:
                 data = stripe_sub._data if hasattr(stripe_sub, '_data') else {}
                 logger.info(f"Stripe _data keys: {sorted(data.keys())}")
