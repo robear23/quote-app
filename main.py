@@ -659,48 +659,58 @@ async def api_account(request: Request):
     # Subscription period end and cancellation state (if premium)
     period_end = None
     cancel_at_period_end = False
+    stripe_sub_id_from_db = None
     try:
         sub_res = await database.supabase.table("subscriptions") \
-            .select("current_period_end, status, cancel_at_period_end") \
+            .select("current_period_end, status, cancel_at_period_end, stripe_subscription_id") \
             .eq("user_id", user_id).execute()
         if sub_res.data:
             period_end = sub_res.data[0].get("current_period_end")
             cancel_at_period_end = bool(sub_res.data[0].get("cancel_at_period_end", False))
+            stripe_sub_id_from_db = sub_res.data[0].get("stripe_subscription_id")
     except Exception:
         pass
 
-    # Auto-heal: paid user with no period dates means webhook missed them — sync from Stripe now
+    # Auto-heal: paid user with no period dates — retrieve full subscription from Stripe
+    # (Subscription.list() in SDK v8 returns lightweight objects missing current_period_end)
     if tier in ("premium", "pro") and not period_end and settings.STRIPE_SECRET_KEY:
         try:
-            stripe_customer_id = user.get("stripe_customer_id")
-            if stripe_customer_id:
-                subs = await asyncio.to_thread(
-                    stripe.Subscription.list, customer=stripe_customer_id, limit=1
-                )
-                if subs.data:
-                    stripe_sub = subs.data[0]
-                    pe_ts = _get(stripe_sub, "current_period_end")
-                    ps_ts = _get(stripe_sub, "current_period_start")
-                    logger.info(f"Auto-sync stripe data: sub_id={_get(stripe_sub, 'id')} status={_get(stripe_sub, 'status')} pe_ts={pe_ts!r} ps_ts={ps_ts!r}")
-                    period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
-                    period_start_dt = datetime.fromtimestamp(ps_ts, tz=timezone.utc) if ps_ts else None
-                    if period_end_dt:
-                        period_end = period_end_dt.isoformat()
-                    if period_start_dt:
-                        period_start = period_start_dt
-                    cancel_at_period_end = bool(_get(stripe_sub, "cancel_at_period_end"))
-                    from subscription_service import upsert_subscription
-                    upsert_res = await upsert_subscription(
-                        user_id=user_id,
-                        stripe_customer_id=stripe_customer_id,
-                        stripe_subscription_id=_get(stripe_sub, "id"),
-                        plan_tier=tier,
-                        status=_get(stripe_sub, "status"),
-                        current_period_end=period_end_dt,
-                        current_period_start=period_start_dt,
-                        cancel_at_period_end=cancel_at_period_end,
+            stripe_sub = None
+            if stripe_sub_id_from_db:
+                stripe_sub = await asyncio.to_thread(stripe.Subscription.retrieve, stripe_sub_id_from_db)
+            else:
+                stripe_customer_id = user.get("stripe_customer_id")
+                if stripe_customer_id:
+                    subs = await asyncio.to_thread(
+                        stripe.Subscription.list, customer=stripe_customer_id, limit=1
                     )
-                    logger.info(f"Auto-synced: period_end={period_end!r} upsert_res={upsert_res!r}")
+                    if subs.data:
+                        stripe_sub = await asyncio.to_thread(
+                            stripe.Subscription.retrieve, _get(subs.data[0], "id")
+                        )
+            if stripe_sub:
+                pe_ts = _get(stripe_sub, "current_period_end")
+                ps_ts = _get(stripe_sub, "current_period_start")
+                period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
+                period_start_dt = datetime.fromtimestamp(ps_ts, tz=timezone.utc) if ps_ts else None
+                if period_end_dt:
+                    period_end = period_end_dt.isoformat()
+                if period_start_dt:
+                    period_start = period_start_dt
+                cancel_at_period_end = bool(_get(stripe_sub, "cancel_at_period_end"))
+                stripe_customer_id = _get(stripe_sub, "customer") or user.get("stripe_customer_id")
+                from subscription_service import upsert_subscription
+                await upsert_subscription(
+                    user_id=user_id,
+                    stripe_customer_id=stripe_customer_id,
+                    stripe_subscription_id=_get(stripe_sub, "id"),
+                    plan_tier=tier,
+                    status=_get(stripe_sub, "status"),
+                    current_period_end=period_end_dt,
+                    current_period_start=period_start_dt,
+                    cancel_at_period_end=cancel_at_period_end,
+                )
+                logger.info(f"Auto-synced subscription dates for user {user_id}: period_end={period_end!r}")
         except Exception as e:
             logger.warning(f"Auto-sync from Stripe failed for user {user_id}: {e}")
 
@@ -856,7 +866,8 @@ async def sync_subscription(request: Request):
         if not subs.data:
             return {"tier": "free", "message": "No Stripe subscription found"}
 
-        sub = subs.data[0]
+        # Retrieve full object — list() in SDK v8 returns lightweight objects missing period fields
+        sub = await asyncio.to_thread(stripe.Subscription.retrieve, _get(subs.data[0], "id"))
         from subscription_service import upsert_subscription
 
         status = _get(sub, "status") or "canceled"
