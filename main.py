@@ -688,15 +688,14 @@ async def api_account(request: Request):
                         stripe_sub = await asyncio.to_thread(
                             stripe.Subscription.retrieve, _get(subs.data[0], "id")
                         )
-            logger.info(f"stripe_sub type={type(stripe_sub).__name__!r} is_none={stripe_sub is None} bool={bool(stripe_sub) if stripe_sub is not None else 'n/a'} _data_len={len(stripe_sub._data) if (stripe_sub is not None and hasattr(stripe_sub, '_data')) else 'n/a'}")
             if stripe_sub:
                 data = stripe_sub._data if hasattr(stripe_sub, '_data') else {}
-                logger.info(f"Stripe _data keys: {sorted(data.keys())}")
-                logger.info(f"_data cpe={data.get('current_period_end')!r} cps={data.get('current_period_start')!r} bca={data.get('billing_cycle_anchor')!r} created={data.get('created')!r}")
-                pe_ts = _get(stripe_sub, "current_period_end")
-                ps_ts = _get(stripe_sub, "current_period_start")
-                period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
-                period_start_dt = datetime.fromtimestamp(ps_ts, tz=timezone.utc) if ps_ts else None
+                # Stripe SDK v8 no longer returns current_period_end/start — derive from billing_cycle_anchor
+                bca_ts = data.get('billing_cycle_anchor')
+                period_end_dt = None
+                period_start_dt = None
+                if bca_ts:
+                    period_end_dt, period_start_dt = _billing_period_from_anchor(bca_ts)
                 if period_end_dt:
                     period_end = period_end_dt.isoformat()
                 if period_start_dt:
@@ -881,10 +880,8 @@ async def sync_subscription(request: Request):
             tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
         else:
             tier = "free"
-        period_end_ts = _get(sub, "current_period_end")
-        period_start_ts = _get(sub, "current_period_start")
-        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
-        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc) if period_start_ts else None
+        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
+        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
 
         await upsert_subscription(
             user_id=user_id,
@@ -981,6 +978,31 @@ def _get(obj, key, default=None):
     return getattr(obj, key, default)
 
 
+def _billing_period_from_anchor(anchor_ts: int) -> tuple:
+    """
+    Stripe SDK v8 removed current_period_end/start from the Subscription object.
+    Compute the current billing period (start, end) from billing_cycle_anchor for
+    a monthly subscription.  Returns (period_end_dt, period_start_dt).
+    """
+    import calendar as _cal
+    anchor = datetime.fromtimestamp(anchor_ts, tz=timezone.utc)
+    now = datetime.now(timezone.utc)
+    anchor_day = anchor.day
+
+    def _add_one_month(dt: datetime) -> datetime:
+        month = dt.month % 12 + 1
+        year = dt.year + (1 if dt.month == 12 else 0)
+        day = min(dt.day, _cal.monthrange(year, month)[1])
+        return dt.replace(year=year, month=month, day=day)
+
+    cur = anchor
+    while True:
+        nxt = _add_one_month(cur)
+        if nxt > now:
+            return nxt, cur   # (period_end, period_start)
+        cur = nxt
+
+
 async def _handle_checkout_completed(session):
     """Promote user to premium after a successful checkout."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
@@ -1007,10 +1029,8 @@ async def _handle_checkout_completed(session):
             user_id = user["id"]
 
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
-        period_end_ts = _get(sub, "current_period_end")
-        period_start_ts = _get(sub, "current_period_start")
-        period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc) if period_end_ts else None
-        period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc) if period_start_ts else None
+        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
+        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
 
         # Determine plan tier from the subscribed price ID
         items_data = _get(_get(sub, "items") or {}, "data") or []
@@ -1053,14 +1073,8 @@ async def _handle_subscription_updated(sub):
             tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
         else:
             tier = "free"
-        period_end = None
-        period_start = None
-        period_end_ts = _get(sub, "current_period_end")
-        period_start_ts = _get(sub, "current_period_start")
-        if period_end_ts:
-            period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc)
-        if period_start_ts:
-            period_start = datetime.fromtimestamp(period_start_ts, tz=timezone.utc)
+        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
+        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
 
         cancel_at_period_end = bool(_get(sub, "cancel_at_period_end"))
         await upsert_subscription(
