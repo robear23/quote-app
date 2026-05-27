@@ -669,6 +669,40 @@ async def api_account(request: Request):
     except Exception:
         pass
 
+    # Auto-heal: paid user with no period dates means webhook missed them — sync from Stripe now
+    if tier in ("premium", "pro") and not period_end and settings.STRIPE_SECRET_KEY:
+        try:
+            stripe_customer_id = user.get("stripe_customer_id")
+            if stripe_customer_id:
+                subs = await asyncio.to_thread(
+                    stripe.Subscription.list, customer=stripe_customer_id, limit=1
+                )
+                if subs.data:
+                    stripe_sub = subs.data[0]
+                    pe_ts = _get(stripe_sub, "current_period_end")
+                    ps_ts = _get(stripe_sub, "current_period_start")
+                    period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
+                    period_start_dt = datetime.fromtimestamp(ps_ts, tz=timezone.utc) if ps_ts else None
+                    if period_end_dt:
+                        period_end = period_end_dt.isoformat()
+                    if period_start_dt:
+                        period_start = period_start_dt
+                    cancel_at_period_end = bool(_get(stripe_sub, "cancel_at_period_end"))
+                    from subscription_service import upsert_subscription
+                    await upsert_subscription(
+                        user_id=user_id,
+                        stripe_customer_id=stripe_customer_id,
+                        stripe_subscription_id=_get(stripe_sub, "id"),
+                        plan_tier=tier,
+                        status=_get(stripe_sub, "status"),
+                        current_period_end=period_end_dt,
+                        current_period_start=period_start_dt,
+                        cancel_at_period_end=cancel_at_period_end,
+                    )
+                    logger.info(f"Auto-synced missing subscription dates for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Auto-sync from Stripe failed for user {user_id}: {e}")
+
     return {
         "user_id": user_id,
         "email": user.get("email"),
