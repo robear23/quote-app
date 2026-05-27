@@ -689,15 +689,9 @@ async def api_account(request: Request):
                             stripe.Subscription.retrieve, _get(subs.data[0], "id")
                         )
             if stripe_sub:
-                try:
-                    sub_dict = stripe_sub.to_dict_recursive()
-                except Exception:
-                    try:
-                        sub_dict = dict(stripe_sub)
-                    except Exception:
-                        sub_dict = {}
-                logger.info(f"Stripe sub keys: {sorted(sub_dict.keys())}")
-                logger.info(f"Stripe sub cpe raw: {sub_dict.get('current_period_end')!r}, cps raw: {sub_dict.get('current_period_start')!r}, billing_cycle_anchor: {sub_dict.get('billing_cycle_anchor')!r}")
+                raw = stripe_sub.__dict__
+                logger.info(f"Stripe sub __dict__ keys: {sorted(raw.keys())}")
+                logger.info(f"Direct attrs: cpe={stripe_sub.current_period_end!r} cps={stripe_sub.current_period_start!r} bca={stripe_sub.billing_cycle_anchor!r} created={stripe_sub.created!r} status={stripe_sub.status!r}")
                 pe_ts = _get(stripe_sub, "current_period_end")
                 ps_ts = _get(stripe_sub, "current_period_start")
                 period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
