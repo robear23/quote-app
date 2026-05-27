@@ -681,6 +681,7 @@ async def api_account(request: Request):
                     stripe_sub = subs.data[0]
                     pe_ts = _get(stripe_sub, "current_period_end")
                     ps_ts = _get(stripe_sub, "current_period_start")
+                    logger.info(f"Auto-sync stripe data: sub_id={_get(stripe_sub, 'id')} status={_get(stripe_sub, 'status')} pe_ts={pe_ts!r} ps_ts={ps_ts!r}")
                     period_end_dt = datetime.fromtimestamp(pe_ts, tz=timezone.utc) if pe_ts else None
                     period_start_dt = datetime.fromtimestamp(ps_ts, tz=timezone.utc) if ps_ts else None
                     if period_end_dt:
@@ -689,7 +690,7 @@ async def api_account(request: Request):
                         period_start = period_start_dt
                     cancel_at_period_end = bool(_get(stripe_sub, "cancel_at_period_end"))
                     from subscription_service import upsert_subscription
-                    await upsert_subscription(
+                    upsert_res = await upsert_subscription(
                         user_id=user_id,
                         stripe_customer_id=stripe_customer_id,
                         stripe_subscription_id=_get(stripe_sub, "id"),
@@ -699,7 +700,7 @@ async def api_account(request: Request):
                         current_period_start=period_start_dt,
                         cancel_at_period_end=cancel_at_period_end,
                     )
-                    logger.info(f"Auto-synced missing subscription dates for user {user_id}")
+                    logger.info(f"Auto-synced: period_end={period_end!r} upsert_res={upsert_res!r}")
         except Exception as e:
             logger.warning(f"Auto-sync from Stripe failed for user {user_id}: {e}")
 

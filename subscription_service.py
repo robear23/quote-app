@@ -237,13 +237,14 @@ async def upsert_subscription(
         "cancel_at_period_end": cancel_at_period_end,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    await database.supabase.table("subscriptions").upsert(record, on_conflict="user_id").execute()
+    res = await database.supabase.table("subscriptions").upsert(record, on_conflict="user_id").execute()
     # Keep users.subscription_tier in sync for quick lookups
     await database.supabase.table("users").update({"subscription_tier": plan_tier}) \
         .eq("id", user_id).execute()
     # Also store customer ID on the user row for easy webhook lookups
     await database.supabase.table("users").update({"stripe_customer_id": stripe_customer_id}) \
         .eq("id", user_id).execute()
+    return res
 
 
 async def get_user_by_stripe_customer(stripe_customer_id: str) -> dict | None:
