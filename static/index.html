@@ -5,11 +5,131 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quote Me — AI-Powered Quotes for Tradespeople</title>
+    <meta name="description" content="Quote Me: AI-powered quoting for tradespeople. Send a voice note, photo, or text via Telegram and get a branded Word, Excel, or PDF quote in seconds. Free plan available.">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#0a0f1e">
+    <link rel="canonical" href="https://quote-me.app">
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://quote-me.app">
+    <meta property="og:site_name" content="Quote Me">
+    <meta property="og:title" content="Quote Me — AI-Powered Quotes for Tradespeople">
+    <meta property="og:description" content="Send a voice note, snap a photo, or type the job in Telegram — get a branded, professional quote back in seconds. Free plan available.">
+    <meta property="og:image" content="https://quote-me.app/static/hero_photo_trade.png">
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Quote Me — AI-Powered Quotes for Tradespeople">
+    <meta name="twitter:description" content="Send a voice note, snap a photo, or type the job in Telegram — get a branded, professional quote back in seconds.">
+    <meta name="twitter:image" content="https://quote-me.app/static/hero_photo_trade.png">
     <link rel="icon" type="image/png" href="/static/quote-me-logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "Quote Me",
+          "url": "https://quote-me.app",
+          "logo": "https://quote-me.app/static/quote-me-logo.png",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": "AI-powered quoting tool for tradespeople. Generate branded Word, Excel, and PDF quotes via Telegram voice notes, photos, or text messages.",
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Free",
+              "price": "0",
+              "priceCurrency": "GBP",
+              "description": "5 quotes per month, free forever"
+            },
+            {
+              "@type": "Offer",
+              "name": "Pro",
+              "price": "5",
+              "priceCurrency": "GBP",
+              "description": "25 quotes per month"
+            },
+            {
+              "@type": "Offer",
+              "name": "Premium",
+              "price": "10",
+              "priceCurrency": "GBP",
+              "description": "100 quotes per month with priority support"
+            }
+          ]
+        },
+        {
+          "@type": "Organization",
+          "name": "ForestTech Solutions",
+          "url": "https://quote-me.app",
+          "logo": "https://quote-me.app/static/quote-me-logo.png",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "email": "contact@foresttechsolutions.net"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is Quote Me?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Quote Me is an AI-powered quoting tool built for tradespeople. Describe a job via voice note, photo, or text in Telegram and get a branded, professional quote back in seconds — as a Word, Excel, or PDF file."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does Quote Me work?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sign up with your email, upload your existing quote template (Word or Excel) so the AI learns your brand, then send a voice note, photo, or text describing the job via Telegram. Quote Me generates a fully formatted, branded quote in seconds."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is Quote Me free?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Quote Me has a free plan with 5 quotes per month (plus 5 bonus quotes in your first month), forever. Paid plans start at £5/month for 25 quotes and £10/month for 100 quotes."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Do I need Telegram to use Quote Me?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Quote Me works through Telegram, so you can generate quotes on your phone in the field using voice notes or photos, without needing a laptop. Telegram is free to download on Android, iOS, and desktop."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "What file formats does Quote Me produce?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Quote Me generates quotes as Word (.docx), Excel (.xlsx), and PDF files. All formats are fully editable and ready to email directly to your client."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How does Quote Me learn my business details?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Upload your existing quote template once (Word or Excel) and Quote Me reads your business name, address, VAT rate, and bank details from it. This Brand DNA is then applied automatically to every quote you generate."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 
     <style>
         :root {
@@ -1423,7 +1543,149 @@
             transform: translateY(0);
         }
 
+        /* ── Mobile hamburger ── */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            margin-left: 8px;
+        }
+
+        .hamburger span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--primary);
+            border-radius: 2px;
+            transition: all 0.25s;
+        }
+
+        .hamburger.open span:nth-child(1) {
+            transform: translateY(7px) rotate(45deg);
+        }
+
+        .hamburger.open span:nth-child(2) {
+            opacity: 0;
+            transform: scaleX(0);
+        }
+
+        .hamburger.open span:nth-child(3) {
+            transform: translateY(-7px) rotate(-45deg);
+        }
+
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 15, 30, 0.97);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 98;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 36px;
+        }
+
+        .mobile-nav.open {
+            display: flex;
+        }
+
+        .mobile-nav a {
+            color: var(--primary);
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+            transition: color 0.2s;
+        }
+
+        .mobile-nav a:hover {
+            color: var(--accent);
+        }
+
+        .mobile-nav .mobile-nav-cta {
+            background: var(--accent);
+            color: white;
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-size: 1rem;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+        }
+
+        /* ── FAQ ── */
+        .faq-list {
+            max-width: 720px;
+            margin: 48px auto 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .faq-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .faq-item[open] {
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+
+        .faq-item summary {
+            padding: 20px 24px;
+            font-weight: 600;
+            font-size: 0.98rem;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            color: var(--primary);
+            user-select: none;
+        }
+
+        .faq-item summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .faq-item summary::after {
+            content: '+';
+            font-size: 1.5rem;
+            font-weight: 300;
+            line-height: 1;
+            color: var(--accent);
+            flex-shrink: 0;
+            transition: transform 0.2s;
+        }
+
+        .faq-item[open] summary::after {
+            transform: rotate(45deg);
+        }
+
+        .faq-item p {
+            padding: 0 24px 20px;
+            color: var(--secondary);
+            font-size: 0.92rem;
+            line-height: 1.7;
+            margin: 0;
+        }
+
         /* ── Responsive ── */
+        @media (max-width: 860px) {
+            .hamburger {
+                display: flex;
+            }
+        }
+
         @media (max-width: 640px) {
             .cta-card {
                 padding: 40px 24px;
@@ -1436,6 +1698,29 @@
             .hero-actions {
                 flex-direction: column;
                 align-items: center;
+            }
+
+            h1.hero-title {
+                margin-bottom: 28px;
+            }
+
+            .section {
+                padding: 64px 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .glow,
+            .launch-badge::after,
+            .bonus-icon {
+                animation: none;
+            }
+
+            .fade-up,
+            .step-card {
+                opacity: 1;
+                transform: none;
+                transition: none;
             }
         }
     </style>
@@ -1460,20 +1745,33 @@
                 <a href="#how-it-works" class="nav-link">How it works</a>
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="#faq" class="nav-link">FAQ</a>
                 <a href="#contact" class="nav-link">Contact</a>
             </div>
             <div class="nav-right" id="navRight">
                 <a href="#signup" class="nav-sign-in">Sign in</a>
                 <a href="#signup" class="nav-cta" id="navCta">Get Started Free</a>
             </div>
+            <button class="hamburger" id="hamburger" aria-label="Open navigation menu" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
         </div>
     </nav>
+
+    <div class="mobile-nav" id="mobileNav" role="dialog" aria-modal="true" aria-label="Navigation menu">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
+        <a href="#signup" class="mobile-nav-cta">Get Started Free</a>
+    </div>
 
     <div class="wrapper">
 
         <!-- Hero -->
         <section id="hero">
-            <img src="/static/hero_photo_trade.png" class="hero-bg"
+            <img src="/static/hero_photo_trade.png" class="hero-bg" fetchpriority="high"
                 alt="Tradesperson taking a photo of a quote illustration">
             <div class="hero-overlay"></div>
 
@@ -1760,6 +2058,41 @@
             </div>
         </section>
 
+        <!-- FAQ -->
+        <section id="faq" class="section"
+            style="background: var(--surface-light); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="container">
+                <div class="section-label fade-up">FAQ</div>
+                <h2 class="section-title fade-up">Common questions</h2>
+                <div class="faq-list">
+                    <details class="faq-item fade-up">
+                        <summary>What is Quote Me?</summary>
+                        <p>Quote Me is an AI-powered quoting tool built for tradespeople. Describe a job via voice note, photo, or text in Telegram and get a branded, professional quote back in seconds — as a Word, Excel, or PDF file.</p>
+                    </details>
+                    <details class="faq-item fade-up" style="transition-delay:0.05s">
+                        <summary>How does Quote Me work?</summary>
+                        <p>Sign up with your email, upload your existing quote template (Word or Excel) so the AI learns your brand, then send a voice note, photo, or text describing the job via Telegram. Quote Me generates a fully formatted, branded quote in seconds.</p>
+                    </details>
+                    <details class="faq-item fade-up" style="transition-delay:0.1s">
+                        <summary>Is Quote Me free?</summary>
+                        <p>Yes. Quote Me has a free plan with 5 quotes per month (plus 5 bonus quotes in your first month), forever. Paid plans start at £5/month for 25 quotes and £10/month for 100 quotes with priority support.</p>
+                    </details>
+                    <details class="faq-item fade-up" style="transition-delay:0.15s">
+                        <summary>Do I need Telegram to use Quote Me?</summary>
+                        <p>Yes. Quote Me works through Telegram, so you can generate quotes on your phone in the field using voice notes or photos — no laptop needed. Telegram is free to download on <a href="https://telegram.org/dl/android" target="_blank" rel="noopener" style="color:var(--accent)">Android</a>, <a href="https://telegram.org/dl/ios" target="_blank" rel="noopener" style="color:var(--accent)">iOS</a>, and <a href="https://desktop.telegram.org" target="_blank" rel="noopener" style="color:var(--accent)">desktop</a>.</p>
+                    </details>
+                    <details class="faq-item fade-up" style="transition-delay:0.2s">
+                        <summary>What file formats does Quote Me produce?</summary>
+                        <p>Quote Me generates quotes as Word (.docx), Excel (.xlsx), and PDF files. All formats are fully editable and ready to email directly to your client.</p>
+                    </details>
+                    <details class="faq-item fade-up" style="transition-delay:0.25s">
+                        <summary>How does Quote Me learn my business details?</summary>
+                        <p>Upload your existing quote template once (Word or Excel) and Quote Me reads your business name, address, VAT rate, and bank details from it. This Brand DNA is then applied automatically to every quote you generate.</p>
+                    </details>
+                </div>
+            </div>
+        </section>
+
         <!-- Footer -->
         <footer>
             <div class="container">
@@ -1922,6 +2255,22 @@
             entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); } });
         }, { threshold: 0.12 });
         document.querySelectorAll('.fade-up, .step-card, .telegram-prereq').forEach(el => observer.observe(el));
+
+        // Mobile nav
+        const hamburger = document.getElementById('hamburger');
+        const mobileNav = document.getElementById('mobileNav');
+        hamburger.addEventListener('click', () => {
+            const open = mobileNav.classList.toggle('open');
+            hamburger.classList.toggle('open', open);
+            hamburger.setAttribute('aria-expanded', String(open));
+            document.body.style.overflow = open ? 'hidden' : '';
+        });
+        mobileNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+            mobileNav.classList.remove('open');
+            hamburger.classList.remove('open');
+            hamburger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }));
 
     </script>
 

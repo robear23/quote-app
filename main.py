@@ -364,6 +364,18 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     return {"ok": True}
 
 
+@app.get("/robots.txt")
+def robots_txt():
+    with open("static/robots.txt", "r") as f:
+        return Response(content=f.read(), media_type="text/plain")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    with open("static/sitemap.xml", "r") as f:
+        return Response(content=f.read(), media_type="application/xml")
+
+
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     with open("static/index.html", "r", encoding="utf-8") as f:
