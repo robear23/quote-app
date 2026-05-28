@@ -19,6 +19,7 @@ from telegram import Update
 from config import settings
 import database
 from database import init_supabase
+from notifications import notify_new_signup
 import logging
 
 # Configure logging
@@ -534,6 +535,7 @@ async def initiate_handshake(email: str):
                         await asyncio.to_thread(send_magic_link_email, email, token, False)
                         return JSONResponse({"status": "check_email"})
                 raise
+            asyncio.create_task(notify_new_signup(email, user_id, new_user.data[0].get("created_at", "")))
             telegram_link = f"https://t.me/{bot_username}?start={user_id}"
             token = await _generate_login_token(user_id)
             await asyncio.to_thread(send_magic_link_email, email, token, True, telegram_link)

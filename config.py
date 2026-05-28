@@ -11,6 +11,7 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "").strip()
     FROM_EMAIL: str = os.getenv("FROM_EMAIL", "noreply@quoteagent.app").strip()
+    NOTIFICATION_EMAIL: str = os.getenv("NOTIFICATION_EMAIL", "robsage96@gmail.com").strip()
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "").strip()  # e.g. https://yourapp.railway.app
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "").strip()
 

@@ -9,6 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 from config import settings
 import database
+from notifications import notify_contact_message
 from ai_service import AIService, RateLimitError, run_ai, assess_docx_template_fields, assess_xlsx_mapping_fields, analyze_template_visually  # noqa: F401 (run_ai re-exported)
 
 try:
@@ -866,6 +867,14 @@ async def contact(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
         }).execute()
         await update.message.reply_text(
             "Thanks for your feedback! The developers will be in touch via email shortly."
+        )
+        asyncio.create_task(
+            notify_contact_message(
+                user_email=db_user.get("email"),
+                telegram_id=user.id,
+                telegram_username=user.username,
+                message=feedback_text,
+            )
         )
     except Exception as e:
         logger.error(f"Failed to store feedback: {e}")
