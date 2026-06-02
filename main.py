@@ -314,11 +314,11 @@ def _send_google_welcome_email(to_email: str, telegram_link: str):
         logger.error(f"Failed to send Google welcome email to {to_email}: {e}")
 
 
-async def _upsert_user_by_email(email: str) -> dict:
-    """Find or create a user by email. Returns the user row."""
+async def _upsert_user_by_email(email: str) -> tuple[dict, bool]:
+    """Find or create a user by email. Returns (user row, is_new)."""
     res = await database.supabase.table("users").select("*").eq("email", email).execute()
     if res.data:
-        return res.data[0]
+        return res.data[0], False
     try:
         new = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
         user = new.data[0]
@@ -327,13 +327,13 @@ async def _upsert_user_by_email(email: str) -> dict:
             await auto_apply_signup_bonus(user["id"])
         except Exception as bonus_err:
             logger.warning(f"Failed to apply signup bonus: {bonus_err}")
-        return user
+        return user, True
     except Exception as e:
         err = str(e).lower()
         if "duplicate" in err or "unique" in err or "23505" in err:
             res2 = await database.supabase.table("users").select("*").eq("email", email).execute()
             if res2.data:
-                return res2.data[0]
+                return res2.data[0], False
         raise
 
 
@@ -593,10 +593,13 @@ async def auth_google_callback(
     email = email.strip().lower()
 
     try:
-        user = await _upsert_user_by_email(email)
+        user, is_new = await _upsert_user_by_email(email)
     except Exception as e:
         logger.error(f"User upsert failed after Google OAuth: {e}")
         return RedirectResponse("/?auth_error=db")
+
+    if is_new:
+        asyncio.create_task(notify_new_signup(email, user["id"], user.get("created_at", "")))
 
     # First-time Google login: send welcome email with Telegram link
     if not user.get("telegram_id"):
