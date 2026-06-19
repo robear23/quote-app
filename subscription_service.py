@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import database
 
-FREE_MONTHLY_LIMIT = 5
+FREE_MONTHLY_LIMIT = 0
 PRO_MONTHLY_LIMIT = 25
 PREMIUM_MONTHLY_LIMIT = 100
 
@@ -65,6 +65,21 @@ async def get_active_extra_quotes_limit(user_id: str) -> int | None:
     if res.data:
         return max(row["benefit_value"] for row in res.data)
     return None
+
+
+async def get_trial_status(user_id: str) -> dict:
+    """Returns whether the 30-day free trial is active and when it expires."""
+    now = datetime.now(timezone.utc)
+    res = await database.supabase.table("user_promo_redemptions") \
+        .select("expires_at") \
+        .eq("user_id", user_id) \
+        .eq("code", "LAUNCH_BONUS") \
+        .execute()
+    if not res.data:
+        return {"active": False, "expires_at": None}
+    expires_at = res.data[0]["expires_at"]
+    expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    return {"active": expires_dt > now, "expires_at": expires_at}
 
 
 async def auto_apply_signup_bonus(user_id: str) -> None:

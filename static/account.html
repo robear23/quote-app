@@ -90,11 +90,15 @@
         .plan-pill-pro { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.4); color: #6ee7b7; }
         .plan-pill-premium { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.4); color: #93c5fd; }
         .plan-pill-cancelling { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: #fcd34d; }
+        .plan-pill-trial { background: rgba(139,92,246,0.12); border: 1px solid rgba(139,92,246,0.4); color: #c4b5fd; }
+        .plan-pill-trial-expired { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; }
         .plan-pill-dot { width: 7px; height: 7px; border-radius: 50%; }
         .pill-free .plan-pill-dot { background: var(--muted); }
         .pill-pro .plan-pill-dot { background: var(--success); }
         .pill-premium .plan-pill-dot { background: var(--accent); }
         .pill-cancelling .plan-pill-dot { background: #f59e0b; }
+        .pill-trial .plan-pill-dot { background: #a78bfa; }
+        .pill-trial-expired .plan-pill-dot { background: #ef4444; }
 
         /* Cancellation notice banner */
         .cancel-notice {
@@ -282,11 +286,11 @@
                 </div>
             </div>
 
-            <!-- Launch bonus notice (free users only) -->
+            <!-- Trial notice (free users with active trial only) -->
             <div class="launch-notice" id="launchNotice" style="display:none">
                 <span class="launch-notice-icon">🎁</span>
-                <span class="launch-notice-text">
-                    <strong>Launch bonus active.</strong> You get <strong>10 quotes</strong> this month instead of the usual <strong>5</strong> — our thanks for joining early.
+                <span class="launch-notice-text" id="launchNoticeText">
+                    <strong>Free trial active.</strong> You have <strong>10 quotes</strong> included — <strong id="trialDaysLeft"></strong> remaining on your trial.
                 </span>
             </div>
 
@@ -462,14 +466,26 @@
         const isPro = tier === 'pro';
         const isPaid = isPremium || isPro;
         const isCancelling = isPaid && d.cancel_at_period_end;
-        const planNames = { premium: 'Premium', pro: 'Pro', free: 'Free' };
-        const planDescs = {
-            premium: isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month',
-            pro: isCancelling ? '25 quotes per month — access until end of billing period' : '25 quotes per month',
-            free: `${d.monthly_limit} quotes per month — upgrade for more`,
-        };
-        document.getElementById('planName').textContent = planNames[tier] || 'Free';
-        document.getElementById('planDesc').textContent = planDescs[tier] || planDescs.free;
+        const trialActive = !isPaid && d.trial_active;
+        const trialExpired = !isPaid && !d.trial_active;
+
+        // Plan name and description
+        let planName, planDesc;
+        if (isPremium) {
+            planName = 'Premium';
+            planDesc = isCancelling ? '100 quotes per month — access until end of billing period' : '100 quotes per month';
+        } else if (isPro) {
+            planName = 'Pro';
+            planDesc = isCancelling ? '25 quotes per month — access until end of billing period' : '25 quotes per month';
+        } else if (trialActive) {
+            planName = 'Free Trial';
+            planDesc = '10 quotes included — trial period';
+        } else {
+            planName = 'Trial Expired';
+            planDesc = 'Upgrade to continue generating quotes';
+        }
+        document.getElementById('planName').textContent = planName;
+        document.getElementById('planDesc').textContent = planDesc;
 
         const pill = document.getElementById('planPill');
         const pillText = document.getElementById('planPillText');
@@ -482,47 +498,62 @@
         } else if (isPro) {
             pill.className = 'plan-pill plan-pill-pro pill-pro';
             pillText.textContent = 'Pro';
+        } else if (trialActive) {
+            pill.className = 'plan-pill plan-pill-trial pill-trial';
+            pillText.textContent = 'Trial';
+        } else {
+            pill.className = 'plan-pill plan-pill-trial-expired pill-trial-expired';
+            pillText.textContent = 'Expired';
         }
 
-        // Usage bar
+        // Usage bar — guard against 0-limit division (trial expired)
         document.getElementById('usageNum').textContent = d.monthly_usage;
         document.getElementById('usageMax').textContent = d.monthly_limit;
-        const pct = Math.min(100, Math.round((d.monthly_usage / d.monthly_limit) * 100));
+        const pct = d.monthly_limit === 0 ? 100 : Math.min(100, Math.round((d.monthly_usage / d.monthly_limit) * 100));
         const bar = document.getElementById('usageBar');
         setTimeout(() => { bar.style.width = pct + '%'; }, 50);
         if (pct >= 80) bar.classList.add('near-limit');
 
-        // Usage reset date — billing anniversary for paid plans, 1st of month for free
-        if (d.billing_period_start) {
-            if (isPaid && !isCancelling) {
-                const resetLabel = d.subscription_period_end
-                    ? new Date(d.subscription_period_end).toLocaleDateString('en-GB', { day:'numeric', month:'long' })
-                    : null;
-                if (resetLabel) {
-                    document.getElementById('usageNote').textContent = `Resets on ${resetLabel}.`;
-                }
-            } else {
-                document.getElementById('usageNote').textContent = 'Resets on the 1st of each month.';
+        // Usage note
+        if (trialExpired) {
+            document.getElementById('usageNote').textContent = 'Upgrade to continue generating quotes.';
+        } else if (isPaid && !isCancelling) {
+            const resetLabel = d.subscription_period_end
+                ? new Date(d.subscription_period_end).toLocaleDateString('en-GB', { day:'numeric', month:'long' })
+                : null;
+            if (resetLabel) {
+                document.getElementById('usageNote').textContent = `Resets on ${resetLabel}.`;
             }
+        } else if (trialActive && d.trial_expires_at) {
+            const trialEnd = new Date(d.trial_expires_at).toLocaleDateString('en-GB', { day:'numeric', month:'long' });
+            document.getElementById('usageNote').textContent = `Trial ends on ${trialEnd}.`;
+        } else {
+            document.getElementById('usageNote').textContent = 'Resets on the 1st of each month.';
         }
 
-        // Cancellation notice or renewal notice
+        // Trial notice with days remaining
+        if (trialActive && d.trial_expires_at) {
+            const daysLeft = Math.max(0, Math.ceil((new Date(d.trial_expires_at) - new Date()) / 86400000));
+            document.getElementById('trialDaysLeft').textContent = `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+        }
+
+        // Cancellation notice
         if (isCancelling && d.subscription_period_end) {
             const end = new Date(d.subscription_period_end);
             const endLabel = end.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
             const planLabel = isPremium ? 'Premium' : 'Pro';
             document.getElementById('cancelNotice').style.display = 'flex';
             document.getElementById('cancelNoticeText').innerHTML =
-                `<strong>Subscription cancelled.</strong> You still have full ${planLabel} access until <strong>${endLabel}</strong>. After that, your account will switch to the Free plan.`;
+                `<strong>Subscription cancelled.</strong> You still have full ${planLabel} access until <strong>${endLabel}</strong>. After that, you will lose access to quote generation unless you resubscribe.`;
         }
 
-        // Upgrade / billing cards
-        // Free → show both Pro and Premium upgrade options
-        // Pro → show only Premium upgrade option (+ billing)
+        // Card visibility
+        // Trial (active or expired) → show both Pro and Premium upgrade cards
+        // Pro → show only Premium upgrade + billing
         // Premium → show only billing
-        document.getElementById('launchNotice').style.display = (tier === 'free') ? 'flex' : 'none';
-        document.getElementById('upgradeProCard').style.display = (tier === 'free') ? 'block' : 'none';
-        document.getElementById('upgradePremiumCard').style.display = (tier === 'free' || isPro) ? 'block' : 'none';
+        document.getElementById('launchNotice').style.display = trialActive ? 'flex' : 'none';
+        document.getElementById('upgradeProCard').style.display = (!isPaid) ? 'block' : 'none';
+        document.getElementById('upgradePremiumCard').style.display = (!isPaid || isPro) ? 'block' : 'none';
         document.getElementById('billingCard').style.display = isPaid ? 'block' : 'none';
 
         // Telegram

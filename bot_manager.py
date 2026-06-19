@@ -459,14 +459,23 @@ async def generate_and_send_quote(
     if quota_exceeded:
         account_url = f"{_settings.APP_URL}/account"
         if tier == "free":
-            msg_text = (
-                f"You've used all {monthly_limit} free quotes this month.\n\n"
-                f"Upgrade to Premium for 100 quotes/month at:\n{account_url}"
-            )
+            if monthly_limit == 0:
+                msg_text = (
+                    "Your free trial has ended.\n\n"
+                    "Upgrade to Pro (25 quotes/month) or Premium (100 quotes/month) to continue:\n"
+                    f"{account_url}"
+                )
+            else:
+                msg_text = (
+                    f"You've used all {monthly_limit} trial quotes this month.\n\n"
+                    "Upgrade to Pro or Premium to keep generating quotes:\n"
+                    f"{account_url}"
+                )
         else:
+            plan_label = "Premium" if tier == "premium" else "Pro"
             msg_text = (
-                f"You've reached your Premium limit of {monthly_limit} quotes this month. "
-                "Resets on the 1st of next month."
+                f"You've reached your {plan_label} limit of {monthly_limit} quotes this month. "
+                "Your quota resets on your next billing date."
             )
         if status_msg:
             await status_msg.edit_text(msg_text)
