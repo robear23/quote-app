@@ -14,10 +14,24 @@ import sys
 
 from supabase import create_client
 from config import settings
+from bot_state_machine import BotState
 
 sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 TEMPLATES_BUCKET = settings.SUPABASE_TEMPLATES_BUCKET
 DOWNLOAD_DIR = "admin_downloads"
+
+
+def _log_action(action: str, target_user_id: str | None, details: dict | None = None) -> None:
+    """Append an immutable audit record to admin_actions. Failures are printed, not raised."""
+    try:
+        sb.table("admin_actions").insert({
+            "action": action,
+            "target_user_id": target_user_id,
+            "operator": "admin_cli",
+            "details": details or {},
+        }).execute()
+    except Exception as e:
+        print(f"[audit] WARNING: failed to write audit log for action={action!r}: {e}")
 
 
 def _find_user(email: str) -> dict | None:
@@ -159,13 +173,15 @@ def cmd_reset(email: str):
         print(f"No user found for: {email}")
         return
 
-    print(f"Current state: {user.get('bot_state')}")
+    prev_state = user.get("bot_state")
+    print(f"Current state: {prev_state}")
     confirm = input(f"Reset bot_state to ACTIVE and clear pending_quote for {email}? [y/N] ").strip().lower()
     if confirm != "y":
         print("Aborted.")
         return
 
-    sb.table("users").update({"bot_state": "ACTIVE", "pending_quote": None}).eq("id", user["id"]).execute()
+    sb.table("users").update({"bot_state": BotState.ACTIVE, "pending_quote": None}).eq("id", user["id"]).execute()
+    _log_action("reset_bot_state", user["id"], {"from_state": prev_state, "to_state": BotState.ACTIVE, "email_hint": email[:3] + "***"})
     print(f"Done — {email} is now in ACTIVE state.")
 
 

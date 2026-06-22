@@ -10,6 +10,7 @@ import uuid
 from datetime import date, timedelta
 from docx import Document
 from docxtpl import DocxTemplate
+from jinja2.sandbox import SandboxedEnvironment
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -651,6 +652,7 @@ class DocumentFactory:
                 ["soffice", "--headless", "--convert-to", "pdf", "--outdir", OUTPUT_DIR, tmp_in],
                 capture_output=True,
                 timeout=45,
+                env={**os.environ, "HOME": "/tmp/lo_home"},
             )
             if result.returncode != 0 or not os.path.exists(tmp_pdf):
                 logger.warning(f"LibreOffice conversion failed: {result.stderr.decode(errors='ignore')[:200]}")
@@ -710,6 +712,7 @@ class DocumentFactory:
                 ["soffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, doc_path],
                 capture_output=True,
                 timeout=45,
+                env={**os.environ, "HOME": "/tmp/lo_home"},
             )
             if result.returncode != 0 or not os.path.exists(expected_pdf_path):
                 logger.warning(f"LibreOffice PDF conversion failed: {result.stderr.decode(errors='ignore')[:200]}")
@@ -855,7 +858,7 @@ class DocumentFactory:
         context["line_items"] = [{**i, "description": _amp(i["description"])} for i in context["line_items"]]
 
         tpl = DocxTemplate(io.BytesIO(template_bytes))
-        tpl.render(context)
+        tpl.render(context, jinja_env=SandboxedEnvironment())
         tpl.save(filepath)
         logger.info(f"Generated DOCX from template: {filepath}")
         return {"filepath": filepath, "subtotal": subtotal, "tax_amount": tax_amount, "total": grand_total}

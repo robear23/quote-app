@@ -1,14 +1,17 @@
 import asyncio
+import io
 import logging
 import os
 import re
 import uuid
+import zipfile
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from config import settings
 import database
+from bot_state_machine import BotState, transition as _sm_transition
 from notifications import notify_contact_message
 from ai_service import AIService, RateLimitError, run_ai, assess_docx_template_fields, assess_xlsx_mapping_fields, analyze_template_visually  # noqa: F401 (run_ai re-exported)
 
@@ -53,8 +56,8 @@ async def _upload_quote_template(user_id: str, template_bytes: bytes) -> str:
     storage_path = f"templates/{user_id}/quote_template.docx"
     try:
         await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Storage remove failed (non-fatal): {e}")
     await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
         storage_path, template_bytes,
         file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
@@ -78,8 +81,8 @@ async def _upload_logo(user_id: str, logo_b64: str) -> str:
     logo_bytes = _b64.b64decode(logo_b64)
     try:
         await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Storage remove failed (non-fatal): {e}")
     await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
         storage_path, logo_bytes,
         file_options={"content-type": "image/png"},
@@ -102,7 +105,7 @@ async def _notify_admin_of_failure(
     context: ContextTypes.DEFAULT_TYPE,
     db_user: dict,
     tg_user,
-    quote_data: dict,
+    _quote_data: dict,
     brand_dna: dict,
     error: Exception,
     is_fallback: bool = False,
@@ -114,12 +117,11 @@ async def _notify_admin_of_failure(
     tb = _tb.format_exc()
     label = "TEMPLATE FALLBACK USED" if is_fallback else "QUOTE GENERATION FAILED"
     template_path = brand_dna.get("template_docx_path", "N/A")
-    customer = quote_data.get("customer_name", "?")
+    user_id = db_user.get("id", "?")
     msg = (
         f"⚠️ *{label}*\n\n"
-        f"User: `{tg_user.id}` (@{tg_user.username or 'no-username'})\n"
-        f"Email: {db_user.get('email', '?')}\n"
-        f"Customer: {customer}\n"
+        f"User ID: `{user_id}`\n"
+        f"Telegram: `{tg_user.id}`\n"
         f"Template: `{template_path}`\n\n"
         f"Error: `{error}`\n\n"
         f"```\n{tb[-1800:]}\n```"
@@ -139,8 +141,8 @@ async def _upload_blank_template(user_id: str, template_bytes: bytes) -> str:
     storage_path = f"templates/{user_id}/blank_template.docx"
     try:
         await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Storage remove failed (non-fatal): {e}")
     await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
         storage_path, template_bytes,
         file_options={"content-type": _DOCX_CONTENT_TYPE},
@@ -153,8 +155,8 @@ async def _upload_xlsx_template(user_id: str, template_bytes: bytes) -> str:
     storage_path = f"templates/{user_id}/quote_template.xlsx"
     try:
         await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).remove([storage_path])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Storage remove failed (non-fatal): {e}")
     await database.supabase.storage.from_(settings.SUPABASE_TEMPLATES_BUCKET).upload(
         storage_path, template_bytes,
         file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
@@ -286,8 +288,8 @@ async def _save_currency_and_ask_tax(
 # ---------------------------------------------------------------------------
 
 async def update_user_state(telegram_id: int, state: str):
-    """Updates the user's bot_state in Supabase."""
-    await database.supabase.table("users").update({"bot_state": state}).eq("telegram_id", telegram_id).execute()
+    """Updates the user's bot_state in Supabase via the state machine."""
+    await _sm_transition(telegram_id, state)
 
 
 async def get_user(telegram_id: int):
@@ -504,7 +506,8 @@ async def generate_and_send_quote(
     try:
         total_res = await database.supabase.table("documents").select("id", count="exact").eq("user_id", db_user["id"]).execute()
         quote_num = (total_res.count or 0)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to get document count for user {db_user['id']}: {e}")
         quote_num = 1
     unique_id = uuid.uuid4().hex[:6]
     output_filename = f"Quote_{surname}_{quote_num:03d}_{unique_id}.{output_ext}"
@@ -535,8 +538,8 @@ async def generate_and_send_quote(
                 if doc_id:
                     try:
                         await database.supabase.table("documents").delete().eq("id", doc_id).execute()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up reserved document slot {doc_id}: {e}")
                 await clear_pending_state(user.id)
                 await update_user_state(user.id, "ACTIVE")
                 await status_msg.edit_text(
@@ -551,8 +554,8 @@ async def generate_and_send_quote(
                 if doc_id:
                     try:
                         await database.supabase.table("documents").delete().eq("id", doc_id).execute()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up reserved document slot {doc_id}: {e}")
                 await clear_pending_state(user.id)
                 await update_user_state(user.id, "ACTIVE")
                 await status_msg.edit_text(
@@ -581,8 +584,8 @@ async def generate_and_send_quote(
         if doc_id:
             try:
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.warning(f"Failed to clean up reserved document slot {doc_id}: {e2}")
         await _notify_admin_of_failure(context, db_user, user, quote_data, brand_dna, e)
         await status_msg.edit_text(
             "⚠️ Something went wrong generating your quote.\n\n"
@@ -629,15 +632,20 @@ async def generate_and_send_quote(
         if doc_id:
             try:
                 await database.supabase.table("documents").delete().eq("id", doc_id).execute()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.warning(f"Failed to clean up reserved document slot {doc_id}: {e2}")
         await status_msg.edit_text("Failed to send the document. Please try again.")
         return
     finally:
         try:
-            if os.path.exists(doc_path): os.remove(doc_path)
-            if pdf_path and os.path.exists(pdf_path): os.remove(pdf_path)
-        except Exception:
+            if os.path.exists(doc_path):
+                os.remove(doc_path)
+        except OSError:
+            pass
+        try:
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+        except OSError:
             pass
 
     # If template rendering failed but fallback succeeded, alert admin and inform user
@@ -785,7 +793,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if res.data:
                 await database.supabase.table("users").update({
                     "telegram_id": user.id,
-                    "bot_state": "ONBOARDING"
+                    "bot_state": BotState.ONBOARDING
                 }).eq("id", payload).execute()
                 await update.message.reply_text(
                     f"Hi {user.first_name}! Account linked.\n\n"
@@ -956,6 +964,40 @@ def _sanitize_dna_for_db(dna_data: dict) -> dict:
     return {k: v for k, v in dna_data.items() if k in _USER_CONFIGS_COLUMNS}
 
 # ---------------------------------------------------------------------------
+# Upload security helpers
+# ---------------------------------------------------------------------------
+
+def _validate_ooxml(data: bytes) -> bool:
+    """Return True only if data is a real OOXML ZIP (contains [Content_Types].xml)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            return "[Content_Types].xml" in zf.namelist()
+    except zipfile.BadZipFile:
+        return False
+
+
+def _has_dangerous_content(data: bytes, file_type: str) -> bool:
+    """Return True if data contains macros or external URL references."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+            if "word/vbaProject.bin" in names or "xl/vbaProject.bin" in names:
+                return True
+            rels_file = (
+                "word/_rels/document.xml.rels"
+                if file_type == "docx"
+                else "xl/_rels/workbook.xml.rels"
+            )
+            if rels_file in names:
+                rels = zf.read(rels_file).decode(errors="replace")
+                if "http://" in rels or "file://" in rels:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Message handlers
 # ---------------------------------------------------------------------------
 
@@ -1006,6 +1048,21 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         try:
             with open(tmp_path, "rb") as f:
                 template_bytes = f.read()
+
+            file_type = "docx" if is_docx else "xlsx"
+            if not _validate_ooxml(template_bytes):
+                await status_msg.edit_text(
+                    "❌ Invalid file — the upload is not a genuine Word or Excel document. "
+                    "Please upload a real .docx or .xlsx file and try again."
+                )
+                return
+
+            if _has_dangerous_content(template_bytes, file_type):
+                await status_msg.edit_text(
+                    "❌ Your file contains macros or external links, which are not supported "
+                    "for security reasons. Please save a macro-free copy and re-upload."
+                )
+                return
 
             if is_docx:
                 # ── DOCX branch ──────────────────────────────────────────────

@@ -1,8 +1,10 @@
 import asyncio
+import json
 import os
 import re
 import secrets
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -26,6 +28,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape as _jinja_autoescape
+
+_email_jinja = Environment(
+    loader=FileSystemLoader("templates/email"),
+    autoescape=_jinja_autoescape(["html"]),
+)
+
 if settings.SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -35,6 +44,7 @@ if settings.SENTRY_DSN:
         integrations=[StarletteIntegration(), FastApiIntegration()],
         traces_sample_rate=0.1,
         environment="production",
+        send_default_pii=False,
     )
     logger.info("Sentry initialised")
 
@@ -87,10 +97,13 @@ if settings.STRIPE_SECRET_KEY:
 
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
-# Simple per-email rate limiter for /handshake — prevents email-spam abuse.
-# In-process dict is fine: the goal is DoS prevention, not correctness guarantees.
-_handshake_last_sent: dict[str, float] = {}
-HANDSHAKE_COOLDOWN_SECONDS = 60
+
+def _mask_email(email: str) -> str:
+    """Returns a masked email for log output: avoids PII in log lines."""
+    if not email or "@" not in email:
+        return "***"
+    local, _, _ = email.partition("@")
+    return f"{local[:3]}***@***"
 
 # ---------------------------------------------------------------------------
 # Magic-link token store (Supabase-backed, single-use, 30-minute TTL)
@@ -122,6 +135,67 @@ async def _consume_login_token(token: str) -> str | None:
         return res.data[0]["user_id"]
     except Exception as e:
         logger.error(f"Failed to consume login token: {e}")
+        return None
+
+
+async def _check_and_record_handshake(email: str) -> bool:
+    """Returns True if the handshake is allowed, False if rate-limited.
+
+    Uses a Supabase RPC for an atomic check-and-update that survives restarts
+    and works across replicas. Fails open so a transient DB error never blocks
+    a legitimate user.
+    """
+    try:
+        result = await database.supabase.rpc(
+            "check_handshake_rate_limit", {"p_email": email}
+        ).execute()
+        return bool(result.data)
+    except Exception as e:
+        logger.warning(f"Handshake rate-limit check failed, allowing request: {e}")
+        return True
+
+
+async def _generate_pending_signup_token(email: str) -> tuple[str, str]:
+    """Creates (or refreshes) a pending signup row for a new user.
+
+    Reuses the pre-allocated user_id from any still-valid pending row so
+    the Telegram deep-link stays consistent across re-sent emails.
+    Returns (token, pending_user_id).
+    """
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    existing = await database.supabase.table("pending_signups") \
+        .select("user_id") \
+        .eq("email", email) \
+        .gt("expires_at", now_iso) \
+        .execute()
+    pending_user_id = existing.data[0]["user_id"] if existing.data else str(uuid.uuid4())
+
+    # Delete any stale or previous tokens for this email before inserting the fresh one.
+    await database.supabase.table("pending_signups").delete().eq("email", email).execute()
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.fromtimestamp(time.time() + 1800, tz=timezone.utc).isoformat()
+    await database.supabase.table("pending_signups").insert({
+        "token": token,
+        "email": email,
+        "user_id": pending_user_id,
+        "expires_at": expires_at,
+    }).execute()
+    return token, pending_user_id
+
+
+async def _consume_pending_signup(token: str) -> dict | None:
+    """Atomically deletes and returns a pending signup row if the token is valid and unexpired."""
+    try:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        res = await database.supabase.table("pending_signups") \
+            .delete() \
+            .eq("token", token) \
+            .gt("expires_at", now) \
+            .execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"Failed to consume pending signup token: {e}")
         return None
 
 
@@ -228,51 +302,26 @@ def send_magic_link_email(to_email: str, token: str, is_new_user: bool = False, 
 
     if is_new_user and telegram_link:
         subject = "Welcome to Quote Me — tap to sign in"
-        extra_html = f"""
-                <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
-                <p style="color:#64748b;font-size:0.85rem;margin-bottom:6px;"><strong>After signing in, open Telegram to get started:</strong></p>
-                <a href="{telegram_link}"
-                   style="display:inline-block;background:#229ED9;color:white;font-weight:600;
-                          padding:12px 24px;border-radius:10px;text-decoration:none;font-size:0.95rem;margin-top:8px;">
-                    Open Quote Me in Telegram
-                </a>
-                <ol style="color:#64748b;font-size:0.85rem;padding-left:20px;line-height:1.8;margin-top:20px;">
-                    <li>Upload 3–10 past invoices or quotes so the AI can learn your style</li>
-                    <li>Start generating branded quotes by voice, photo, or text</li>
-                </ol>"""
         intro = "Your account is ready. Click the button below to sign in — the link expires in 30 minutes."
     else:
         subject = "Your Quote Me sign-in link"
-        extra_html = ""
         intro = "Click the button below to sign in to Quote Me. This link expires in 30 minutes and can only be used once."
 
     try:
+        html = _email_jinja.get_template("magic_link.html").render(
+            verify_url=verify_url,
+            intro=intro,
+            telegram_link=telegram_link if (is_new_user and telegram_link) else None,
+        )
         resend.Emails.send({
             "from": settings.FROM_EMAIL,
             "to": [to_email],
             "subject": subject,
-            "html": f"""
-            <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e293b;">
-                <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Quote Me ⚡</h1>
-                <p style="color:#475569;margin-bottom:24px;">{intro}</p>
-                <a href="{verify_url}"
-                   style="display:inline-block;background:#3b82f6;color:white;font-weight:600;
-                          padding:14px 28px;border-radius:10px;text-decoration:none;font-size:1rem;">
-                    Sign in to Quote Me
-                </a>
-                <p style="color:#94a3b8;font-size:0.78rem;margin-top:16px;">
-                    If you didn't request this, you can safely ignore this email.
-                </p>
-                {extra_html}
-                <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
-                    © 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" style="color:#94a3b8;text-decoration:underline;">ForestTech Solutions</a>
-                </p>
-            </div>
-            """,
+            "html": html,
         })
-        logger.info(f"Magic link email sent to {to_email}")
+        logger.info(f"Magic link email sent to {_mask_email(to_email)}")
     except Exception as e:
-        logger.error(f"Failed to send magic link to {to_email}: {e}")
+        logger.error(f"Failed to send magic link to {_mask_email(to_email)}: {e}")
 
 
 def _send_google_welcome_email(to_email: str, telegram_link: str):
@@ -281,37 +330,16 @@ def _send_google_welcome_email(to_email: str, telegram_link: str):
         logger.warning("RESEND_API_KEY not set — skipping welcome email.")
         return
     try:
+        html = _email_jinja.get_template("google_welcome.html").render(telegram_link=telegram_link)
         resend.Emails.send({
             "from": settings.FROM_EMAIL,
             "to": [to_email],
             "subject": "You're in — open Quote Me in Telegram",
-            "html": f"""
-            <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e293b;">
-                <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Welcome to Quote Me ⚡</h1>
-                <p style="color:#475569;margin-bottom:24px;">
-                    Your account is ready. Tap the button below to open Telegram and start training your AI — it only takes a few minutes.
-                </p>
-                <a href="{telegram_link}"
-                   style="display:inline-block;background:#229ED9;color:white;font-weight:600;
-                          padding:14px 28px;border-radius:10px;text-decoration:none;font-size:1rem;">
-                    Open Quote Me in Telegram
-                </a>
-                <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
-                <p style="color:#64748b;font-size:0.85rem;margin-bottom:6px;"><strong>What happens next:</strong></p>
-                <ol style="color:#64748b;font-size:0.85rem;padding-left:20px;line-height:1.8;">
-                    <li>Open the link above in Telegram</li>
-                    <li>Upload 3–10 past invoices or quotes so the AI can learn your style</li>
-                    <li>Start generating branded quotes by voice, photo, or text</li>
-                </ol>
-                <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
-                    © 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" style="color:#94a3b8;text-decoration:underline;">ForestTech Solutions</a>
-                </p>
-            </div>
-            """,
+            "html": html,
         })
-        logger.info(f"Google welcome email sent to {to_email}")
+        logger.info(f"Google welcome email sent to {_mask_email(to_email)}")
     except Exception as e:
-        logger.error(f"Failed to send Google welcome email to {to_email}: {e}")
+        logger.error(f"Failed to send Google welcome email to {_mask_email(to_email)}: {e}")
 
 
 async def _upsert_user_by_email(email: str) -> tuple[dict, bool]:
@@ -399,7 +427,9 @@ def share_page(doc_id: str):
 async def api_share_info(doc_id: str):
     """Returns details and a signed URL for a specific document."""
     try:
-        res = await database.supabase.table("documents").select("*, users(email)").eq("id", doc_id).execute()
+        res = await database.supabase.table("documents").select(
+            "id, user_id, customer_name, customer_email, customer_phone, email_subject, cover_message, total, created_at, file_url"
+        ).eq("id", doc_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Document not found")
         doc = res.data[0]
@@ -485,22 +515,17 @@ async def api_share_download(doc_id: str):
 async def initiate_handshake(email: str):
     """
     Email sign-in entry point. Sends a magic link — never grants a session directly.
-    New users are created here; all users must click the emailed link to authenticate.
+    Existing users get a sign-in link. New users get a pending signup entry; the
+    users row is only created when they click the link (see /auth/email/verify).
     """
     email = email.strip().lower()
     if not email or not EMAIL_RE.match(email) or len(email) > 254:
         raise HTTPException(status_code=400, detail="Invalid email address")
 
-    # Rate limit: one email per address per 60 seconds.
-    # Prune stale entries every time we write, keeping the dict small.
-    now = time.time()
-    if now - _handshake_last_sent.get(email, 0) < HANDSHAKE_COOLDOWN_SECONDS:
+    # Persistent rate limit: one email per address per 60 seconds.
+    # Backed by Supabase so it survives restarts and works across replicas.
+    if not await _check_and_record_handshake(email):
         return JSONResponse({"status": "check_email"})
-    _handshake_last_sent[email] = now
-    stale_cutoff = now - HANDSHAKE_COOLDOWN_SECONDS * 2
-    stale_keys = [k for k, v in _handshake_last_sent.items() if v < stale_cutoff]
-    for k in stale_keys:
-        _handshake_last_sent.pop(k, None)
 
     if not settings.RESEND_API_KEY:
         raise HTTPException(status_code=503, detail="Email service not configured")
@@ -516,28 +541,10 @@ async def initiate_handshake(email: str):
             token = await _generate_login_token(user_id)
             await asyncio.to_thread(send_magic_link_email, email, token, False)
         else:
-            # New user: create account then send welcome + magic link
-            try:
-                new_user = await database.supabase.table("users").insert({"email": email, "bot_state": "HANDSHAKE"}).execute()
-                user_id = new_user.data[0]["id"]
-                try:
-                    from subscription_service import auto_apply_signup_bonus
-                    await auto_apply_signup_bonus(user_id)
-                except Exception as bonus_err:
-                    logger.warning(f"Failed to apply signup bonus: {bonus_err}")
-            except Exception as insert_err:
-                err_str = str(insert_err).lower()
-                if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
-                    retry = await database.supabase.table("users").select("id").eq("email", email).execute()
-                    if retry.data:
-                        user_id = retry.data[0]["id"]
-                        token = await _generate_login_token(user_id)
-                        await asyncio.to_thread(send_magic_link_email, email, token, False)
-                        return JSONResponse({"status": "check_email"})
-                raise
-            asyncio.create_task(notify_new_signup(email, user_id, new_user.data[0].get("created_at", "")))
-            telegram_link = f"https://t.me/{bot_username}?start={user_id}"
-            token = await _generate_login_token(user_id)
+            # New user: store a pending signup (no users row yet).
+            # The row is created at /auth/email/verify to prevent junk rows from spam.
+            token, pending_user_id = await _generate_pending_signup_token(email)
+            telegram_link = f"https://t.me/{bot_username}?start={pending_user_id}"
             await asyncio.to_thread(send_magic_link_email, email, token, True, telegram_link)
 
         return JSONResponse({"status": "check_email"})
@@ -621,10 +628,47 @@ async def auth_google_callback(
 
 @app.get("/auth/email/verify")
 async def auth_email_verify(token: str):
-    """Validates a magic link token and creates a session."""
+    """Validates a magic link token and creates a session.
+
+    Two paths:
+    - Existing users: token is in login_tokens → just set session.
+    - New users: token is in pending_signups → create users row then set session.
+    """
+    # Path 1: existing user magic link
     user_id = await _consume_login_token(token)
-    if not user_id:
+    if user_id:
+        redirect = RedirectResponse("/account")
+        _set_session_cookie(redirect, user_id)
+        return redirect
+
+    # Path 2: new user completing registration for the first time
+    pending = await _consume_pending_signup(token)
+    if not pending:
         return RedirectResponse("/?auth_error=invalid_link")
+
+    user_id = pending["user_id"]
+    email = pending["email"]
+    try:
+        new_user = await database.supabase.table("users").insert({
+            "id": user_id,
+            "email": email,
+            "bot_state": "HANDSHAKE",
+        }).execute()
+        try:
+            from subscription_service import auto_apply_signup_bonus
+            await auto_apply_signup_bonus(user_id)
+        except Exception as bonus_err:
+            logger.warning(f"Failed to apply signup bonus: {bonus_err}")
+        asyncio.create_task(notify_new_signup(email, user_id, new_user.data[0].get("created_at", "")))
+    except Exception as e:
+        err_str = str(e).lower()
+        if "duplicate" in err_str or "unique" in err_str or "23505" in err_str:
+            # User was already created (e.g., concurrent link click) — just sign them in.
+            pass
+        else:
+            logger.error(f"Failed to create user at verify: {e}")
+            return RedirectResponse("/?auth_error=db")
+
     redirect = RedirectResponse("/account")
     _set_session_cookie(redirect, user_id)
     return redirect
@@ -670,7 +714,7 @@ async def api_account(request: Request):
             limit = promo_limit
         trial_status = await get_trial_status(user_id)
     period_start = await get_billing_period_start(user_id)
-    logger.info(f"Account API: user_id={user_id} email={user.get('email')} telegram_id={user.get('telegram_id')} usage={usage}/{limit}")
+    logger.info(f"Account API: user_id={user_id} email={_mask_email(user.get('email', ''))} usage={usage}/{limit}")
 
     bot_username = await get_bot_username()
     telegram_url = f"https://t.me/{bot_username}?start={user_id}"
@@ -687,8 +731,8 @@ async def api_account(request: Request):
             period_end = sub_res.data[0].get("current_period_end")
             cancel_at_period_end = bool(sub_res.data[0].get("cancel_at_period_end", False))
             stripe_sub_id_from_db = sub_res.data[0].get("stripe_subscription_id")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to load subscription record for user {user_id}: {e}")
 
     # Auto-heal: paid user with no period dates — retrieve full subscription from Stripe
     # (Subscription.list() in SDK v8 returns lightweight objects missing current_period_end)
@@ -708,13 +752,7 @@ async def api_account(request: Request):
                             stripe.Subscription.retrieve, _get(subs.data[0], "id")
                         )
             if stripe_sub:
-                data = stripe_sub._data if hasattr(stripe_sub, '_data') else {}
-                # Stripe SDK v8 no longer returns current_period_end/start — derive from billing_cycle_anchor
-                bca_ts = data.get('billing_cycle_anchor')
-                period_end_dt = None
-                period_start_dt = None
-                if bca_ts:
-                    period_end_dt, period_start_dt = _billing_period_from_anchor(bca_ts)
+                period_end_dt, period_start_dt = _period_from_subscription(stripe_sub)
                 if period_end_dt:
                     period_end = period_end_dt.isoformat()
                 if period_start_dt:
@@ -787,8 +825,8 @@ async def create_checkout_session(request: Request):
     body = {}
     try:
         body = await request.json()
-    except Exception:
-        pass
+    except (json.JSONDecodeError, ValueError):
+        pass  # empty or non-JSON body is valid; plan defaults apply
     plan = body.get("plan", "premium")
     if plan not in ("premium", "pro"):
         plan = "premium"
@@ -901,8 +939,7 @@ async def sync_subscription(request: Request):
             tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
         else:
             tier = "free"
-        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
-        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
+        period_end, period_start = _period_from_subscription(sub)
 
         await upsert_subscription(
             user_id=user_id,
@@ -933,7 +970,8 @@ async def billing_portal(request: Request):
     try:
         user_res = await database.supabase.table("users").select("stripe_customer_id").eq("id", user_id).execute()
         customer_id = user_res.data[0].get("stripe_customer_id") if user_res.data else None
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to load stripe_customer_id for billing portal: {e}")
         customer_id = None
 
     if not customer_id:
@@ -973,7 +1011,13 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Webhook parse error")
 
     event_type = event["type"]
-    logger.info(f"Stripe event received: {event_type}")
+    event_id = event["id"]
+    event_created = event.get("created", 0)
+    logger.info(f"Stripe event received: {event_type} ({event_id})")
+
+    # Idempotency guard: Stripe re-delivers events on non-2xx; skip already-processed ones.
+    if await _is_event_processed(event_id):
+        return {"ok": True, "status": "already_processed"}
 
     try:
         data_obj = event["data"]["object"]
@@ -984,7 +1028,7 @@ async def stripe_webhook(request: Request):
         await _handle_checkout_completed(data_obj)
 
     elif event_type in ("customer.subscription.updated", "customer.subscription.created"):
-        await _handle_subscription_updated(data_obj)
+        await _handle_subscription_updated(data_obj, event_created)
 
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(data_obj)
@@ -1000,28 +1044,43 @@ def _get(obj, key, default=None):
 
 
 def _billing_period_from_anchor(anchor_ts: int) -> tuple:
-    """
-    Stripe SDK v8 removed current_period_end/start from the Subscription object.
-    Compute the current billing period (start, end) from billing_cycle_anchor for
-    a monthly subscription.  Returns (period_end_dt, period_start_dt).
-    """
-    import calendar as _cal
-    anchor = datetime.fromtimestamp(anchor_ts, tz=timezone.utc)
-    now = datetime.now(timezone.utc)
-    anchor_day = anchor.day
+    """Thin wrapper — delegates to subscription_service.billing_period_from_anchor."""
+    from subscription_service import billing_period_from_anchor
+    return billing_period_from_anchor(anchor_ts)
 
-    def _add_one_month(dt: datetime) -> datetime:
-        month = dt.month % 12 + 1
-        year = dt.year + (1 if dt.month == 12 else 0)
-        day = min(dt.day, _cal.monthrange(year, month)[1])
-        return dt.replace(year=year, month=month, day=day)
 
-    cur = anchor
-    while True:
-        nxt = _add_one_month(cur)
-        if nxt > now:
-            return nxt, cur   # (period_end, period_start)
-        cur = nxt
+def _period_from_subscription(sub) -> tuple:
+    """Extract (period_end_dt, period_start_dt) from a retrieved Stripe Subscription.
+
+    Reads current_period_end/start from the raw _data dict first (works across
+    Stripe SDK versions), falling back to billing_cycle_anchor math for monthly
+    plans when those fields are absent.
+    """
+    sub_data = sub._data if hasattr(sub, '_data') else {}
+    period_end_ts = sub_data.get('current_period_end') or _get(sub, 'current_period_end')
+    period_start_ts = sub_data.get('current_period_start') or _get(sub, 'current_period_start')
+    if period_end_ts and period_start_ts:
+        return (
+            datetime.fromtimestamp(int(period_end_ts), tz=timezone.utc),
+            datetime.fromtimestamp(int(period_start_ts), tz=timezone.utc),
+        )
+    bca_ts = sub_data.get('billing_cycle_anchor') or _get(sub, 'billing_cycle_anchor')
+    return _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
+
+
+async def _is_event_processed(event_id: str) -> bool:
+    """Insert event_id into stripe_events. Returns True if already processed (duplicate)."""
+    try:
+        await database.supabase.table("stripe_events").insert({"event_id": event_id}).execute()
+        return False  # Inserted — first time we've seen this event
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "unique" in err or "23505" in err:
+            logger.info(f"Stripe event {event_id} already processed — skipping")
+            return True
+        # Non-duplicate DB error: fail open so billing is never blocked by a DB hiccup
+        logger.warning(f"stripe_events insert failed (non-duplicate): {e} — allowing processing")
+        return False
 
 
 async def _handle_checkout_completed(session):
@@ -1050,8 +1109,7 @@ async def _handle_checkout_completed(session):
             user_id = user["id"]
 
         sub = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
-        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
-        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
+        period_end, period_start = _period_from_subscription(sub)
 
         # Determine plan tier from the subscribed price ID
         items_data = _get(_get(sub, "items") or {}, "data") or []
@@ -1077,7 +1135,7 @@ async def _handle_checkout_completed(session):
         logger.error(f"_handle_checkout_completed failed: {e}", exc_info=True)
 
 
-async def _handle_subscription_updated(sub):
+async def _handle_subscription_updated(sub, event_created: int = 0):
     """Sync subscription status changes from Stripe."""
     from subscription_service import upsert_subscription, get_user_by_stripe_customer
 
@@ -1087,6 +1145,24 @@ async def _handle_subscription_updated(sub):
         if not user:
             return
 
+        # Out-of-order guard: skip if this event predates our last DB write for this sub.
+        if event_created:
+            try:
+                existing = await database.supabase.table("subscriptions") \
+                    .select("updated_at").eq("user_id", user["id"]).execute()
+                if existing.data and existing.data[0].get("updated_at"):
+                    raw_ts = existing.data[0]["updated_at"].replace("Z", "+00:00")
+                    db_updated = datetime.fromisoformat(raw_ts)
+                    event_dt = datetime.fromtimestamp(event_created, tz=timezone.utc)
+                    if event_dt < db_updated:
+                        logger.info(
+                            f"Skipping stale subscription.updated for user {user['id']}: "
+                            f"event_created={event_dt.isoformat()} < db_updated={db_updated.isoformat()}"
+                        )
+                        return
+            except Exception as e:
+                logger.warning(f"Out-of-order check failed (proceeding): {e}")
+
         status = _get(sub, "status") or "canceled"
         if status in ("active", "trialing"):
             items_data = _get(_get(sub, "items") or {}, "data") or []
@@ -1094,8 +1170,7 @@ async def _handle_subscription_updated(sub):
             tier = "pro" if (sub_price_id and sub_price_id == settings.STRIPE_PRO_PRICE_ID) else "premium"
         else:
             tier = "free"
-        bca_ts = _get(sub._data if hasattr(sub, '_data') else {}, "billing_cycle_anchor") or _get(sub, "billing_cycle_anchor")
-        period_end, period_start = _billing_period_from_anchor(bca_ts) if bca_ts else (None, None)
+        period_end, period_start = _period_from_subscription(sub)
 
         cancel_at_period_end = bool(_get(sub, "cancel_at_period_end"))
         await upsert_subscription(

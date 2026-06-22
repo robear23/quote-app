@@ -8,15 +8,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies and audit for known CVEs
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt pip-audit \
+    && pip-audit -r requirements.txt \
+    && pip uninstall -y pip-audit 2>/dev/null || true
 
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p temp_uploads generated_documents static
+# Create necessary directories and a non-root user
+RUN mkdir -p temp_uploads generated_documents static && useradd --create-home --shell /bin/bash app && chown -R app:app /app
+
+USER app
 
 # Expose the port Railway will assign
 EXPOSE 8000

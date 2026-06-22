@@ -309,3 +309,109 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS cover_message TEXT;
 -- Without this bucket the share/download link will always return 404.
 -- ============================================================
 
+-- ============================================================
+-- MIGRATION: Phase 3A — Persistent handshake rate limiting
+-- Replaces the in-memory _handshake_last_sent dict so the 60-second
+-- cooldown survives server restarts and works across replicas.
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS handshake_attempts (
+    email       TEXT PRIMARY KEY,
+    last_sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE handshake_attempts ENABLE ROW LEVEL SECURITY;
+
+-- Atomic check-and-record: returns TRUE if the handshake is allowed,
+-- FALSE if the email is still within the cooldown window.
+CREATE OR REPLACE FUNCTION check_handshake_rate_limit(
+    p_email            TEXT,
+    p_cooldown_seconds INT DEFAULT 60
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_last_sent TIMESTAMPTZ;
+BEGIN
+    SELECT last_sent_at INTO v_last_sent
+    FROM handshake_attempts
+    WHERE email = p_email;
+
+    IF FOUND AND v_last_sent > now() - (p_cooldown_seconds || ' seconds')::INTERVAL THEN
+        RETURN FALSE;
+    END IF;
+
+    INSERT INTO handshake_attempts (email, last_sent_at)
+    VALUES (p_email, now())
+    ON CONFLICT (email) DO UPDATE SET last_sent_at = now();
+
+    RETURN TRUE;
+END;
+$$;
+
+-- ============================================================
+-- MIGRATION: Phase 3A — Deferred user creation for new signups
+-- New users are held in pending_signups until they click the magic
+-- link. This prevents junk rows in the users table from unauthenticated
+-- POST spam to /handshake.
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS pending_signups (
+    token      TEXT    PRIMARY KEY,
+    email      TEXT    NOT NULL,
+    user_id    UUID    NOT NULL,   -- pre-allocated UUID, used when row is created at verify time
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE pending_signups ENABLE ROW LEVEL SECURITY;
+
+-- pg_cron: clean up expired pending signups every 15 minutes
+SELECT cron.schedule(
+    'cleanup-expired-pending-signups',
+    '*/15 * * * *',
+    $$DELETE FROM pending_signups WHERE expires_at < now()$$
+);
+
+-- ============================================================
+-- MIGRATION: Phase 4A — Stripe webhook idempotency
+-- Track processed Stripe event IDs to prevent duplicate writes
+-- when Stripe re-delivers an event after a transient failure.
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS stripe_events (
+    event_id     TEXT        PRIMARY KEY,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE stripe_events ENABLE ROW LEVEL SECURITY;
+
+-- pg_cron: clean up events older than 8 days (Stripe retries for up to 7 days)
+SELECT cron.schedule(
+    'cleanup-old-stripe-events',
+    '0 3 * * *',
+    $$DELETE FROM stripe_events WHERE processed_at < now() - INTERVAL '8 days'$$
+);
+
+-- ============================================================
+-- MIGRATION: Phase 5D — Admin audit log
+-- Append-only record of admin CLI actions. Stores IDs only —
+-- no raw email addresses or customer data.
+-- Run in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS admin_actions (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    action         TEXT        NOT NULL,         -- e.g. 'reset_bot_state'
+    target_user_id UUID        REFERENCES users(id) ON DELETE SET NULL,
+    operator       TEXT        NOT NULL DEFAULT 'admin_cli',
+    details        JSONB,                        -- non-PII context (state names, counts, etc.)
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE admin_actions ENABLE ROW LEVEL SECURITY;
+

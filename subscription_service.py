@@ -267,3 +267,29 @@ async def get_user_by_stripe_customer(stripe_customer_id: str) -> dict | None:
     res = await database.supabase.table("users").select("*") \
         .eq("stripe_customer_id", stripe_customer_id).execute()
     return res.data[0] if res.data else None
+
+
+def billing_period_from_anchor(
+    anchor_ts: int,
+    _now: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    """Compute current billing period from billing_cycle_anchor for a monthly subscription.
+
+    Returns (period_end_dt, period_start_dt).
+    `_now` is injectable for testing; defaults to UTC now when omitted.
+    """
+    anchor = datetime.fromtimestamp(anchor_ts, tz=timezone.utc)
+    now = _now if _now is not None else datetime.now(timezone.utc)
+
+    def _add_one_month(dt: datetime) -> datetime:
+        month = dt.month % 12 + 1
+        year = dt.year + (1 if dt.month == 12 else 0)
+        day = min(dt.day, calendar.monthrange(year, month)[1])
+        return dt.replace(year=year, month=month, day=day)
+
+    cur = anchor
+    while True:
+        nxt = _add_one_month(cur)
+        if nxt > now:
+            return nxt, cur   # (period_end, period_start)
+        cur = nxt

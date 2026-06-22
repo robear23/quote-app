@@ -6,7 +6,9 @@ load_dotenv()
 class Settings:
     PROJECT_NAME: str = "Telegram Quote Me"
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").strip()
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "").strip().encode('ascii', 'ignore').decode('ascii')
+    # NOTE: Confirm whether this is the service-role key (bypasses RLS) or anon key.
+    # Service-role key is required for server-side writes; if so, RLS is defense-in-depth only.
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "").strip()
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "").strip()
@@ -60,5 +62,7 @@ class Settings:
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
         if self.SESSION_SECRET == "change-me-in-production":
             raise ValueError("SESSION_SECRET must be set to a unique secret in production")
+        if os.getenv("ENV") == "production" and not self.APP_URL.startswith("https://"):
+            raise ValueError("APP_URL must start with https:// in production")
 
 settings = Settings()

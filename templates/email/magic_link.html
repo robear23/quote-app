@@ -1,0 +1,28 @@
+<div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#1e293b;">
+    <h1 style="font-size:1.6rem;font-weight:800;margin-bottom:8px;">Quote Me ⚡</h1>
+    <p style="color:#475569;margin-bottom:24px;">{{ intro }}</p>
+    <a href="{{ verify_url }}"
+       style="display:inline-block;background:#3b82f6;color:white;font-weight:600;
+              padding:14px 28px;border-radius:10px;text-decoration:none;font-size:1rem;">
+        Sign in to Quote Me
+    </a>
+    <p style="color:#94a3b8;font-size:0.78rem;margin-top:16px;">
+        If you didn't request this, you can safely ignore this email.
+    </p>
+    {% if telegram_link %}
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
+    <p style="color:#64748b;font-size:0.85rem;margin-bottom:6px;"><strong>After signing in, open Telegram to get started:</strong></p>
+    <a href="{{ telegram_link }}"
+       style="display:inline-block;background:#229ED9;color:white;font-weight:600;
+              padding:12px 24px;border-radius:10px;text-decoration:none;font-size:0.95rem;margin-top:8px;">
+        Open Quote Me in Telegram
+    </a>
+    <ol style="color:#64748b;font-size:0.85rem;padding-left:20px;line-height:1.8;margin-top:20px;">
+        <li>Upload 3–10 past invoices or quotes so the AI can learn your style</li>
+        <li>Start generating branded quotes by voice, photo, or text</li>
+    </ol>
+    {% endif %}
+    <p style="color:#94a3b8;font-size:0.78rem;margin-top:32px;">
+        © 2026 Quote Me · Built for tradespeople, by <a href="https://foresttechsolutions.net/" style="color:#94a3b8;text-decoration:underline;">ForestTech Solutions</a>
+    </p>
+</div>
