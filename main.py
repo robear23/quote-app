@@ -184,6 +184,10 @@ async def _generate_pending_signup_token(email: str) -> tuple[str, str]:
     return token, pending_user_id
 
 
+class _InfraError(Exception):
+    """Raised when the DB schema is misconfigured (e.g. missing table)."""
+
+
 async def _consume_pending_signup(token: str) -> dict | None:
     """Atomically deletes and returns a pending signup row if the token is valid and unexpired."""
     try:
@@ -195,6 +199,10 @@ async def _consume_pending_signup(token: str) -> dict | None:
             .execute()
         return res.data[0] if res.data else None
     except Exception as e:
+        err_str = str(e)
+        if "PGRST205" in err_str or "schema cache" in err_str:
+            logger.error(f"pending_signups table missing from Supabase schema cache — run the Phase 3A migration: {e}")
+            raise _InfraError from e
         logger.error(f"Failed to consume pending signup token: {e}")
         return None
 
@@ -642,7 +650,10 @@ async def auth_email_verify(token: str):
         return redirect
 
     # Path 2: new user completing registration for the first time
-    pending = await _consume_pending_signup(token)
+    try:
+        pending = await _consume_pending_signup(token)
+    except _InfraError:
+        return RedirectResponse("/?auth_error=service_unavailable")
     if not pending:
         return RedirectResponse("/?auth_error=invalid_link")
 
