@@ -1130,6 +1130,30 @@ async def _handle_checkout_completed(session):
         else:
             plan_tier = "premium"
 
+        # Cancel any pre-existing subscription for this user that differs from the new one.
+        # This prevents double-billing when upgrading (e.g. pro → premium creates a new sub
+        # while the old one keeps renewing).
+        try:
+            existing_sub_res = await database.supabase.table("subscriptions") \
+                .select("stripe_subscription_id, plan_tier") \
+                .eq("user_id", user_id) \
+                .execute()
+            if existing_sub_res.data:
+                old_sub_id = existing_sub_res.data[0].get("stripe_subscription_id")
+                old_tier = existing_sub_res.data[0].get("plan_tier")
+                if old_sub_id and old_sub_id != subscription_id:
+                    logger.info(
+                        f"User {user_id} upgrading from {old_tier} ({old_sub_id}) to "
+                        f"{plan_tier} ({subscription_id}) — cancelling old subscription at period end"
+                    )
+                    await asyncio.to_thread(
+                        stripe.Subscription.modify,
+                        old_sub_id,
+                        cancel_at_period_end=True,
+                    )
+        except Exception as cancel_err:
+            logger.error(f"Failed to cancel old subscription for user {user_id}: {cancel_err}", exc_info=True)
+
         logger.info(f"Syncing {plan_tier} for user_id={user_id}")
         await upsert_subscription(
             user_id=user_id,
