@@ -49,7 +49,7 @@ for _d in (TEMPLATES_DIR, GENERATED_DIR, RESULTS_DIR):
     _d.mkdir(exist_ok=True)
 
 _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-ANALYSIS_MODEL = "gemini-2.5-flash"
+ANALYSIS_MODEL = "gemini-3-flash-preview"
 
 # ── Field style helper ────────────────────────────────────────────────────────
 # Controls how fillable fields appear in the blank template being tested:

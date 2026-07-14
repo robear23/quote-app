@@ -385,8 +385,8 @@ Return ONLY valid JSON with these keys:
 }
 """
 
-MODEL = "gemini-2.5-flash"
-FALLBACK_MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemini-3-flash-preview"
+FALLBACK_MODEL = "gemini-3.1-flash-lite"
 MAX_RETRIES = 5
 BASE_RETRY_DELAY = 3  # seconds
 
