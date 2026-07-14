@@ -1,7 +1,17 @@
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
+
+if sys.platform == "win32":
+    # Local Windows dev machines commonly run antivirus (e.g. AVG) that MITMs
+    # TLS with a locally-installed root CA. Windows trusts it but certifi
+    # doesn't, so certifi-based HTTPS calls (httpx/supabase/genai) fail
+    # verification. truststore defers verification to the OS trust store,
+    # which already trusts that root. No-op / unnecessary on Linux prod.
+    import truststore
+    truststore.inject_into_ssl()
 
 class Settings:
     PROJECT_NAME: str = "Telegram Quote Me"
