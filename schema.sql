@@ -3,8 +3,11 @@
 -- Enable the UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Enable pg_cron (not on by default in new Supabase projects) — required by the cron.schedule() calls below
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
 -- Users Table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email TEXT UNIQUE NOT NULL,
     telegram_id BIGINT UNIQUE,
@@ -13,7 +16,7 @@ CREATE TABLE users (
 );
 
 -- User Configurations (Brand DNA)
-CREATE TABLE user_configs (
+CREATE TABLE IF NOT EXISTS user_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
     business_name TEXT,
@@ -30,7 +33,7 @@ CREATE TABLE user_configs (
 );
 
 -- Documents (Generated Quotes/Invoices)
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     customer_name TEXT,
