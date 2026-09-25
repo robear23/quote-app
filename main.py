@@ -378,8 +378,10 @@ async def _upsert_user_by_email(email: str) -> tuple[dict, bool]:
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
-def health_check():
-    return {"status": "ok"}
+async def health_check():
+    if not await database.ping():
+        return JSONResponse(status_code=503, content={"status": "error", "database": "unreachable"})
+    return {"status": "ok", "database": "ok"}
 
 
 @app.post("/telegram")

@@ -1,3 +1,4 @@
+import asyncio
 from supabase import acreate_client, AsyncClient
 from config import settings
 import logging
@@ -15,3 +16,18 @@ async def init_supabase():
         raise ValueError("Missing Supabase credentials.")
     supabase = await acreate_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     logger.info("Async Supabase client initialised")
+
+
+async def ping(timeout_seconds: float = 5.0) -> bool:
+    """Return True if Supabase answers a trivial query within the timeout."""
+    if supabase is None:
+        return False
+    try:
+        await asyncio.wait_for(
+            supabase.table("users").select("id").limit(1).execute(),
+            timeout=timeout_seconds,
+        )
+        return True
+    except Exception:
+        logger.exception("Supabase health ping failed")
+        return False
