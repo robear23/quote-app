@@ -483,6 +483,19 @@ def _generate_with_retry(contents, config=JSON_CONFIG):
     raise RateLimitError("Gemini API is unavailable — please try again in a moment.")
 
 
+def _parse_json(raw: str | None):
+    """Parses the first JSON value in a Gemini response.
+
+    Strips markdown code fences and ignores anything after the closing brace —
+    gemini-3-flash-preview intermittently appends stray fragments, which makes
+    json.loads fail with "Extra data". Raises json.JSONDecodeError if no JSON is found.
+    """
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
+    return json.JSONDecoder().raw_decode(raw)[0]
+
+
 def _detect_line_items_table(all_tables_in_doc) -> int | None:
     """Fallback: score tables by header keywords to find the line items table."""
     desc_kw = {
@@ -697,8 +710,7 @@ class AIService:
                 logger.error("Gemini returned empty response for brand DNA extraction")
                 return None
 
-            # raw_decode ignores trailing junk — Gemini occasionally repeats fragments after the closing brace
-            result, _ = json.JSONDecoder().raw_decode(raw)
+            result = _parse_json(raw)
             if not isinstance(result, dict) or not result:
                 logger.error(f"Gemini returned non-dict or empty result: {result!r}")
                 return None
@@ -727,7 +739,7 @@ class AIService:
             if extra_columns:
                 prompt += _extra_columns_prompt_suffix(extra_columns)
             response = _generate_with_retry(f"{prompt}\n\nUser Input: {text}")
-            return _normalize_quote(json.loads(response.text))
+            return _normalize_quote(_parse_json(response.text))
         except RateLimitError:
             raise
         except Exception as e:
@@ -769,7 +781,7 @@ class AIService:
             except Exception:
                 pass
 
-            return _normalize_quote(json.loads(response.text))
+            return _normalize_quote(_parse_json(response.text))
 
         except RateLimitError:
             raise
@@ -796,7 +808,7 @@ class AIService:
             except Exception:
                 pass
 
-            return _normalize_quote(json.loads(response.text))
+            return _normalize_quote(_parse_json(response.text))
 
         except RateLimitError:
             raise
@@ -817,7 +829,7 @@ class AIService:
                 user_response=user_response
             )
             response = _generate_with_retry(prompt)
-            result = json.loads(response.text)
+            result = _parse_json(response.text)
             if "updated_quote" in result:
                 result["updated_quote"] = _normalize_quote(result["updated_quote"])
             return result
@@ -1068,7 +1080,7 @@ class AIService:
         )
         try:
             _discovery_response = _generate_with_retry(_discovery_prompt)
-            _discovery = json.loads(_discovery_response.text)
+            _discovery = _parse_json(_discovery_response.text)
             if not isinstance(_discovery, dict):
                 raise ValueError(f"AI field discovery returned non-dict: {type(_discovery).__name__}")
 
@@ -1124,7 +1136,7 @@ class AIService:
 
         try:
             response = _generate_with_retry(prompt)
-            field_map = json.loads(response.text)
+            field_map = _parse_json(response.text)
             if not isinstance(field_map, dict):
                 logger.error(f"Gemini template mapping returned non-dict: {type(field_map).__name__}")
                 field_map = {}
@@ -1371,7 +1383,7 @@ class AIService:
                 raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
                 raw = re.sub(r"\n?```$", "", raw)
 
-            dna = json.loads(raw.strip())
+            dna = _parse_json(raw)
             logger.info(f"XLSX brand DNA extracted: business_name={dna.get('business_name')!r}")
             return dna
 
@@ -1431,7 +1443,7 @@ class AIService:
                 raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw)
                 raw = re.sub(r"\n?```$", "", raw)
 
-            mapping = json.loads(raw.strip())
+            mapping = _parse_json(raw)
             logger.info(f"XLSX field mapping built: {mapping}")
             return mapping
 
@@ -1465,7 +1477,7 @@ def analyze_template_visually(png_bytes: bytes, hint: str = "") -> dict:
         raw = (response.text or "").strip()
         if raw.startswith("```"):
             raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw).rstrip("` \n")
-        result = json.loads(raw)
+        result = _parse_json(raw)
         logger.info(f"Visual field detection result: {result}")
         return result
     except Exception as e:
