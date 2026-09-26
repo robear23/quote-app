@@ -989,9 +989,13 @@ def _has_dangerous_content(data: bytes, file_type: str) -> bool:
                 else "xl/_rels/workbook.xml.rels"
             )
             if rels_file in names:
+                # Every rels file contains "http://" in its XML namespace, so match on
+                # TargetMode="External" instead. Clickable hyperlinks are inert and allowed;
+                # anything else external (remote templates, OLE links, linked images) is not.
                 rels = zf.read(rels_file).decode(errors="replace")
-                if "http://" in rels or "file://" in rels:
-                    return True
+                for rel in re.findall(r"<Relationship\b[^>]*>", rels):
+                    if 'TargetMode="External"' in rel and "/relationships/hyperlink" not in rel:
+                        return True
     except Exception:
         pass
     return False
