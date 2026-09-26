@@ -23,6 +23,9 @@ OUTPUT_DIR = "generated_documents"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+_TAX_SURCHARGE_FIELDS = {"computed_vat", "computed_tax", "computed_gst", "computed_hst", "computed_sales_tax"}
+
+
 def _extract_tax_rate(brand_dna: dict) -> float:
     calc = brand_dna.get("calculation_methods")
     if isinstance(calc, dict):
@@ -746,6 +749,11 @@ class DocumentFactory:
         surcharge_total = 0.0
         surcharge_context: dict = {}
         for sc in (brand_dna.get("computed_surcharges") or []):
+            # Templates processed before the tax-label fix stored "VAT (20%)" etc. as a surcharge,
+            # which double-charged tax. Render those as the real tax amount instead.
+            if sc["field"] in _TAX_SURCHARGE_FIELDS:
+                surcharge_context[sc["field"]] = f"{sym}{tax_amount:,.2f}" if tax_rate > 0 else ""
+                continue
             sc_amount = subtotal * sc["rate"]
             surcharge_total += sc_amount
             surcharge_context[sc["field"]] = f"{sym}{sc_amount:,.2f}"

@@ -1013,6 +1013,9 @@ class AIService:
         # the adjacent cell if it's empty or contains dummy text.
         _SUBTOTAL_RE = re.compile(r'^\s*(sub\s*total|subtotal|net|total\s*excl?\s*vat)\s*:?\s*$', re.I)
         _TAX_RE = re.compile(r'^\s*(vat|tax|gst|service\s*charge|tax\s*amount)\s*:?\s*$', re.I)
+        # Tax labels that embed a rate e.g. "VAT (20%)", "GST @ 10%" — must map to tax_amount,
+        # not fall through to _SURCHARGE_PCT_RE (which would add the rate on top of the real tax)
+        _TAX_PCT_RE = re.compile(r'^\s*(vat|tax|gst|hst|sales\s*tax)\s*(@\s*)?\(?\s*@?\s*\d+(?:\.\d+)?\s*%\s*\)?\s*:?\s*$', re.I)
         _TOTAL_RE = re.compile(r'^\s*(total|total\s*due|grand\s*total|amount\s*due|total\s*payable|net\s*amount\s*payable|estimated\s*total)\s*:?\s*$', re.I)
         # Matches surcharge rows that embed a percentage e.g. "Fuel Surcharge (10%)"
         _SURCHARGE_PCT_RE = re.compile(r'^(.+?)\s*\(\s*(\d+(?:\.\d+)?)\s*%\s*\)\s*:?\s*$', re.I)
@@ -1024,7 +1027,7 @@ class AIService:
                     field_to_map = None
                     if _SUBTOTAL_RE.match(txt):
                         field_to_map = "subtotal"
-                    elif _TAX_RE.match(txt):
+                    elif _TAX_RE.match(txt) or _TAX_PCT_RE.match(txt):
                         field_to_map = "tax_amount"
                     elif _TOTAL_RE.match(txt):
                         field_to_map = "grand_total"
