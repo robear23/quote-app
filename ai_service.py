@@ -410,14 +410,24 @@ _BRACKET_TO_FIELD = {
     "postcode": "address_line_3",
     "address": "customer_address",
     "customer address": "customer_address",
+    "client address": "customer_address",
     "client email": "customer_email",
+    "customer email": "customer_email",
     "client@email.com": "customer_email",
     "email": "customer_email",
+    "client phone": "customer_phone",
+    "customer phone": "customer_phone",
+    "phone": "customer_phone",
     "quote reference": "quote_ref",
     "quote ref": "quote_ref",
+    "quote number": "quote_ref",
+    "quote no": "quote_ref",
+    "quote #": "quote_ref",
     "reference": "quote_ref",
     "ref": "quote_ref",
     "date": "quote_date",
+    "quote date": "quote_date",
+    "issue date": "quote_date",
     "expiry date": "valid_until",
     "expiry": "valid_until",
     "valid until": "valid_until",
@@ -948,6 +958,22 @@ class AIService:
         regex_matched = set()
         custom_fields_map: dict = {}
 
+        _BARE_TAG_RE = re.compile(r'^\{\{\s*\w+\s*\}\}$')
+        _INLINE_BLANK_RE = re.compile(r'\[[^\]]+\]|_{3,}')
+
+        def _keep_label(para, replacement_text: str) -> str:
+            """Swap only the blank in "Label: [Blank]" / "Label: ____" lines for a bare tag.
+
+            Gemini sometimes returns just "{{ tag }}" for inline label+blank lines, which
+            would wipe the label when the whole paragraph is replaced.
+            """
+            if not _BARE_TAG_RE.match(replacement_text.strip()):
+                return replacement_text
+            blanks = _INLINE_BLANK_RE.findall(para.text)
+            if len(blanks) != 1 or not para.text.replace(blanks[0], "").strip():
+                return replacement_text
+            return para.text.replace(blanks[0], replacement_text.strip())
+
         def _apply_field(location, replacement_text):
             if not location or not replacement_text or not isinstance(location, dict):
                 return
@@ -957,7 +983,7 @@ class AIService:
                     if idx is not None and idx < len(non_empty_paras):
                         if _is_static_label(non_empty_paras[idx].text):
                             return
-                        _set_para_text(non_empty_paras[idx], replacement_text)
+                        _set_para_text(non_empty_paras[idx], _keep_label(non_empty_paras[idx], replacement_text))
                 elif location.get("type") == "table":
                     _ti = location.get("table_index")
                     _ri = location.get("row_index")
@@ -967,6 +993,8 @@ class AIService:
                         _cell = all_tables_in_doc[_ti].rows[_ri].cells[_ci]
                         if _is_static_label(_cell_own_text(_cell)):
                             return
+                        if _pi < len(_cell.paragraphs):
+                            replacement_text = _keep_label(_cell.paragraphs[_pi], replacement_text)
                         _set_cell_text(_cell, replacement_text, _pi)
             except Exception as err:
                 logger.warning(f"Failed to apply field replacement '{replacement_text}': {err}")
