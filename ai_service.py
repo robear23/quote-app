@@ -697,7 +697,8 @@ class AIService:
                 logger.error("Gemini returned empty response for brand DNA extraction")
                 return None
 
-            result = json.loads(raw)
+            # raw_decode ignores trailing junk — Gemini occasionally repeats fragments after the closing brace
+            result, _ = json.JSONDecoder().raw_decode(raw)
             if not isinstance(result, dict) or not result:
                 logger.error(f"Gemini returned non-dict or empty result: {result!r}")
                 return None
